@@ -1,0 +1,184 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+    /* Base Colors - OFSP Theme */
+    --background: #ffffff; /* White */
+    --foreground: #111827; /* Gray 900 */
+    --card: #ffffff; /* White */
+    --card-foreground: #111827; /* Gray 900 */
+    --popover: #ffffff; /* White */
+    --popover-foreground: #111827; /* Gray 900 */
+    
+    /* Primary - OFSP Orange */
+    --primary: #FF6B35; /* Orange 500 */
+    --primary-foreground: #ffffff; /* White */
+    
+    /* Secondary - Agricultural Green */
+    --secondary: #F0FDF4; /* Green 50 */
+    --secondary-foreground: #16A34A; /* Green 600 */
+    
+    /* Muted Colors */
+    --muted: #F9FAFB; /* Gray 50 */
+    --muted-foreground: #6B7280; /* Gray 500 */
+    
+    /* Accent - Orange for highlights */
+    --accent: #FF6B35; /* Orange 500 */
+    --accent-foreground: #ffffff; /* White */
+    
+    /* Destructive - Red for errors */
+    --destructive: #EF4444; /* Red 500 */
+    --destructive-foreground: #ffffff; /* White */
+    
+    /* Borders & Inputs */
+    --border: #E5E7EB; /* Gray 200 */
+    --input: #E5E7EB; /* Gray 200 */
+    --ring: #E55A2B; /* Orange 600 */
+    
+    /* Chart Colors - OFSP Theme */
+    --chart-1: #FF6B35; /* Orange 500 */
+    --chart-2: #16A34A; /* Green 600 */
+    --chart-3: #FBBF24; /* Yellow 500 */
+    --chart-4: #3B82F6; /* Blue 500 */
+    --chart-5: #EF4444; /* Red 500 */
+    
+    /* Border Radius */
+    --radius: 0.625rem;
+    
+    /* Sidebar Colors */
+    --sidebar: #F9FAFB; /* Gray 50 */
+    --sidebar-foreground: #111827; /* Gray 900 */
+    --sidebar-primary: #E55A2B; /* Orange 600 */
+    --sidebar-primary-foreground: #ffffff; /* White */
+    --sidebar-accent: #FF6B35; /* Orange 500 */
+    --sidebar-accent-foreground: #ffffff; /* White */
+    --sidebar-border: #E5E7EB; /* Gray 200 */
+    --sidebar-ring: #E55A2B; /* Orange 600 */
+    
+    /* OFSP Specific Colors */
+    --ofsp-orange-50: #FFF5F2;
+    --ofsp-orange-100: #FFE5DC;
+    --ofsp-orange-500: #FF6B35;
+    --ofsp-orange-600: #E55A2B;
+    --ofsp-orange-700: #CC4A21;
+    
+    --ofsp-green-500: #22C55E;
+    --ofsp-green-600: #16A34A;
+    --ofsp-green-700: #15803D;
+    
+    /* Status Colors */
+    --success: #16A34A; /* Green 600 */
+    --warning: #FBBF24; /* Yellow 500 */
+    --error: #EF4444; /* Red 500 */
+    --info: #3B82F6; /* Blue 500 */
+}
+
+.dark {
+    /* Dark Mode - OFSP Theme */
+    --background: #111827; /* Gray 900 */
+    --foreground: #F3F4F6; /* Gray 100 */
+    --card: #1F2937; /* Gray 800 */
+    --card-foreground: #F3F4F6; /* Gray 100 */
+    --popover: #1F2937; /* Gray 800 */
+    --popover-foreground: #F3F4F6; /* Gray 100 */
+    
+    /* Primary - Lighter Orange for Dark Mode */
+    --primary: #FF8C5A; /* Lighter Orange */
+    --primary-foreground: #1F2937; /* Dark text on orange */
+    
+    /* Secondary - Dark Green */
+    --secondary: #14532D; /* Dark green background */
+    --secondary-foreground: #F3F4F6; /* Light text */
+    
+    /* Muted Colors */
+    --muted: #1F2937; /* Gray 800 */
+    --muted-foreground: #9CA3AF; /* Gray 400 */
+    
+    /* Accent */
+    --accent: #FF8C5A; /* Lighter Orange */
+    --accent-foreground: #1F2937;
+    
+    /* Destructive */
+    --destructive: #F87171; /* Red */
+    --destructive-foreground: #F3F4F6;
+    
+    /* Borders & Inputs */
+    --border: rgba(255, 255, 255, 0.1);
+    --input: rgba(255, 255, 255, 0.15);
+    --ring: #FF8C5A; /* Orange ring */
+    
+    /* Chart Colors */
+    --chart-1: #FF8C5A; /* Orange */
+    --chart-2: #4ADE80; /* Green */
+    --chart-3: #FBBF24; /* Yellow */
+    --chart-4: #60A5FA; /* Blue */
+    --chart-5: #F87171; /* Red */
+    
+    /* Sidebar */
+    --sidebar: #1F2937; /* Gray 800 */
+    --sidebar-foreground: #F3F4F6; /* Gray 100 */
+    --sidebar-primary: #FF9D6B; /* Orange */
+    --sidebar-primary-foreground: #1F2937;
+    --sidebar-accent: #FF8C5A; /* Orange */
+    --sidebar-accent-foreground: #1F2937;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-ring: #FF8C5A; /* Orange */
+}
+
+@theme inline {
+    --font-sans: 'Inter Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --radius-2xl: calc(var(--radius) + 8px);
+    --radius-3xl: calc(var(--radius) + 12px);
+    --radius-4xl: calc(var(--radius) + 16px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply font-sans bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
