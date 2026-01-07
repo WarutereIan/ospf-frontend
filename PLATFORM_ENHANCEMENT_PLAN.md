@@ -912,3 +912,4 @@ Farmer taps "Accept Order" → Order accepted instantly
 **Status:** Ready for implementation  
 **Priority:** Phase 1 features CRITICAL for MVP success  
 **Timeline:** 25 days (as per ToR) covers Phase 1-2 core features
+

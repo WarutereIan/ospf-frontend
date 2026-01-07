@@ -173,3 +173,4 @@ export function SmartMatching({ buyerRequirements, onSelectFarmer }: SmartMatchi
     </Card>
   );
 }
+
