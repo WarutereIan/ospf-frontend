@@ -12,13 +12,8 @@ import {
   IconX,
   IconPhoto,
   IconLoader2,
-  IconScale,
-  IconCurrency,
-  IconReceipt,
-  IconMessage,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
 
 interface StockInEntry {
   farmerId: string;
@@ -29,16 +24,7 @@ interface StockInEntry {
   qualityGrade: "A" | "B" | "C";
   photos: string[];
   notes?: string;
-  timestamp?: string;
-  receiptId?: string;
 }
-
-// Price rates per kg based on quality grade
-const PRICE_RATES = {
-  A: 150, // Premium rate for Grade A
-  B: 120, // Standard rate for Grade B
-  C: 90,  // Processing rate for Grade C
-};
 
 const ofspVarieties = [
   { value: "kenya", label: "Kenya" },
@@ -66,9 +52,6 @@ export function StockInForm() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
-  const [receiptData, setReceiptData] = useState<any>(null);
-  const [workflowStep, setWorkflowStep] = useState<"weigh" | "quality" | "record" | "receipt" | "sms">("weigh");
 
   // Sample farmers for search - TODO: Replace with API
   const sampleFarmers = [
@@ -107,11 +90,6 @@ export function StockInForm() {
     }));
   };
 
-  const calculatePrice = () => {
-    if (!formData.quantity || !formData.qualityGrade) return 0;
-    return formData.quantity * PRICE_RATES[formData.qualityGrade];
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.farmerId || !formData.variety || !formData.quantity || !formData.qualityGrade) {
@@ -119,68 +97,24 @@ export function StockInForm() {
     }
 
     setIsSubmitting(true);
-    setWorkflowStep("record");
-    
     // TODO: Replace with actual API call
     setTimeout(() => {
-      const receiptId = `RCP-${Date.now()}`;
-      const timestamp = new Date().toISOString();
-      
-      const entryData = {
-        ...formData,
-        timestamp,
-        receiptId,
-      };
-
-      console.log("Stock In Entry:", entryData);
-
-      // Generate receipt data
-      const pricePerKg = PRICE_RATES[formData.qualityGrade];
-      const totalAmount = calculatePrice();
-      
-      setReceiptData({
-        receiptId,
-        type: "stock_in" as const,
-        date: timestamp,
-        farmerName: formData.farmerName,
-        variety: ofspVarieties.find((v) => v.value === formData.variety)?.label || formData.variety,
-        quantity: formData.quantity,
-        qualityGrade: formData.qualityGrade,
-        pricePerKg,
-        totalAmount,
-        location: "Kangundo Aggregation Center", // TODO: Get from context
-        transactionId: receiptId,
-        qrCode: `https://ofsp-marketplace.com/verify/${receiptId}`, // TODO: Generate actual QR code
+      console.log("Stock In Entry:", formData);
+      // Reset form
+      setFormData({
+        farmerId: "",
+        farmerName: "",
+        orderId: "",
+        variety: "",
+        quantity: 0,
+        qualityGrade: undefined,
+        photos: [],
+        notes: "",
       });
-
-      setWorkflowStep("receipt");
-      setIsReceiptOpen(true);
+      setSearchTerm("");
       setIsSubmitting(false);
-
-      // After receipt is shown, proceed to SMS step
-      setTimeout(() => {
-        setWorkflowStep("sms");
-        // TODO: Trigger SMS confirmation API call
-        console.log("SMS confirmation sent to farmer");
-      }, 1000);
+      alert("Stock in entry recorded successfully! Receipt generated.");
     }, 2000);
-  };
-
-  const handleReceiptClose = () => {
-    setIsReceiptOpen(false);
-    // Reset form after receipt is closed
-    setFormData({
-      farmerId: "",
-      farmerName: "",
-      orderId: "",
-      variety: "",
-      quantity: 0,
-      qualityGrade: undefined,
-      photos: [],
-      notes: "",
-    });
-    setSearchTerm("");
-    setWorkflowStep("weigh");
   };
 
   const selectedGrade = qualityGrades.find((g) => g.value === formData.qualityGrade);
@@ -194,63 +128,6 @@ export function StockInForm() {
           Record incoming OFSP produce at aggregation center
         </p>
       </div>
-
-      {/* Workflow Steps Indicator */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                workflowStep === "weigh" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-              )}>
-                <IconScale className="h-5 w-5" />
-                <span className="text-sm font-medium">1. Weigh Produce</span>
-              </div>
-              <div className="h-0.5 w-8 bg-muted" />
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                workflowStep === "quality" || workflowStep === "record" || workflowStep === "receipt" || workflowStep === "sms"
-                  ? "bg-primary/10 text-primary" 
-                  : "bg-muted text-muted-foreground"
-              )}>
-                <IconCheck className="h-5 w-5" />
-                <span className="text-sm font-medium">2. Quality Check</span>
-              </div>
-              <div className="h-0.5 w-8 bg-muted" />
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                workflowStep === "record" || workflowStep === "receipt" || workflowStep === "sms"
-                  ? "bg-primary/10 text-primary" 
-                  : "bg-muted text-muted-foreground"
-              )}>
-                <IconPhoto className="h-5 w-5" />
-                <span className="text-sm font-medium">3. Record Entry</span>
-              </div>
-              <div className="h-0.5 w-8 bg-muted" />
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                workflowStep === "receipt" || workflowStep === "sms"
-                  ? "bg-primary/10 text-primary" 
-                  : "bg-muted text-muted-foreground"
-              )}>
-                <IconReceipt className="h-5 w-5" />
-                <span className="text-sm font-medium">4. Generate Receipt</span>
-              </div>
-              <div className="h-0.5 w-8 bg-muted" />
-              <div className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                workflowStep === "sms"
-                  ? "bg-primary/10 text-primary" 
-                  : "bg-muted text-muted-foreground"
-              )}>
-                <IconMessage className="h-5 w-5" />
-                <span className="text-sm font-medium">5. SMS Confirmation</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -504,24 +381,6 @@ export function StockInForm() {
                     <span className="text-muted-foreground">Photos</span>
                     <span className="font-medium">{formData.photos?.length || 0}</span>
                   </div>
-                  {formData.qualityGrade && formData.quantity > 0 && (
-                    <>
-                      <div className="border-t pt-3 mt-3 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Price per kg</span>
-                          <span className="font-medium">
-                            KES {PRICE_RATES[formData.qualityGrade]}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm font-semibold">
-                          <span>Total Amount</span>
-                          <span className="text-lg text-primary">
-                            KES {calculatePrice().toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  )}
                 </div>
                 <div className="border-t pt-4">
                   <Button
@@ -569,44 +428,7 @@ export function StockInForm() {
           </div>
         </div>
       </form>
-
-      {/* Receipt Dialog */}
-      {receiptData && (
-        <ReceiptGenerator
-          open={isReceiptOpen}
-          onOpenChange={(open) => {
-            setIsReceiptOpen(open);
-            if (!open) {
-              handleReceiptClose();
-            }
-          }}
-          receiptData={receiptData}
-          onDownload={(format) => {
-            console.log(`Downloading receipt as ${format}...`);
-            // TODO: Implement actual download
-          }}
-          onPrint={() => {
-            window.print();
-          }}
-        />
-      )}
-
-      {/* SMS Confirmation Indicator */}
-      {workflowStep === "sms" && !isReceiptOpen && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <IconMessage className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-semibold text-green-900">SMS Confirmation Sent</p>
-                <p className="text-sm text-green-800">
-                  Confirmation message has been sent to {formData.farmerName}'s phone number
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
+

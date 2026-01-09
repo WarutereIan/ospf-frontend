@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconCheck, IconX, IconLoader2, IconCurrency } from "@tabler/icons-react";
-import { cn } from "@/lib/utils";
 
 interface CounterOfferDialogProps {
   open: boolean;
@@ -218,3 +217,4 @@ export function CounterOfferDialog({
     </Dialog>
   );
 }
+

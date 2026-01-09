@@ -4,11 +4,6 @@ import { useUserRole } from "@/contexts/UserRoleContext";
 export function DashboardPage() {
   const { role } = useUserRole();
 
-  // Redirect to login if no role is set
-  if (!role) {
-    return <Navigate to="/login" replace />;
-  }
-
   // Redirect to role-specific dashboard
   switch (role) {
     case "farmer":
@@ -22,6 +17,8 @@ export function DashboardPage() {
     case "aggregation_manager":
       return <Navigate to="/dashboard/aggregation" replace />;
     default:
-      return <Navigate to="/login" replace />;
+      // Default to farmer dashboard if role not set
+      return <Navigate to="/dashboard/farmer" replace />;
   }
 }
+

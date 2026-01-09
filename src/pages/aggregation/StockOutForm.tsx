@@ -20,9 +20,6 @@ interface StockOutEntry {
   buyerId: string;
   buyerName: string;
   orderId?: string;
-  inventoryId?: string; // Link to inventory batch
-  farmerId?: string; // Track farmer origin
-  farmerName?: string; // Track farmer origin
   variety: string;
   quantity: number; // kg
   qualityGrade: "A" | "B" | "C";
@@ -50,9 +47,6 @@ export function StockOutForm() {
     buyerId: "",
     buyerName: "",
     orderId: "",
-    inventoryId: "",
-    farmerId: "",
-    farmerName: "",
     variety: "",
     quantity: 0,
     qualityGrade: undefined,
@@ -65,8 +59,6 @@ export function StockOutForm() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [availableInventory, setAvailableInventory] = useState<any[]>([]);
-  const [selectedInventoryBatch, setSelectedInventoryBatch] = useState<any>(null);
 
   // Sample buyers for search - TODO: Replace with API
   const sampleBuyers = [
@@ -75,58 +67,12 @@ export function StockOutForm() {
     { id: "B003", name: "Mike Ochieng", phone: "+254734567890" },
   ];
 
-  // Sample inventory for selection - TODO: Replace with API
-  const sampleInventory = [
-    {
-      id: "INV-001",
-      farmerId: "F001",
-      farmerName: "James Mutua",
-      variety: "kenya",
-      varietyLabel: "Kenya",
-      qualityGrade: "A" as const,
-      availableQuantity: 500,
-      stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "INV-002",
-      farmerId: "F002",
-      farmerName: "Mary Wanjiku",
-      variety: "spk004",
-      varietyLabel: "SPK004",
-      qualityGrade: "A" as const,
-      availableQuantity: 300,
-      stockInDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: "INV-003",
-      farmerId: "F003",
-      farmerName: "Peter Kamau",
-      variety: "kabode",
-      varietyLabel: "Kabode",
-      qualityGrade: "B" as const,
-      availableQuantity: 200,
-      stockInDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-    },
-  ];
-
   const filteredBuyers = sampleBuyers.filter(
     (buyer) =>
       buyer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       buyer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       buyer.phone.includes(searchTerm)
   );
-
-  const handleInventorySelection = (batch: any) => {
-    setSelectedInventoryBatch(batch);
-    setFormData((prev) => ({
-      ...prev,
-      inventoryId: batch.id,
-      farmerId: batch.farmerId,
-      farmerName: batch.farmerName,
-      variety: batch.variety,
-      qualityGrade: batch.qualityGrade,
-    }));
-  };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -197,84 +143,6 @@ export function StockOutForm() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Inventory Selection - Select which farmer's produce to dispatch */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Select Inventory Batch</CardTitle>
-                <CardDescription>Choose the produce batch to dispatch (includes farmer origin)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!selectedInventoryBatch ? (
-                  <div className="space-y-2">
-                    <Label>Available Inventory</Label>
-                    <div className="border rounded-lg max-h-64 overflow-y-auto">
-                      {sampleInventory.map((batch) => (
-                        <button
-                          key={batch.id}
-                          type="button"
-                          onClick={() => handleInventorySelection(batch)}
-                          className="w-full text-left p-4 hover:bg-muted transition-colors border-b last:border-b-0"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{batch.varietyLabel} - Grade {batch.qualityGrade}</p>
-                              <p className="text-sm text-muted-foreground">
-                                Farmer: {batch.farmerName} ({batch.farmerId})
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                Available: {batch.availableQuantity} kg
-                              </p>
-                            </div>
-                            <Badge variant="outline" className="bg-green-100 text-green-800">
-                              Grade {batch.qualityGrade}
-                            </Badge>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">Selected Batch: {selectedInventoryBatch.id}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {selectedInventoryBatch.varietyLabel} - Grade {selectedInventoryBatch.qualityGrade}
-                        </p>
-                        <p className="text-sm font-semibold text-primary mt-2">
-                          From Farmer: {selectedInventoryBatch.farmerName}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Farmer ID: {selectedInventoryBatch.farmerId}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Available: {selectedInventoryBatch.availableQuantity} kg
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedInventoryBatch(null);
-                          setFormData((prev) => ({
-                            ...prev,
-                            inventoryId: "",
-                            farmerId: "",
-                            farmerName: "",
-                            variety: "",
-                            qualityGrade: undefined,
-                          }));
-                        }}
-                      >
-                        <IconX className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
             {/* Buyer Selection */}
             <Card>
               <CardHeader>
@@ -346,59 +214,77 @@ export function StockOutForm() {
               </CardContent>
             </Card>
 
-            {/* Dispatch Quantity */}
+            {/* Produce Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Dispatch Quantity</CardTitle>
-                <CardDescription>Specify quantity to dispatch from selected batch</CardDescription>
+                <CardTitle>Produce Details</CardTitle>
+                <CardDescription>Enter dispatch information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-3 bg-muted rounded-lg space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Selected Variety:</span>
-                    <span className="font-medium">
-                      {selectedInventoryBatch
-                        ? selectedInventoryBatch.varietyLabel
-                        : "Select inventory batch first"}
-                    </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="variety">OFSP Variety</Label>
+                    <Select
+                      value={formData.variety}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, variety: value || "" }))}
+                    >
+                      <SelectTrigger id="variety">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ofspVarieties.map((v) => (
+                          <SelectItem key={v.value} value={v.value}>
+                            {v.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Quality Grade:</span>
-                    {formData.qualityGrade ? (
-                      <Badge variant="outline" className={qualityGrades.find(g => g.value === formData.qualityGrade)?.color}>
-                        Grade {formData.qualityGrade}
-                      </Badge>
-                    ) : (
-                      <span>-</span>
-                    )}
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Available:</span>
-                    <span className="font-medium">
-                      {selectedInventoryBatch ? `${selectedInventoryBatch.availableQuantity} kg` : "-"}
-                    </span>
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity (kg)</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      placeholder="0"
+                      min={0}
+                      step={0.1}
+                      value={formData.quantity || ""}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))
+                      }
+                    />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="quantity">Dispatch Quantity (kg) *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    placeholder="0"
-                    min={0}
-                    max={selectedInventoryBatch?.availableQuantity || undefined}
-                    step={0.1}
-                    value={formData.quantity || ""}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))
-                    }
-                    disabled={!selectedInventoryBatch}
-                  />
-                  {selectedInventoryBatch && formData.quantity > selectedInventoryBatch.availableQuantity && (
-                    <p className="text-sm text-red-600">
-                      Quantity exceeds available stock ({selectedInventoryBatch.availableQuantity} kg)
-                    </p>
-                  )}
+                  <Label>Quality Grade</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {qualityGrades.map((grade) => (
+                      <button
+                        key={grade.value}
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({ ...prev, qualityGrade: grade.value as "A" | "B" | "C" }))
+                        }
+                        className={cn(
+                          "p-4 border-2 rounded-lg text-left transition-all",
+                          formData.qualityGrade === grade.value
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        )}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <Badge variant="outline" className={grade.color}>
+                            Grade {grade.value}
+                          </Badge>
+                          {formData.qualityGrade === grade.value && (
+                            <IconCheck className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{grade.label.split(" - ")[1]}</p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -519,11 +405,6 @@ export function StockOutForm() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <p className="text-xs font-semibold text-primary mb-1">FARMER ORIGIN</p>
-                    <p className="text-sm font-medium">{formData.farmerName || "Not selected"}</p>
-                    <p className="text-xs text-muted-foreground">{formData.farmerId || "-"}</p>
-                  </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Buyer</span>
                     <span className="font-medium">{formData.buyerName || "Not selected"}</span>
@@ -531,7 +412,7 @@ export function StockOutForm() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Variety</span>
                     <span className="font-medium">
-                      {selectedInventoryBatch?.varietyLabel || "Not selected"}
+                      {ofspVarieties.find((v) => v.value === formData.variety)?.label || "Not selected"}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -565,11 +446,10 @@ export function StockOutForm() {
                     className="w-full"
                     disabled={
                       !formData.buyerId ||
-                      !formData.inventoryId ||
-                      !formData.farmerId ||
+                      !formData.variety ||
                       !formData.quantity ||
-                      isSubmitting ||
-                      (selectedInventoryBatch && formData.quantity > selectedInventoryBatch.availableQuantity)
+                      !formData.qualityGrade ||
+                      isSubmitting
                     }
                   >
                     {isSubmitting ? (
@@ -609,3 +489,4 @@ export function StockOutForm() {
     </div>
   );
 }
+

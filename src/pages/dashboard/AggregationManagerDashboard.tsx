@@ -8,6 +8,7 @@ import {
   IconPackage,
   IconTrendingUp,
   IconTrendingDown,
+  IconCheckCircle,
   IconAlertTriangle,
   IconClipboardCheck,
   IconUsers,
@@ -215,31 +216,31 @@ export function AggregationManagerDashboard() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link to="/dashboard/aggregation/stock-in" className="w-full">
+              <Link to="/dashboard/stock-in" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrendingUp className="mr-2 h-4 w-4" />
                   Stock In
                 </Button>
               </Link>
-              <Link to="/dashboard/aggregation/stock-out" className="w-full">
+              <Link to="/dashboard/stock-out" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrendingDown className="mr-2 h-4 w-4" />
                   Stock Out
                 </Button>
               </Link>
-              <Link to="/dashboard/aggregation/quality-checks" className="w-full">
+              <Link to="/dashboard/quality-checks" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconClipboardCheck className="mr-2 h-4 w-4" />
                   Quality Checks
                 </Button>
               </Link>
-              <Link to="/dashboard/aggregation/inventory" className="w-full">
+              <Link to="/dashboard/inventory" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   Inventory Report
                 </Button>
               </Link>
-              <Link to="/dashboard/aggregation/farmers" className="w-full">
+              <Link to="/dashboard/farmers" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconUsers className="mr-2 h-4 w-4" />
                   Farmer Coordination
@@ -317,3 +318,4 @@ function StatCard({ label, value, description, icon, isLoading }: StatCardProps)
     </Card>
   );
 }
+

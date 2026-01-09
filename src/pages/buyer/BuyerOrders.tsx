@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -7,36 +6,30 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   IconSearch,
   IconEye,
   IconPackage,
   IconDownload,
   IconStar,
-  IconMapPin,
-  IconTruck,
-  IconClipboardCheck,
-  IconCash,
-  IconClock,
-  IconTrendingUp,
-  IconTrendingDown,
-  IconAlertTriangle,
-  IconCircleCheck,
-  IconChartBar,
-  IconUser,
 } from "@tabler/icons-react";
+import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
+import { PaymentDialog } from "@/components/payments/PaymentDialog";
 import { RateFarmer } from "./RateFarmer";
 import { Link } from "react-router-dom";
-import { cn } from "@/lib/utils";
 
 interface BuyerOrder {
   id: string;
   farmerId: string;
   farmerName: string;
-  farmerPhone: string;
-  farmerRating?: number;
-  aggregationCenter: string;
-  centerLocation: string;
   variety: string;
   quantity: number;
   qualityGrade: string;
@@ -48,7 +41,6 @@ interface BuyerOrder {
     | "payment_secured"
     | "in_transit"
     | "at_aggregation"
-    | "quality_checked"
     | "quality_approved"
     | "out_for_delivery"
     | "delivered"
@@ -61,12 +53,6 @@ interface BuyerOrder {
   paymentAmount?: number;
   photos?: string[];
   canRate: boolean;
-  qualityScore?: number;
-  qualityFeedback?: string;
-  estimatedDeliveryDate?: string;
-  actualDeliveryDate?: string;
-  farmerDeliveryHistory?: number; // Number of successful past deliveries
-  farmerQualityAverage?: number; // Farmer's average quality score
 }
 
 const sampleOrders: BuyerOrder[] = [
@@ -74,10 +60,6 @@ const sampleOrders: BuyerOrder[] = [
     id: "ORD-001",
     farmerId: "F001",
     farmerName: "James Mutua",
-    farmerPhone: "+254712345678",
-    farmerRating: 4.8,
-    aggregationCenter: "Kangundo Aggregation Center",
-    centerLocation: "Kangundo",
     variety: "Kenya",
     quantity: 500,
     qualityGrade: "A",
@@ -85,151 +67,38 @@ const sampleOrders: BuyerOrder[] = [
     totalAmount: 75000,
     status: "quality_approved",
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Nairobi",
+    deliveryLocation: "Kangundo Aggregation Center",
     paymentStatus: "ready_for_release",
     paymentAmount: 75000,
     canRate: false,
-    qualityScore: 95,
-    qualityFeedback: "Excellent quality - premium grade, uniform size",
-    estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-    farmerDeliveryHistory: 25,
-    farmerQualityAverage: 92,
   },
   {
     id: "ORD-002",
     farmerId: "F002",
     farmerName: "Mary Wanjiku",
-    farmerPhone: "+254723456789",
-    farmerRating: 4.5,
-    aggregationCenter: "Kathiani Aggregation Center",
-    centerLocation: "Kathiani",
     variety: "SPK004",
     quantity: 300,
     qualityGrade: "A",
-    pricePerKg: 150,
-    totalAmount: 45000,
+    pricePerKg: 120,
+    totalAmount: 36000,
     status: "completed",
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Mombasa",
+    deliveryLocation: "Kathiani Aggregation Center",
     paymentStatus: "completed",
-    paymentAmount: 45000,
+    paymentAmount: 36000,
     canRate: true,
-    qualityScore: 88,
-    qualityFeedback: "Good quality, slight variation in size",
-    actualDeliveryDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    farmerDeliveryHistory: 18,
-    farmerQualityAverage: 87,
-  },
-  {
-    id: "ORD-003",
-    farmerId: "F003",
-    farmerName: "Peter Kamau",
-    farmerPhone: "+254734567890",
-    farmerRating: 4.2,
-    aggregationCenter: "Masinga Aggregation Center",
-    centerLocation: "Masinga",
-    variety: "Kabode",
-    quantity: 200,
-    qualityGrade: "B",
-    pricePerKg: 120,
-    totalAmount: 24000,
-    status: "at_aggregation",
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Kisumu",
-    paymentStatus: "in_escrow",
-    paymentAmount: 24000,
-    canRate: false,
-    estimatedDeliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    farmerDeliveryHistory: 12,
-    farmerQualityAverage: 78,
-  },
-  {
-    id: "ORD-004",
-    farmerId: "F001",
-    farmerName: "James Mutua",
-    farmerPhone: "+254712345678",
-    farmerRating: 4.8,
-    aggregationCenter: "Kangundo Aggregation Center",
-    centerLocation: "Kangundo",
-    variety: "Kenya",
-    quantity: 400,
-    qualityGrade: "A",
-    pricePerKg: 150,
-    totalAmount: 60000,
-    status: "order_placed",
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Nairobi",
-    paymentStatus: "pending",
-    canRate: false,
-    estimatedDeliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    farmerDeliveryHistory: 25,
-    farmerQualityAverage: 92,
   },
 ];
 
 export function BuyerOrders() {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<BuyerOrder[]>(sampleOrders);
   const [filteredOrders, setFilteredOrders] = useState<BuyerOrder[]>(sampleOrders);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [farmerFilter, setFarmerFilter] = useState("all");
-  const [centerFilter, setCenterFilter] = useState("all");
+  const [selectedOrder, setSelectedOrder] = useState<BuyerOrder | null>(null);
+  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
-  const [selectedOrderForRating, setSelectedOrderForRating] = useState<BuyerOrder | null>(null);
-
-  // Calculate metrics
-  const totalSpent = orders
-    .filter((o) => o.status === "completed")
-    .reduce((sum, o) => sum + o.totalAmount, 0);
-
-  const totalPending = orders
-    .filter((o) => o.paymentStatus === "pending" || o.paymentStatus === "in_escrow")
-    .reduce((sum, o) => sum + (o.paymentAmount || 0), 0);
-
-  const averageQualityReceived = orders.filter((o) => o.qualityScore).length > 0
-    ? Math.round(
-        orders.filter((o) => o.qualityScore).reduce((sum, o) => sum + (o.qualityScore || 0), 0) /
-          orders.filter((o) => o.qualityScore).length
-      )
-    : 0;
-
-  const pendingRatings = orders.filter((o) => o.canRate).length;
-
-  const uniqueFarmers = Array.from(new Set(orders.map((o) => o.farmerId)));
-  const uniqueCenters = Array.from(new Set(orders.map((o) => o.aggregationCenter)));
-
-  const completionRate = orders.length > 0
-    ? Math.round((orders.filter((o) => o.status === "completed").length / orders.length) * 100)
-    : 0;
-
-  useEffect(() => {
-    let filtered = [...orders];
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (o) =>
-          o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          o.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          o.variety.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((o) => o.status === statusFilter);
-    }
-
-    if (farmerFilter !== "all") {
-      filtered = filtered.filter((o) => o.farmerId === farmerFilter);
-    }
-
-    if (centerFilter !== "all") {
-      filtered = filtered.filter((o) => o.aggregationCenter === centerFilter);
-    }
-
-    setFilteredOrders(filtered);
-  }, [orders, searchTerm, statusFilter, farmerFilter, centerFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -242,8 +111,6 @@ export function BuyerOrders() {
       case "in_transit":
       case "at_aggregation":
         return "bg-purple-100 text-purple-800";
-      case "quality_checked":
-        return "bg-orange-100 text-orange-800";
       case "quality_approved":
         return "bg-green-100 text-green-800";
       case "out_for_delivery":
@@ -266,125 +133,9 @@ export function BuyerOrders() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">My Orders</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Track your purchases with complete farmer traceability
+            Track your purchases and order status
           </p>
         </div>
-      </div>
-
-      {/* Enhanced Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
-            <p className="text-xs text-muted-foreground">All-time</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Active Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {orders.filter((o) => !["completed", "rejected", "disputed"].includes(o.status)).length}
-            </div>
-            <p className="text-xs text-muted-foreground">In progress</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Spent</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-green-600">
-              KES {(totalSpent / 1000).toFixed(0)}K
-            </div>
-            <p className="text-xs text-muted-foreground">Completed</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Avg Quality</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-1">
-              <div className="text-2xl font-bold">{averageQualityReceived}%</div>
-              <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-            </div>
-            <p className="text-xs text-muted-foreground">Received</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Unique Farmers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{uniqueFarmers.length}</div>
-            <p className="text-xs text-muted-foreground">Suppliers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Pending Ratings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{pendingRatings}</div>
-            <p className="text-xs text-muted-foreground">To rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Performance Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
-              {completionRate >= 90 ? (
-                <IconTrendingUp className="h-5 w-5 text-green-600" />
-              ) : (
-                <IconTrendingDown className="h-5 w-5 text-orange-600" />
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold mb-1">{completionRate}%</div>
-            <p className="text-xs text-muted-foreground">Successfully completed orders</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Active Centers</CardTitle>
-              <IconMapPin className="h-5 w-5 text-primary" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold mb-1">{uniqueCenters.length}</div>
-            <p className="text-xs text-muted-foreground">Aggregation centers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
-              <IconCash className="h-5 w-5 text-orange-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold mb-1">KES {(totalPending / 1000).toFixed(0)}K</div>
-            <p className="text-xs text-muted-foreground">In escrow</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}
@@ -400,45 +151,19 @@ export function BuyerOrders() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select value={farmerFilter} onValueChange={(value) => setFarmerFilter(value || "all")}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Farmers</SelectItem>
-                {uniqueFarmers.map((farmerId) => {
-                  const farmer = orders.find((o) => o.farmerId === farmerId);
-                  return (
-                    <SelectItem key={farmerId} value={farmerId}>
-                      {farmer?.farmerName}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <Select value={centerFilter} onValueChange={(value) => setCenterFilter(value || "all")}>
-              <SelectTrigger className="w-full md:w-[220px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Centers</SelectItem>
-                {uniqueCenters.map((center) => (
-                  <SelectItem key={center} value={center}>
-                    {center}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value || "all")}>
-              <SelectTrigger className="w-full md:w-[180px]">
+              <SelectTrigger className="w-full md:w-[200px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="order_placed">Order Placed</SelectItem>
                 <SelectItem value="order_accepted">Order Accepted</SelectItem>
+                <SelectItem value="payment_secured">Payment Secured</SelectItem>
+                <SelectItem value="in_transit">In Transit</SelectItem>
                 <SelectItem value="at_aggregation">At Aggregation</SelectItem>
                 <SelectItem value="quality_approved">Quality Approved</SelectItem>
+                <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
@@ -450,22 +175,8 @@ export function BuyerOrders() {
       {/* Orders Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Orders</CardTitle>
-              <CardDescription>{filteredOrders.length} order(s) found</CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                <IconDownload className="mr-2 h-4 w-4" />
-                Export
-              </Button>
-              <Button variant="outline" size="sm">
-                <IconChartBar className="mr-2 h-4 w-4" />
-                Analytics
-              </Button>
-            </div>
-          </div>
+          <CardTitle>Orders</CardTitle>
+          <CardDescription>{filteredOrders.length} order(s) found</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
@@ -473,12 +184,10 @@ export function BuyerOrders() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
-                  <TableHead>Farmer (Origin)</TableHead>
-                  <TableHead>Center</TableHead>
+                  <TableHead>Farmer</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Quantity</TableHead>
                   <TableHead>Amount</TableHead>
-                  <TableHead>Quality</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -486,59 +195,13 @@ export function BuyerOrders() {
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => (
-                  <TableRow 
-                    key={order.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
-                  >
+                  <TableRow key={order.id}>
                     <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="flex items-center gap-2 mb-1">
-                          <IconUser className="h-3 w-3 text-primary" />
-                          <span className="font-medium">{order.farmerName}</span>
-                        </div>
-                        {order.farmerRating && (
-                          <div className="flex items-center gap-1">
-                            <IconStar className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                            <span className="text-xs">{order.farmerRating.toFixed(1)}</span>
-                            <span className="text-xs text-muted-foreground">
-                              ({order.farmerDeliveryHistory} orders)
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <p className="font-medium">{order.aggregationCenter}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <IconMapPin className="h-3 w-3" />
-                          {order.centerLocation}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium text-sm">{order.variety}</p>
-                        <Badge variant="outline" className="text-xs">
-                          Grade {order.qualityGrade}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">{order.quantity} kg</TableCell>
+                    <TableCell>{order.farmerName}</TableCell>
+                    <TableCell>{order.variety}</TableCell>
+                    <TableCell>{order.quantity} kg</TableCell>
                     <TableCell className="font-semibold">
                       KES {order.totalAmount.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      {order.qualityScore ? (
-                        <div className="flex items-center gap-1">
-                          <IconStar className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                          <span className="font-medium text-sm">{order.qualityScore}%</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">Pending</span>
-                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getStatusColor(order.status)}>
@@ -549,13 +212,13 @@ export function BuyerOrders() {
                       {new Date(order.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-2">
                         {order.canRate && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              setSelectedOrderForRating(order);
+                              setSelectedOrder(order);
                               setRatingDialogOpen(true);
                             }}
                           >
@@ -565,7 +228,10 @@ export function BuyerOrders() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            setOrderDetailsOpen(true);
+                          }}
                         >
                           <IconEye className="h-4 w-4" />
                         </Button>
@@ -579,20 +245,229 @@ export function BuyerOrders() {
         </CardContent>
       </Card>
 
-      {/* Rating Dialog */}
-      {selectedOrderForRating && ratingDialogOpen && (
-        <RateFarmer
-          farmerId={selectedOrderForRating.farmerId}
-          farmerName={selectedOrderForRating.farmerName}
-          orderId={selectedOrderForRating.id}
-          variety={selectedOrderForRating.variety}
-          quantity={selectedOrderForRating.quantity}
-          onRatingSubmitted={() => {
-            setRatingDialogOpen(false);
-            setSelectedOrderForRating(null);
-          }}
+      {/* Order Details Dialog */}
+      <Dialog open={orderDetailsOpen} onOpenChange={setOrderDetailsOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+            <DialogDescription>Order #{selectedOrder?.id}</DialogDescription>
+          </DialogHeader>
+
+          {selectedOrder && (
+            <div className="space-y-6">
+              {/* Order Timeline */}
+              <OrderTimeline
+                currentStage={selectedOrder.status as OrderStage}
+                stages={[
+                  {
+                    stage: "order_placed",
+                    timestamp: selectedOrder.createdAt,
+                    completed: true,
+                  },
+                  {
+                    stage: "order_accepted",
+                    timestamp:
+                      selectedOrder.status !== "order_placed"
+                        ? new Date(Date.now() - 15 * 60 * 1000).toISOString()
+                        : undefined,
+                    completed: selectedOrder.status !== "order_placed",
+                  },
+                  {
+                    stage: "payment_secured",
+                    timestamp:
+                      ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                        selectedOrder.status
+                      )
+                        ? new Date(Date.now() - 10 * 60 * 1000).toISOString()
+                        : undefined,
+                    completed: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                      selectedOrder.status
+                    ),
+                  },
+                  {
+                    stage: "in_transit",
+                    timestamp:
+                      ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                        selectedOrder.status
+                      )
+                        ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                        : undefined,
+                    completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                      selectedOrder.status
+                    ),
+                  },
+                  {
+                    stage: "at_aggregation",
+                    timestamp:
+                      ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                        selectedOrder.status
+                      )
+                        ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
+                        : undefined,
+                    completed: ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                      selectedOrder.status
+                    ),
+                  },
+                  {
+                    stage: "quality_approved",
+                    timestamp:
+                      ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                        selectedOrder.status
+                      )
+                        ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
+                        : undefined,
+                    completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
+                      selectedOrder.status
+                    ),
+                  },
+                  {
+                    stage: "out_for_delivery",
+                    timestamp:
+                      ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status)
+                        ? new Date(Date.now() - 30 * 1000).toISOString()
+                        : undefined,
+                    completed: ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status),
+                  },
+                  {
+                    stage: "delivered",
+                    timestamp:
+                      ["delivered", "completed"].includes(selectedOrder.status)
+                        ? new Date().toISOString()
+                        : undefined,
+                    completed: ["delivered", "completed"].includes(selectedOrder.status),
+                  },
+                  {
+                    stage: "completed",
+                    timestamp: selectedOrder.status === "completed" ? new Date().toISOString() : undefined,
+                    completed: selectedOrder.status === "completed",
+                  },
+                ]}
+              />
+
+              {/* Payment Status */}
+              {selectedOrder.paymentStatus && selectedOrder.paymentAmount && (
+                <EscrowStatus
+                  status={selectedOrder.paymentStatus}
+                  amount={selectedOrder.paymentAmount}
+                  orderId={selectedOrder.id}
+                  createdAt={selectedOrder.createdAt}
+                />
+              )}
+
+              {/* Order Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Farmer Information</h3>
+                  <div className="border rounded-md p-4">
+                    <p className="font-medium">{selectedOrder.farmerName}</p>
+                    <p className="text-sm text-muted-foreground">ID: {selectedOrder.farmerId}</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Order Details</h3>
+                  <div className="border rounded-md p-4 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Variety:</span>
+                      <span className="font-medium">{selectedOrder.variety}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Quantity:</span>
+                      <span className="font-medium">{selectedOrder.quantity} kg</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Price per kg:</span>
+                      <span className="font-medium">KES {selectedOrder.pricePerKg}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold">Total:</span>
+                      <span className="font-bold">KES {selectedOrder.totalAmount.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Photo Gallery */}
+              {selectedOrder.photos && selectedOrder.photos.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">Quality Check Photos</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {selectedOrder.photos.map((photo, index) => (
+                      <div key={index} className="aspect-square rounded-lg overflow-hidden border">
+                        <img
+                          src={photo}
+                          alt={`Quality check ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                {selectedOrder.status === "order_placed" && !selectedOrder.paymentStatus && (
+                  <Button onClick={() => setPaymentDialogOpen(true)}>
+                    Make Payment
+                  </Button>
+                )}
+                {selectedOrder.canRate && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setOrderDetailsOpen(false);
+                      setRatingDialogOpen(true);
+                    }}
+                  >
+                    <IconStar className="mr-2 h-4 w-4" />
+                    Rate Farmer
+                  </Button>
+                )}
+                <Button variant="outline">
+                  <IconDownload className="mr-2 h-4 w-4" />
+                  Download Receipt
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      {selectedOrder && (
+        <PaymentDialog
+          open={paymentDialogOpen}
+          onOpenChange={setPaymentDialogOpen}
+          orderId={selectedOrder.id}
+          amount={selectedOrder.totalAmount}
+          farmerName={selectedOrder.farmerName}
         />
+      )}
+
+      {/* Rating Dialog */}
+      {selectedOrder && (
+        <Dialog open={ratingDialogOpen} onOpenChange={setRatingDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <RateFarmer
+              orderId={selectedOrder.id}
+              farmerName={selectedOrder.farmerName}
+              farmerId={selectedOrder.farmerId}
+              variety={selectedOrder.variety}
+              quantity={selectedOrder.quantity}
+              onRatingSubmitted={() => {
+                setRatingDialogOpen(false);
+                // Update order to mark as rated
+                setOrders((prev) =>
+                  prev.map((o) =>
+                    o.id === selectedOrder.id ? { ...o, canRate: false } : o
+                  )
+                );
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
 }
+

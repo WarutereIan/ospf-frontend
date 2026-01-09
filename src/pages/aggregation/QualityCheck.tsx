@@ -17,8 +17,6 @@ import { cn } from "@/lib/utils";
 
 interface QualityCheckForm {
   stockId: string;
-  farmerId: string; // Track farmer origin
-  farmerName: string; // Track farmer origin
   variety: string;
   quantity: number;
   qualityGrade: "A" | "B" | "C" | null;
@@ -45,8 +43,6 @@ const sizeOptions = [
 export function QualityCheck() {
   const [formData, setFormData] = useState<QualityCheckForm>({
     stockId: "",
-    farmerId: "",
-    farmerName: "",
     variety: "",
     quantity: 0,
     qualityGrade: null,
@@ -57,27 +53,6 @@ export function QualityCheck() {
     notes: "",
     approved: null,
   });
-
-  // Sample pending stock for quality check - TODO: Replace with API
-  const samplePendingStock = [
-    { id: "STK-001", farmerId: "F001", farmerName: "James Mutua", variety: "Kenya", quantity: 500 },
-    { id: "STK-002", farmerId: "F002", farmerName: "Mary Wanjiku", variety: "SPK004", quantity: 300 },
-    { id: "STK-003", farmerId: "F003", farmerName: "Peter Kamau", variety: "Kabode", quantity: 200 },
-  ];
-
-  const handleStockSelection = (stockId: string) => {
-    const selected = samplePendingStock.find((s) => s.id === stockId);
-    if (selected) {
-      setFormData((prev) => ({
-        ...prev,
-        stockId: selected.id,
-        farmerId: selected.farmerId,
-        farmerName: selected.farmerName,
-        variety: selected.variety,
-        quantity: selected.quantity,
-      }));
-    }
-  };
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -119,8 +94,6 @@ export function QualityCheck() {
       // Reset form
       setFormData({
         stockId: "",
-        farmerId: "",
-        farmerName: "",
         variety: "",
         quantity: 0,
         qualityGrade: null,
@@ -151,44 +124,48 @@ export function QualityCheck() {
           <Card>
             <CardHeader>
               <CardTitle>Stock Information</CardTitle>
-              <CardDescription>Select pending stock for quality check</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="stockId">Select Pending Stock *</Label>
-                <Select
-                  value={formData.stockId}
-                  onValueChange={handleStockSelection}
-                >
-                  <SelectTrigger id="stockId">
-                    <SelectValue placeholder="Select stock to check" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {samplePendingStock.map((stock) => (
-                      <SelectItem key={stock.id} value={stock.id}>
-                        {stock.id} - {stock.farmerName} - {stock.variety} ({stock.quantity} kg)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {formData.farmerName && (
-                <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                  <p className="text-xs font-semibold text-primary mb-2">FARMER ORIGIN</p>
-                  <p className="font-medium">{formData.farmerName}</p>
-                  <p className="text-sm text-muted-foreground">Farmer ID: {formData.farmerId}</p>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Variety:</span>
-                      <p className="font-medium">{formData.variety}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Quantity:</span>
-                      <p className="font-medium">{formData.quantity} kg</p>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="stockId">Stock ID</Label>
+                  <Input
+                    id="stockId"
+                    placeholder="INV-001"
+                    value={formData.stockId}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, stockId: e.target.value }))}
+                  />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label htmlFor="variety">Variety</Label>
+                  <Select
+                    value={formData.variety}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, variety: value || "" }))}
+                  >
+                    <SelectTrigger id="variety">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kenya">Kenya</SelectItem>
+                      <SelectItem value="spk004">SPK004</SelectItem>
+                      <SelectItem value="kabode">Kabode</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">Quantity (kg)</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={formData.quantity || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))
+                    }
+                    min={0}
+                    step={0.1}
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -241,7 +218,7 @@ export function QualityCheck() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select average size" />
                   </SelectTrigger>
                   <SelectContent>
                     {sizeOptions.map((size) => (
@@ -379,12 +356,6 @@ export function QualityCheck() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
-                {formData.farmerName && (
-                  <div className="p-2 bg-primary/10 rounded">
-                    <p className="text-xs font-semibold text-primary">FARMER</p>
-                    <p className="text-sm font-medium">{formData.farmerName}</p>
-                  </div>
-                )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Stock ID</span>
                   <span className="font-medium">{formData.stockId || "Not entered"}</span>
@@ -467,3 +438,4 @@ export function QualityCheck() {
     </div>
   );
 }
+

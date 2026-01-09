@@ -111,7 +111,7 @@ export function MarketInfo() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link to="/dashboard/farmer">
+          <Link to="/dashboard">
             <Button variant="ghost" size="sm" className="mb-2">
               <IconArrowLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
@@ -295,3 +295,4 @@ export function MarketInfo() {
     </div>
   );
 }
+

@@ -187,7 +187,7 @@ export function BulkOrderCart({
                     onValueChange={(value) => setDeliveryLocation(value || "")}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select delivery location" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="kangundo">Kangundo Aggregation Center</SelectItem>
@@ -229,3 +229,4 @@ export function BulkOrderCart({
     </Dialog>
   );
 }
+

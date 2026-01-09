@@ -119,13 +119,13 @@ export function FarmerDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/dashboard/farmer/produce/new">
+          <Link to="/dashboard/produce/new">
             <Button size="sm">
               <IconPlus className="mr-2 h-4 w-4" />
               Post Produce
             </Button>
           </Link>
-          <Link to="/dashboard/farmer/leaderboard">
+          <Link to="/dashboard/leaderboard">
             <Button size="sm" variant="outline">
               <IconTrophy className="mr-2 h-4 w-4" />
               View Leaderboard
@@ -213,7 +213,7 @@ export function FarmerDashboard() {
                           {order.status}
                         </Badge>
                       </div>
-                      <Link to={`/dashboard/farmer/orders/${order.id}`}>
+                      <Link to={`/dashboard/orders/${order.id}`}>
                         <Button size="sm" variant="outline">
                           <IconArrowRight className="h-4 w-4" />
                         </Button>
@@ -233,7 +233,7 @@ export function FarmerDashboard() {
             )}
           </CardContent>
           <CardFooter>
-            <Link to="/dashboard/farmer/orders" className="w-full">
+            <Link to="/dashboard/orders" className="w-full">
               <Button variant="outline" className="w-full">View All Orders</Button>
             </Link>
           </CardFooter>
@@ -247,25 +247,25 @@ export function FarmerDashboard() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link to="/dashboard/farmer/produce" className="w-full">
+              <Link to="/dashboard/produce" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   Manage Produce
                 </Button>
               </Link>
-              <Link to="/dashboard/farmer/orders" className="w-full">
+              <Link to="/dashboard/orders" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrendingUp className="mr-2 h-4 w-4" />
                   View Orders
                 </Button>
               </Link>
-              <Link to="/dashboard/farmer/leaderboard" className="w-full">
+              <Link to="/dashboard/leaderboard" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrophy className="mr-2 h-4 w-4" />
                   Peer Leaderboard
                 </Button>
               </Link>
-              <Link to="/dashboard/farmer/market-info" className="w-full">
+              <Link to="/dashboard/market-info" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconChartBar className="mr-2 h-4 w-4" />
                   Market Prices
@@ -297,7 +297,7 @@ export function FarmerDashboard() {
               </div>
             </CardContent>
             <CardFooter>
-              <Link to="/dashboard/farmer/market-info" className="w-full">
+              <Link to="/dashboard/market-info" className="w-full">
                 <Button variant="outline" className="w-full">View Full Market Info</Button>
               </Link>
             </CardFooter>

@@ -1,845 +1,507 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  IconPlus,
   IconPackage,
   IconSearch,
-  IconMapPin,
-  IconTrendingUp,
-  IconTrendingDown,
-  IconStar,
-  IconAlertCircle,
-  IconClipboardCheck,
-  IconCash,
-  IconChartBar,
-  IconBulb,
-  IconEye,
-  IconClock,
-  IconCheck,
-  IconX,
-  IconArrowUp,
-  IconArrowDown,
-  IconReceipt,
+  IconEdit,
+  IconTrash,
+  IconAlertTriangle,
+  IconArrowLeft,
+  IconPhoto,
 } from "@tabler/icons-react";
-import { cn } from "@/lib/utils";
 
-// Aggregation Center Stock (Farmer's produce across centers)
-interface CenterStock {
-  centerId: string;
-  centerName: string;
-  location: string;
-  variety: string;
-  quantity: number; // Current stock in kg
-  qualityGrade: "A" | "B" | "C";
-  stockInDate: string;
-  status: "fresh" | "aging" | "sold" | "wasted";
-  daysInStorage: number;
-  lastSold?: string;
-  soldQuantity?: number;
-  wastage?: number;
-}
+// OFSP Varieties
+const ofspVarieties = [
+  { label: "Kenya", value: "kenya" },
+  { label: "SPK004", value: "spk004" },
+  { label: "Kabode", value: "kabode" },
+];
 
-// Delivery History to Aggregation Centers
-interface Delivery {
+// Quality Grades
+const qualityGrades = [
+  { label: "Grade A - Premium", value: "A", color: "bg-green-100 text-green-800" },
+  { label: "Grade B - Standard", value: "B", color: "bg-yellow-100 text-yellow-800" },
+  { label: "Grade C - Processing", value: "C", color: "bg-orange-100 text-orange-800" },
+];
+
+// Sub-counties in Machakos
+const subCounties = [
+  { label: "Kangundo", value: "kangundo" },
+  { label: "Kathiani", value: "kathiani" },
+  { label: "Masinga", value: "masinga" },
+  { label: "Yatta", value: "yatta" },
+];
+
+interface ProduceListing {
   id: string;
-  centerId: string;
-  centerName: string;
-  date: string;
   variety: string;
   quantity: number;
-  qualityGrade: "A" | "B" | "C";
-  qualityScore: number; // 0-100
+  qualityGrade: string;
   pricePerKg: number;
-  totalAmount: number;
-  paymentStatus: "pending" | "released" | "paid";
-  receiptId: string;
-  feedback?: string;
-}
-
-// Quality Assessment from Centers
-interface QualityAssessment {
-  id: string;
-  centerId: string;
-  centerName: string;
-  date: string;
-  variety: string;
-  qualityGrade: "A" | "B" | "C";
-  colorScore: number; // 1-10
-  sizeScore: number; // 1-10
-  damagePercentage: number;
-  overallScore: number; // 0-100
-  approved: boolean;
-  feedback: string;
-}
-
-// Recommendation
-interface Recommendation {
-  id: string;
-  type: "quality" | "price" | "variety" | "timing" | "market";
-  title: string;
+  location: string;
   description: string;
-  priority: "high" | "medium" | "low";
-  icon: any;
+  status: "active" | "sold" | "inactive";
+  createdAt: string;
+  photos?: string[];
 }
+
+// Sample data - will be replaced with API calls
+const sampleListings: ProduceListing[] = [
+  {
+    id: "LST-001",
+    variety: "kenya",
+    quantity: 500,
+    qualityGrade: "A",
+    pricePerKg: 150,
+    location: "kangundo",
+    description: "Fresh harvest, Grade A quality",
+    status: "active",
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "LST-002",
+    variety: "spk004",
+    quantity: 300,
+    qualityGrade: "B",
+    pricePerKg: 120,
+    location: "kangundo",
+    description: "Good quality, ready for market",
+    status: "active",
+    createdAt: new Date().toISOString(),
+  },
+];
 
 export function ProduceManagement() {
-  const [centerStocks, setCenterStocks] = useState<CenterStock[]>([]);
-  const [deliveryHistory, setDeliveryHistory] = useState<Delivery[]>([]);
-  const [qualityAssessments, setQualityAssessments] = useState<QualityAssessment[]>([]);
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [listings, setListings] = useState<ProduceListing[]>(sampleListings);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterCenter, setFilterCenter] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      // Mock Center Stocks
-      const mockCenterStocks: CenterStock[] = [
-        {
-          centerId: "AC-001",
-          centerName: "Kangundo Aggregation Center",
-          location: "Kangundo",
-          variety: "Kenya",
-          quantity: 200,
-          qualityGrade: "A",
-          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "fresh",
-          daysInStorage: 2,
-          soldQuantity: 300,
-        },
-        {
-          centerId: "AC-002",
-          centerName: "Kathiani Aggregation Center",
-          location: "Kathiani",
-          variety: "SPK004",
-          quantity: 150,
-          qualityGrade: "A",
-          stockInDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "aging",
-          daysInStorage: 5,
-          soldQuantity: 100,
-        },
-        {
-          centerId: "AC-003",
-          centerName: "Masinga Aggregation Center",
-          location: "Masinga",
-          variety: "Kabode",
-          quantity: 0,
-          qualityGrade: "B",
-          stockInDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "sold",
-          daysInStorage: 8,
-          soldQuantity: 200,
-          lastSold: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-
-      // Mock Delivery History
-      const mockDeliveries: Delivery[] = [
-        {
-          id: "DEL-001",
-          centerId: "AC-001",
-          centerName: "Kangundo Aggregation Center",
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "Kenya",
-          quantity: 500,
-          qualityGrade: "A",
-          qualityScore: 95,
-          pricePerKg: 150,
-          totalAmount: 75000,
-          paymentStatus: "released",
-          receiptId: "RCP-001",
-          feedback: "Excellent quality, uniform size, vibrant color",
-        },
-        {
-          id: "DEL-002",
-          centerId: "AC-002",
-          centerName: "Kathiani Aggregation Center",
-          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "SPK004",
-          quantity: 250,
-          qualityGrade: "A",
-          qualityScore: 88,
-          pricePerKg: 150,
-          totalAmount: 37500,
-          paymentStatus: "paid",
-          receiptId: "RCP-002",
-          feedback: "Good quality, slight variation in size",
-        },
-        {
-          id: "DEL-003",
-          centerId: "AC-003",
-          centerName: "Masinga Aggregation Center",
-          date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "Kabode",
-          quantity: 200,
-          qualityGrade: "B",
-          qualityScore: 75,
-          pricePerKg: 120,
-          totalAmount: 24000,
-          paymentStatus: "paid",
-          receiptId: "RCP-003",
-          feedback: "Standard quality, some minor blemishes",
-        },
-      ];
-
-      // Mock Quality Assessments
-      const mockAssessments: QualityAssessment[] = [
-        {
-          id: "QA-001",
-          centerId: "AC-001",
-          centerName: "Kangundo Aggregation Center",
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "Kenya",
-          qualityGrade: "A",
-          colorScore: 9,
-          sizeScore: 10,
-          damagePercentage: 2,
-          overallScore: 95,
-          approved: true,
-          feedback: "Premium quality - vibrant orange color, uniform large size, minimal damage",
-        },
-        {
-          id: "QA-002",
-          centerId: "AC-002",
-          centerName: "Kathiani Aggregation Center",
-          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "SPK004",
-          qualityGrade: "A",
-          colorScore: 8,
-          sizeScore: 9,
-          damagePercentage: 5,
-          overallScore: 88,
-          approved: true,
-          feedback: "Good quality - some size variation but overall excellent",
-        },
-        {
-          id: "QA-003",
-          centerId: "AC-003",
-          centerName: "Masinga Aggregation Center",
-          date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-          variety: "Kabode",
-          qualityGrade: "B",
-          colorScore: 7,
-          sizeScore: 7,
-          damagePercentage: 10,
-          overallScore: 75,
-          approved: true,
-          feedback: "Standard quality - acceptable for processing",
-        },
-      ];
-
-      // Mock Recommendations
-      const mockRecommendations: Recommendation[] = [
-        {
-          id: "REC-001",
-          type: "quality",
-          title: "Maintain Your Premium Quality",
-          description: "Your recent deliveries to Kangundo Center achieved a 95% quality score. Keep following your current harvesting and handling practices.",
-          priority: "high",
-          icon: IconStar,
-        },
-        {
-          id: "REC-002",
-          type: "price",
-          title: "Price Opportunity for Grade A Kenya",
-          description: "Grade A Kenya variety is in high demand. Current market price is 12% above average. Consider prioritizing this variety.",
-          priority: "high",
-          icon: IconTrendingUp,
-        },
-        {
-          id: "REC-003",
-          type: "timing",
-          title: "Stock Aging at Kathiani Center",
-          description: "Your produce at Kathiani Center has been in storage for 5 days. Consider checking with the center about sales prospects.",
-          priority: "medium",
-          icon: IconClock,
-        },
-        {
-          id: "REC-004",
-          type: "variety",
-          title: "Diversify with SPK004",
-          description: "SPK004 variety shows consistent demand across all centers. Consider increasing production of this variety.",
-          priority: "low",
-          icon: IconPackage,
-        },
-      ];
-
-      setCenterStocks(mockCenterStocks);
-      setDeliveryHistory(mockDeliveries);
-      setQualityAssessments(mockAssessments);
-      setRecommendations(mockRecommendations);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
-
-  // Calculate metrics
-  const totalInStorage = centerStocks
-    .filter((s) => s.status === "fresh" || s.status === "aging")
-    .reduce((sum, s) => sum + s.quantity, 0);
-
-  const totalDelivered = deliveryHistory.reduce((sum, d) => sum + d.quantity, 0);
-
-  const totalEarnings = deliveryHistory
-    .filter((d) => d.paymentStatus === "paid" || d.paymentStatus === "released")
-    .reduce((sum, d) => sum + d.totalAmount, 0);
-
-  const averageQualityScore =
-    qualityAssessments.length > 0
-      ? Math.round(
-          qualityAssessments.reduce((sum, q) => sum + q.overallScore, 0) / qualityAssessments.length
-        )
-      : 0;
-
-  const pendingPayments = deliveryHistory.filter((d) => d.paymentStatus === "pending").length;
-
-  const uniqueCenters = Array.from(new Set(centerStocks.map((s) => s.centerId))).length;
-
-  // Filter center stocks
-  const filteredStocks = centerStocks.filter((stock) => {
-    const matchesSearch =
-      stock.centerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      stock.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      stock.centerId.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesCenter = filterCenter === "all" || stock.centerId === filterCenter;
-    const matchesStatus = filterStatus === "all" || stock.status === filterStatus;
-
-    return matchesSearch && matchesCenter && matchesStatus;
+  const [filterVariety, setFilterVariety] = useState("all");
+  const [newListingOpen, setNewListingOpen] = useState(false);
+  const [newListing, setNewListing] = useState({
+    variety: "",
+    quantity: "",
+    qualityGrade: "",
+    pricePerKg: "",
+    location: "",
+    description: "",
   });
+
+  const filteredListings = listings.filter((listing) => {
+    const matchesSearch =
+      listing.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      listing.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === "all" || listing.status === filterStatus;
+    const matchesVariety = filterVariety === "all" || listing.variety === filterVariety;
+    return matchesSearch && matchesStatus && matchesVariety;
+  });
+
+  const handleAddListing = () => {
+    if (
+      newListing.variety &&
+      newListing.quantity &&
+      newListing.qualityGrade &&
+      newListing.pricePerKg &&
+      newListing.location
+    ) {
+      const listing: ProduceListing = {
+        id: `LST-${String(listings.length + 1).padStart(3, "0")}`,
+        variety: newListing.variety,
+        quantity: parseInt(newListing.quantity),
+        qualityGrade: newListing.qualityGrade,
+        pricePerKg: parseFloat(newListing.pricePerKg),
+        location: newListing.location,
+        description: newListing.description,
+        status: "active",
+        createdAt: new Date().toISOString(),
+      };
+
+      setListings([...listings, listing]);
+      setNewListing({
+        variety: "",
+        quantity: "",
+        qualityGrade: "",
+        pricePerKg: "",
+        location: "",
+        description: "",
+      });
+      setNewListingOpen(false);
+    }
+  };
+
+  const handleDeleteListing = (id: string) => {
+    setListings(listings.filter((listing) => listing.id !== id));
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "fresh":
+      case "active":
         return "bg-green-100 text-green-800";
-      case "aging":
-        return "bg-yellow-100 text-yellow-800";
       case "sold":
         return "bg-blue-100 text-blue-800";
-      case "wasted":
-        return "bg-red-100 text-red-800";
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case "paid":
-        return "bg-green-100 text-green-800";
-      case "released":
-        return "bg-blue-100 text-blue-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+  const getGradeColor = (grade: string) => {
+    const gradeInfo = qualityGrades.find((g) => g.value === grade);
+    return gradeInfo?.color || "bg-gray-100 text-gray-800";
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "border-orange-300 bg-orange-50";
-      case "medium":
-        return "border-yellow-300 bg-yellow-50";
-      case "low":
-        return "border-blue-300 bg-blue-50";
-      default:
-        return "border-gray-300 bg-gray-50";
-    }
+  const getVarietyName = (value: string) => {
+    const variety = ofspVarieties.find((v) => v.value === value);
+    return variety?.label || value;
   };
 
-  const handleViewDelivery = (delivery: Delivery) => {
-    setSelectedDelivery(delivery);
-    setIsDetailDialogOpen(true);
+  const getSubCountyName = (value: string) => {
+    const subCounty = subCounties.find((s) => s.value === value);
+    return subCounty?.label || value;
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">My Produce Dashboard</h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1">
-          Track your produce across aggregation centers, quality assessments, and performance metrics
-        </p>
-      </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Link to="/dashboard">
+            <Button variant="ghost" size="sm" className="mb-2">
+              <IconArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-bold">Manage Produce</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Post and manage your OFSP produce listings
+          </p>
+        </div>
+        <Dialog open={newListingOpen} onOpenChange={setNewListingOpen}>
+          <DialogTrigger>
+            <Button>
+              <IconPlus className="mr-2 h-4 w-4" />
+              Post Produce
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Post New Produce Listing</DialogTitle>
+              <DialogDescription>
+                Add your OFSP produce to the marketplace for buyers to discover
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="variety">OFSP Variety *</FieldLabel>
+                  <Select
+                    value={newListing.variety}
+                    onValueChange={(value) =>
+                      setNewListing({ ...newListing, variety: value || "" })
+                    }
+                  >
+                    <SelectTrigger id="variety">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ofspVarieties.map((variety) => (
+                        <SelectItem key={variety.value} value={variety.value}>
+                          {variety.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">In Storage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{totalInStorage} kg</div>
-            <p className="text-xs text-muted-foreground mt-1">Across {uniqueCenters} centers</p>
-          </CardContent>
-        </Card>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="quantity">Quantity (kg) *</FieldLabel>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      placeholder="e.g. 500"
+                      value={newListing.quantity}
+                      onChange={(e) =>
+                        setNewListing({ ...newListing, quantity: e.target.value })
+                      }
+                      min="1"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="qualityGrade">Quality Grade *</FieldLabel>
+                    <Select
+                      value={newListing.qualityGrade}
+                      onValueChange={(value) =>
+                        setNewListing({ ...newListing, qualityGrade: value || "" })
+                      }
+                    >
+                      <SelectTrigger id="qualityGrade">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {qualityGrades.map((grade) => (
+                          <SelectItem key={grade.value} value={grade.value}>
+                            {grade.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Delivered</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{totalDelivered} kg</div>
-            <p className="text-xs text-muted-foreground mt-1">{deliveryHistory.length} deliveries</p>
-          </CardContent>
-        </Card>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="pricePerKg">Price per kg (KES) *</FieldLabel>
+                    <Input
+                      id="pricePerKg"
+                      type="number"
+                      placeholder="e.g. 150"
+                      value={newListing.pricePerKg}
+                      onChange={(e) =>
+                        setNewListing({ ...newListing, pricePerKg: e.target.value })
+                      }
+                      min="0"
+                      step="0.01"
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="location">Sub-County *</FieldLabel>
+                    <Select
+                      value={newListing.location}
+                      onValueChange={(value) =>
+                        setNewListing({ ...newListing, location: value || "" })
+                      }
+                    >
+                      <SelectTrigger id="location">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subCounties.map((subCounty) => (
+                          <SelectItem key={subCounty.value} value={subCounty.value}>
+                            {subCounty.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Total Earnings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-green-600">KES {totalEarnings.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Paid + Released</p>
-          </CardContent>
-        </Card>
+                <Field>
+                  <FieldLabel htmlFor="description">Description</FieldLabel>
+                  <Textarea
+                    id="description"
+                    placeholder="Add any additional details about your produce..."
+                    value={newListing.description}
+                    onChange={(e) =>
+                      setNewListing({ ...newListing, description: e.target.value })
+                    }
+                    rows={3}
+                  />
+                </Field>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Avg Quality</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <div className="text-xl font-bold">{averageQualityScore}%</div>
-              <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                <Field>
+                  <FieldLabel>Photos (Optional)</FieldLabel>
+                  <Button variant="outline" type="button" className="w-full">
+                    <IconPhoto className="mr-2 h-4 w-4" />
+                    Upload Photos
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Add photos of your produce to attract buyers
+                  </p>
+                </Field>
+              </FieldGroup>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{qualityAssessments.length} assessments</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Pending Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold text-orange-600">{pendingPayments}</div>
-            <p className="text-xs text-muted-foreground mt-1">Awaiting release</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium text-muted-foreground">Active Centers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{uniqueCenters}</div>
-            <p className="text-xs text-muted-foreground mt-1">Aggregation centers</p>
-          </CardContent>
-        </Card>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewListingOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddListing}>Post Listing</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Recommendations */}
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <IconBulb className="h-5 w-5 text-yellow-600" />
-            <CardTitle>Recommendations & Insights</CardTitle>
-          </div>
-          <CardDescription>Personalized suggestions to improve your produce management</CardDescription>
+          <CardTitle>Your Produce Listings</CardTitle>
+          <CardDescription>
+            Manage your active and sold produce listings
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {recommendations.map((rec) => {
-              const Icon = rec.icon;
-              return (
-                <div
-                  key={rec.id}
-                  className={cn("p-4 rounded-lg border-2", getPriorityColor(rec.priority))}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-white">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold text-sm">{rec.title}</h4>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-xs",
-                            rec.priority === "high"
-                              ? "border-orange-500 text-orange-700"
-                              : rec.priority === "medium"
-                              ? "border-yellow-500 text-yellow-700"
-                              : "border-blue-500 text-blue-700"
-                          )}
-                        >
-                          {rec.priority}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{rec.description}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Stock Across Centers */}
-      <Card>
-        <CardHeader>
-          <CardTitle>My Produce Across Aggregation Centers</CardTitle>
-          <CardDescription>Real-time tracking of your produce in different centers</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
-              <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by center, variety..."
+                placeholder="Search by variety or listing ID..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select value={filterCenter} onValueChange={(value) => setFilterCenter(value || "all")}>
-              <SelectTrigger className="w-full md:w-[200px]">
+            <Select value={filterVariety} onValueChange={(value) => setFilterVariety(value || "all")}>
+              <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Centers</SelectItem>
-                {Array.from(new Set(centerStocks.map((s) => s.centerId))).map((centerId) => {
-                  const center = centerStocks.find((s) => s.centerId === centerId);
-                  return (
-                    <SelectItem key={centerId} value={centerId}>
-                      {center?.centerName}
-                    </SelectItem>
-                  );
-                })}
+                <SelectItem value="all">All Varieties</SelectItem>
+                {ofspVarieties.map((variety) => (
+                  <SelectItem key={variety.value} value={variety.value}>
+                    {variety.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value || "all")}>
-              <SelectTrigger className="w-full md:w-[180px]">
+              <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="fresh">Fresh</SelectItem>
-                <SelectItem value="aging">Aging</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="sold">Sold</SelectItem>
-                <SelectItem value="wasted">Wasted</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Stocks Table */}
-          {isLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
-              ))}
-            </div>
-          ) : filteredStocks.length > 0 ? (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Center</TableHead>
-                    <TableHead>Variety</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Current Stock</TableHead>
-                    <TableHead>Sold</TableHead>
-                    <TableHead>Days in Storage</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredStocks.map((stock) => (
-                    <TableRow key={`${stock.centerId}-${stock.variety}`}>
-                      <TableCell>
-                        <div className="text-sm">
-                          <p className="font-medium">{stock.centerName}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <IconMapPin className="h-3 w-3" />
-                            {stock.location}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">{stock.variety}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">Grade {stock.qualityGrade}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-semibold">{stock.quantity} kg</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {stock.soldQuantity || 0} kg
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {stock.daysInStorage > 7 ? (
-                            <IconAlertCircle className="h-4 w-4 text-red-600" />
-                          ) : stock.daysInStorage > 5 ? (
-                            <IconClock className="h-4 w-4 text-yellow-600" />
-                          ) : (
-                            <IconCheck className="h-4 w-4 text-green-600" />
-                          )}
-                          <span className="text-sm">{stock.daysInStorage} days</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getStatusColor(stock.status)}>
-                          {stock.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <IconPackage className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No produce found</p>
-              <p className="text-sm text-muted-foreground">Try adjusting your filters</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quality Assessments */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <IconClipboardCheck className="h-5 w-5 text-blue-600" />
-            <CardTitle>Quality Assessments from Centers</CardTitle>
-          </div>
-          <CardDescription>Feedback and ratings from aggregation center quality checks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {qualityAssessments.map((assessment) => (
-              <div
-                key={assessment.id}
-                className={cn(
-                  "p-4 rounded-lg border-2",
-                  assessment.approved ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                )}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h4 className="font-semibold text-sm">{assessment.centerName}</h4>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(assessment.date).toLocaleDateString()} - {assessment.variety}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">Grade {assessment.qualityGrade}</Badge>
-                    {assessment.approved ? (
-                      <IconCheck className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <IconX className="h-5 w-5 text-red-600" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 mb-3">
-                  <div className="text-center">
-                    <p className="text-2xl font-bold">{assessment.overallScore}%</p>
-                    <p className="text-xs text-muted-foreground">Overall Score</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xl font-semibold">{assessment.colorScore}/10</p>
-                    <p className="text-xs text-muted-foreground">Color</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xl font-semibold">{assessment.sizeScore}/10</p>
-                    <p className="text-xs text-muted-foreground">Size</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xl font-semibold">{assessment.damagePercentage}%</p>
-                    <p className="text-xs text-muted-foreground">Damage</p>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t">
-                  <p className="text-sm font-medium mb-1">Feedback:</p>
-                  <p className="text-sm text-muted-foreground italic">"{assessment.feedback}"</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Delivery History */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Deliveries</CardTitle>
-              <CardDescription>Your delivery history to aggregation centers</CardDescription>
-            </div>
-            <Button variant="outline" size="sm">
-              <IconChartBar className="mr-2 h-4 w-4" />
-              View All
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+          {/* Listings Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Delivery ID</TableHead>
-                  <TableHead>Center</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Listing ID</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Quantity</TableHead>
-                  <TableHead>Quality Score</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Quality Grade</TableHead>
+                  <TableHead>Price/kg</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {deliveryHistory.map((delivery) => (
-                  <TableRow key={delivery.id}>
-                    <TableCell className="font-medium">{delivery.id}</TableCell>
-                    <TableCell className="text-sm">{delivery.centerName}</TableCell>
-                    <TableCell className="text-sm">
-                      {new Date(delivery.date).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>{delivery.variety}</TableCell>
-                    <TableCell className="font-semibold">{delivery.quantity} kg</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <IconStar className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                        <span className="font-medium">{delivery.qualityScore}%</span>
+                {filteredListings.length > 0 ? (
+                  filteredListings.map((listing) => (
+                    <TableRow key={listing.id}>
+                      <TableCell className="font-medium">{listing.id}</TableCell>
+                      <TableCell>{getVarietyName(listing.variety)}</TableCell>
+                      <TableCell>{listing.quantity} kg</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getGradeColor(listing.qualityGrade)}>
+                          Grade {listing.qualityGrade}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>KES {listing.pricePerKg}/kg</TableCell>
+                      <TableCell>{getSubCountyName(listing.location)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getStatusColor(listing.status)}>
+                          {listing.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost">
+                            <IconEdit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteListing(listing.id)}
+                            className="text-destructive"
+                          >
+                            <IconTrash className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8">
+                      <div className="flex flex-col items-center">
+                        <IconPackage className="h-10 w-10 text-muted-foreground mb-2" />
+                        <p className="text-lg font-medium text-muted-foreground">
+                          No listings found
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Try adjusting your search or filters, or post a new listing
+                        </p>
                       </div>
                     </TableCell>
-                    <TableCell className="font-semibold">
-                      KES {delivery.totalAmount.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={getPaymentStatusColor(delivery.paymentStatus)}
-                      >
-                        {delivery.paymentStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewDelivery(delivery)}
-                      >
-                        <IconEye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
                   </TableRow>
-                ))}
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Delivery Details Dialog */}
-      {selectedDelivery && (
-        <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Delivery Details</DialogTitle>
-              <DialogDescription>{selectedDelivery.id}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium">Aggregation Center</p>
-                  <p className="text-sm text-muted-foreground">{selectedDelivery.centerName}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Delivery Date</p>
-                  <p className="text-sm text-muted-foreground">
-                    {new Date(selectedDelivery.date).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Listings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{listings.length}</div>
+            <p className="text-xs text-muted-foreground">
+              {listings.filter((l) => l.status === "active").length} active
+            </p>
+          </CardContent>
+        </Card>
 
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Variety:</span>
-                  <span className="text-sm font-medium">{selectedDelivery.variety}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Quality Grade:</span>
-                  <Badge variant="outline">Grade {selectedDelivery.qualityGrade}</Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Quantity:</span>
-                  <span className="text-sm font-medium">{selectedDelivery.quantity} kg</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Quality Score:</span>
-                  <div className="flex items-center gap-1">
-                    <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    <span className="text-sm font-medium">{selectedDelivery.qualityScore}%</span>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Price per kg:</span>
-                  <span className="text-sm font-medium">KES {selectedDelivery.pricePerKg}</span>
-                </div>
-                <div className="flex justify-between border-t pt-2">
-                  <span className="text-sm font-semibold">Total Amount:</span>
-                  <span className="text-sm font-bold">
-                    KES {selectedDelivery.totalAmount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <p className="text-sm font-medium mb-1">Payment Status:</p>
-                <Badge className={getPaymentStatusColor(selectedDelivery.paymentStatus)}>
-                  {selectedDelivery.paymentStatus}
-                </Badge>
-              </div>
-
-              <div className="border-t pt-4">
-                <p className="text-sm font-medium mb-1">Receipt ID:</p>
-                <div className="flex items-center gap-2">
-                  <IconReceipt className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">{selectedDelivery.receiptId}</span>
-                </div>
-              </div>
-
-              {selectedDelivery.feedback && (
-                <div className="border-t pt-4">
-                  <p className="text-sm font-medium mb-1">Center Feedback:</p>
-                  <p className="text-sm text-muted-foreground italic">
-                    "{selectedDelivery.feedback}"
-                  </p>
-                </div>
-              )}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Quantity Listed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {listings.reduce((sum, l) => sum + l.quantity, 0)} kg
             </div>
-          </DialogContent>
-        </Dialog>
-      )}
+            <p className="text-xs text-muted-foreground">Across all listings</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Average Price</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              KES{" "}
+              {listings.length > 0
+                ? Math.round(
+                    listings.reduce((sum, l) => sum + l.pricePerKg, 0) / listings.length
+                  )
+                : 0}
+              /kg
+            </div>
+            <p className="text-xs text-muted-foreground">Average across all listings</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
+

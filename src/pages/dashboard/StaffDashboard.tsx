@@ -57,13 +57,13 @@ export function StaffDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/dashboard/staff/users">
+          <Link to="/dashboard/users">
             <Button size="sm" variant="outline">
               <IconUsers className="mr-2 h-4 w-4" />
               Manage Users
             </Button>
           </Link>
-          <Link to="/dashboard/staff/settings">
+          <Link to="/dashboard/settings">
             <Button size="sm">
               <IconSettings className="mr-2 h-4 w-4" />
               System Settings
@@ -114,7 +114,7 @@ export function StaffDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link to="/dashboard/staff/users">
+              <Link to="/dashboard/users">
                 <Card className="hover:bg-muted transition-colors cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ export function StaffDashboard() {
                   </CardContent>
                 </Card>
               </Link>
-              <Link to="/dashboard/staff/analytics">
+              <Link to="/dashboard/analytics">
                 <Card className="hover:bg-muted transition-colors cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
@@ -144,7 +144,7 @@ export function StaffDashboard() {
                   </CardContent>
                 </Card>
               </Link>
-              <Link to="/dashboard/staff/settings">
+              <Link to="/dashboard/settings">
                 <Card className="hover:bg-muted transition-colors cursor-pointer">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3">
@@ -184,25 +184,25 @@ export function StaffDashboard() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Link to="/dashboard/staff/users" className="w-full">
+            <Link to="/dashboard/users" className="w-full">
               <Button variant="outline" className="w-full justify-start">
                 <IconUsers className="mr-2 h-4 w-4" />
                 User Management
               </Button>
             </Link>
-            <Link to="/dashboard/staff/analytics" className="w-full">
+            <Link to="/dashboard/analytics" className="w-full">
               <Button variant="outline" className="w-full justify-start">
                 <IconChartBar className="mr-2 h-4 w-4" />
                 Analytics
               </Button>
             </Link>
-            <Link to="/dashboard/staff/reports" className="w-full">
+            <Link to="/dashboard/reports" className="w-full">
               <Button variant="outline" className="w-full justify-start">
                 <IconFileText className="mr-2 h-4 w-4" />
                 Reports
               </Button>
             </Link>
-            <Link to="/dashboard/staff/settings" className="w-full">
+            <Link to="/dashboard/settings" className="w-full">
               <Button variant="outline" className="w-full justify-start">
                 <IconSettings className="mr-2 h-4 w-4" />
                 Settings
@@ -247,3 +247,4 @@ function StatCard({ label, value, description, icon, isLoading }: StatCardProps)
     </Card>
   );
 }
+

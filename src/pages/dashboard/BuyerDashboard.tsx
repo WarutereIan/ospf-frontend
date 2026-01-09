@@ -220,7 +220,7 @@ export function BuyerDashboard() {
             )}
           </CardContent>
           <CardFooter>
-            <Link to="/dashboard/buyer/orders" className="w-full">
+            <Link to="/dashboard/orders" className="w-full">
               <Button variant="outline" className="w-full">View All Orders</Button>
             </Link>
           </CardFooter>
@@ -239,13 +239,13 @@ export function BuyerDashboard() {
                   Browse Marketplace
                 </Button>
               </Link>
-              <Link to="/dashboard/buyer/orders" className="w-full">
+              <Link to="/dashboard/orders" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   My Orders
                 </Button>
               </Link>
-              <Link to="/dashboard/buyer/ratings" className="w-full">
+              <Link to="/dashboard/ratings" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconStar className="mr-2 h-4 w-4" />
                   Rate Farmers
@@ -315,3 +315,4 @@ function StatCard({ label, value, description, icon, isLoading }: StatCardProps)
     </Card>
   );
 }
+
