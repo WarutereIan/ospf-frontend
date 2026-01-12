@@ -1,11 +1,13 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 export type UserRole =
   | "farmer"
   | "buyer"
   | "officer"
   | "staff"
-  | "aggregation_manager";
+  | "aggregation_manager"
+  | "input_provider"
+  | "transport_provider";
 
 interface UserRoleContextType {
   role: UserRole | null;

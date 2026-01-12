@@ -1,7 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, Menu, MenuItem, useProSidebar } from "react-pro-sidebar";
 import {
-  IconHome,
   IconShoppingBag,
   IconChartBar,
   IconPackage,
@@ -16,6 +15,9 @@ import {
   IconClipboardCheck,
   IconStar,
   IconMenu2,
+  IconSeeding,
+  IconTruck,
+  IconShoppingCart,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,9 +32,10 @@ interface MenuItem {
 
 // Farmer menu items
 const farmerMenuItems: MenuItem[] = [
-  { name: "Home", path: "/", icon: IconHome },
+  { name: "My Dashboard", path: "/dashboard/farmer", icon: IconChartBar },
   { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
-  { name: "Dashboard", path: "/dashboard/farmer", icon: IconChartBar },
+  { name: "Inputs", path: "/marketplace/inputs", icon: IconSeeding },
+  
   { name: "My Produce", path: "/dashboard/produce", icon: IconPackage },
   { name: "Orders", path: "/dashboard/orders", icon: IconPackage },
   { name: "Leaderboard", path: "/dashboard/leaderboard", icon: IconTrophy },
@@ -41,17 +44,16 @@ const farmerMenuItems: MenuItem[] = [
 
 // Buyer menu items
 const buyerMenuItems: MenuItem[] = [
-  { name: "Home", path: "/", icon: IconHome },
+  { name: "My Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
   { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
-  { name: "Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
+
   { name: "My Orders", path: "/dashboard/orders", icon: IconPackage },
   { name: "Rate Farmers", path: "/dashboard/ratings", icon: IconStar },
 ];
 
 // Officer menu items
 const officerMenuItems: MenuItem[] = [
-  { name: "Home", path: "/", icon: IconHome },
-  { name: "Dashboard", path: "/dashboard/officer", icon: IconChartBar },
+  { name: "My Dashboard", path: "/dashboard/officer", icon: IconChartBar },
   { name: "Farmers", path: "/dashboard/farmers", icon: IconUsers },
   { name: "Reports", path: "/dashboard/reports", icon: IconFileText },
   { name: "Centers", path: "/dashboard/centers", icon: IconMapPin },
@@ -60,8 +62,7 @@ const officerMenuItems: MenuItem[] = [
 
 // Staff menu items
 const staffMenuItems: MenuItem[] = [
-  { name: "Home", path: "/", icon: IconHome },
-  { name: "Dashboard", path: "/dashboard/staff", icon: IconChartBar },
+  { name: "My Dashboard", path: "/dashboard/staff", icon: IconChartBar },
   { name: "Users", path: "/dashboard/users", icon: IconUsers },
   { name: "Analytics", path: "/dashboard/analytics", icon: IconChartBar },
   { name: "Reports", path: "/dashboard/reports", icon: IconFileText },
@@ -70,13 +71,30 @@ const staffMenuItems: MenuItem[] = [
 
 // Aggregation Manager menu items
 const aggregationManagerMenuItems: MenuItem[] = [
-  { name: "Home", path: "/", icon: IconHome },
-  { name: "Dashboard", path: "/dashboard/aggregation", icon: IconChartBar },
+  { name: "My Dashboard", path: "/dashboard/aggregation", icon: IconChartBar },
   { name: "Stock In", path: "/dashboard/stock-in", icon: IconTrendingUp },
   { name: "Stock Out", path: "/dashboard/stock-out", icon: IconTrendingDown },
   { name: "Quality Checks", path: "/dashboard/quality-checks", icon: IconClipboardCheck },
   { name: "Inventory", path: "/dashboard/inventory", icon: IconPackage },
   { name: "Farmers", path: "/dashboard/farmers", icon: IconUsers },
+];
+
+// Input Provider menu items
+const inputProviderMenuItems: MenuItem[] = [
+  { name: "My Dashboard", path: "/dashboard/input-provider", icon: IconChartBar },
+  { name: "My Inputs", path: "/dashboard/inputs", icon: IconSeeding },
+  { name: "Orders", path: "/dashboard/input-orders", icon: IconShoppingCart },
+  { name: "Inventory", path: "/dashboard/input-inventory", icon: IconPackage },
+  { name: "Customers", path: "/dashboard/customers", icon: IconUsers },
+];
+
+// Transport Provider menu items
+const transportProviderMenuItems: MenuItem[] = [
+  { name: "My Dashboard", path: "/dashboard/transport-provider", icon: IconChartBar },
+  { name: "Requests", path: "/dashboard/transport-requests", icon: IconTruck },
+  { name: "Active Deliveries", path: "/dashboard/deliveries", icon: IconTrendingUp },
+  { name: "Completed", path: "/dashboard/completed-deliveries", icon: IconClipboardCheck },
+  { name: "Earnings", path: "/dashboard/earnings", icon: IconChartBar },
 ];
 
 function getMenuItemsForRole(role: UserRole | null): MenuItem[] {
@@ -91,6 +109,10 @@ function getMenuItemsForRole(role: UserRole | null): MenuItem[] {
       return staffMenuItems;
     case "aggregation_manager":
       return aggregationManagerMenuItems;
+    case "input_provider":
+      return inputProviderMenuItems;
+    case "transport_provider":
+      return transportProviderMenuItems;
     default:
       return farmerMenuItems; // Default to farmer
   }
@@ -172,7 +194,7 @@ export function RoleBasedSidebar() {
           {menuItems.map((item) => {
             const isActive =
               location.pathname === item.path ||
-              (item.path !== "/" && location.pathname.startsWith(item.path));
+              location.pathname.startsWith(item.path);
             const Icon = item.icon;
             return (
               <MenuItem

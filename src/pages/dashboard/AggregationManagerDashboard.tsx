@@ -8,10 +8,12 @@ import {
   IconPackage,
   IconTrendingUp,
   IconTrendingDown,
-  IconCheckCircle,
   IconAlertTriangle,
   IconClipboardCheck,
   IconUsers,
+  IconBuilding,
+  IconBuildingCommunity,
+  IconMapPin,
 } from "@tabler/icons-react";
 
 interface ManagerStats {
@@ -46,7 +48,10 @@ export function AggregationManagerDashboard() {
   });
   const [recentActivity, setRecentActivity] = useState<StockActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const centerName = "Kangundo Aggregation Center"; // TODO: Get from context
+  const centerName = "Kangundo Main Aggregation Center"; // TODO: Get from context
+  const centerType = "main"; // TODO: Get from context - "main" or "satellite"
+  const centerSubCounty = "Kangundo"; // TODO: Get from context
+  const centerWard = centerType === "satellite" ? "Kangundo East" : undefined; // TODO: Get from context
 
   useEffect(() => {
     // TODO: Replace with actual API calls
@@ -88,9 +93,33 @@ export function AggregationManagerDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Aggregation Center Dashboard</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            {centerName} - Stock management and quality control
+          <div className="flex items-center gap-3 mb-2">
+            {centerType === "main" ? (
+              <IconBuilding className="h-6 w-6 text-blue-600" />
+            ) : (
+              <IconBuildingCommunity className="h-6 w-6 text-purple-600" />
+            )}
+            <Badge
+              variant="outline"
+              className={
+                centerType === "main"
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-purple-100 text-purple-800"
+              }
+            >
+              {centerType === "main" ? "Main Center - Subcounty Level" : "Satellite Center - Ward Level"}
+            </Badge>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold">{centerName}</h1>
+          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+            <IconMapPin className="h-4 w-4" />
+            <span>
+              {centerSubCounty} Subcounty
+              {centerWard && ` - ${centerWard} Ward`}
+            </span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Stock management and quality control
           </p>
         </div>
         <div className="flex gap-2">

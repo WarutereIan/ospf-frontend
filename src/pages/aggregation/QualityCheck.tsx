@@ -218,7 +218,7 @@ export function QualityCheck() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select average size" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {sizeOptions.map((size) => (

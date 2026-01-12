@@ -19,8 +19,11 @@ import {
   IconCheck,
   IconLoader2,
   IconPlus,
+  IconBuilding,
+  IconBuildingCommunity,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { allAggregationCenters, formatCenterLabel } from "@/data/aggregationCenters";
 
 interface CartItem {
   listingId: string;
@@ -187,13 +190,21 @@ export function BulkOrderCart({
                     onValueChange={(value) => setDeliveryLocation(value || "")}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select delivery location" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kangundo">Kangundo Aggregation Center</SelectItem>
-                      <SelectItem value="kathiani">Kathiani Aggregation Center</SelectItem>
-                      <SelectItem value="masinga">Masinga Aggregation Center</SelectItem>
-                      <SelectItem value="yatta">Yatta Aggregation Center</SelectItem>
+                      {allAggregationCenters.map((center) => (
+                        <SelectItem key={center.value} value={center.value}>
+                          <div className="flex items-center gap-2">
+                            {center.type === "main" ? (
+                              <IconBuilding className="h-4 w-4 text-blue-600 inline" />
+                            ) : (
+                              <IconBuildingCommunity className="h-4 w-4 text-purple-600 inline" />
+                            )}
+                            <span>{formatCenterLabel(center)}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

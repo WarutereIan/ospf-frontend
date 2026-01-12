@@ -11,14 +11,20 @@ import {
   IconEdit,
   IconAlertTriangle,
   IconDownload,
+  IconBuilding,
+  IconBuildingCommunity,
 } from "@tabler/icons-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface AggregationCenter {
   id: string;
   name: string;
   location: string;
   subCounty: string;
+  ward?: string; // For satellite centers
+  centerType: "main" | "satellite";
+  mainCenterId?: string; // For satellite centers to link to their main center
   manager: string;
   currentStock: number;
   capacity: number;
@@ -32,23 +38,33 @@ interface AggregationCenter {
 export function Centers() {
   const [centers, setCenters] = useState<AggregationCenter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [centerFilter, setCenterFilter] = useState<"all" | "main" | "satellite">("all");
   const [totalStats, setTotalStats] = useState({
     totalCenters: 0,
+    mainCenters: 0,
+    satelliteCenters: 0,
     totalStock: 0,
     totalCapacity: 0,
     stockInToday: 0,
     stockOutToday: 0,
   });
+  
+  const filteredCenters = centers.filter((center) => {
+    if (centerFilter === "all") return true;
+    return center.centerType === centerFilter;
+  });
 
   useEffect(() => {
     // TODO: Replace with actual API calls
     setTimeout(() => {
-      setCenters([
+      const allCenters = [
+        // MAIN CENTERS (Subcounty Level)
         {
           id: "AC001",
-          name: "Kangundo Aggregation Center",
+          name: "Kangundo Main Aggregation Center",
           location: "Kangundo Town",
           subCounty: "Kangundo",
+          centerType: "main",
           manager: "Peter Kariuki",
           currentStock: 5000,
           capacity: 10000,
@@ -60,9 +76,10 @@ export function Centers() {
         },
         {
           id: "AC002",
-          name: "Kathiani Aggregation Center",
+          name: "Kathiani Main Aggregation Center",
           location: "Kathiani Market",
           subCounty: "Kathiani",
+          centerType: "main",
           manager: "Jane Muthoni",
           currentStock: 3200,
           capacity: 8000,
@@ -70,29 +87,161 @@ export function Centers() {
           status: "operational",
           stockInToday: 800,
           stockOutToday: 500,
-          alerts: ["Capacity approaching 80%"],
+          alerts: [],
         },
         {
           id: "AC003",
-          name: "Matungulu Aggregation Center",
-          location: "Matungulu",
+          name: "Matungulu Main Aggregation Center",
+          location: "Matungulu Town",
           subCounty: "Matungulu",
+          centerType: "main",
           manager: "David Kimani",
+          currentStock: 2500,
+          capacity: 7000,
+          activeFarmers: 28,
+          status: "operational",
+          stockInToday: 600,
+          stockOutToday: 400,
+          alerts: [],
+        },
+        {
+          id: "AC004",
+          name: "Yatta Main Aggregation Center",
+          location: "Yatta Market",
+          subCounty: "Yatta",
+          centerType: "main",
+          manager: "Grace Wambui",
+          currentStock: 1800,
+          capacity: 6000,
+          activeFarmers: 22,
+          status: "operational",
+          stockInToday: 500,
+          stockOutToday: 300,
+          alerts: [],
+        },
+        
+        // SATELLITE CENTERS (Ward Level)
+        {
+          id: "SAT001",
+          name: "Kangundo East Satellite Center",
+          location: "Kangundo East Ward",
+          subCounty: "Kangundo",
+          ward: "Kangundo East",
+          centerType: "satellite",
+          mainCenterId: "AC001",
+          manager: "John Mwangi",
+          currentStock: 800,
+          capacity: 2000,
+          activeFarmers: 15,
+          status: "operational",
+          stockInToday: 250,
+          stockOutToday: 150,
+          alerts: [],
+        },
+        {
+          id: "SAT002",
+          name: "Kangundo West Satellite Center",
+          location: "Kangundo West Ward",
+          subCounty: "Kangundo",
+          ward: "Kangundo West",
+          centerType: "satellite",
+          mainCenterId: "AC001",
+          manager: "Mary Njoki",
+          currentStock: 600,
+          capacity: 1500,
+          activeFarmers: 12,
+          status: "operational",
+          stockInToday: 200,
+          stockOutToday: 100,
+          alerts: [],
+        },
+        {
+          id: "SAT003",
+          name: "Kathiani Central Satellite Center",
+          location: "Kathiani Central Ward",
+          subCounty: "Kathiani",
+          ward: "Kathiani Central",
+          centerType: "satellite",
+          mainCenterId: "AC002",
+          manager: "Paul Mutuku",
+          currentStock: 500,
+          capacity: 1800,
+          activeFarmers: 10,
+          status: "operational",
+          stockInToday: 180,
+          stockOutToday: 120,
+          alerts: [],
+        },
+        {
+          id: "SAT004",
+          name: "Mitaboni Satellite Center",
+          location: "Mitaboni Ward",
+          subCounty: "Kathiani",
+          ward: "Mitaboni",
+          centerType: "satellite",
+          mainCenterId: "AC002",
+          manager: "Lucy Mwikali",
+          currentStock: 400,
+          capacity: 1500,
+          activeFarmers: 8,
+          status: "operational",
+          stockInToday: 150,
+          stockOutToday: 80,
+          alerts: [],
+        },
+        {
+          id: "SAT005",
+          name: "Matungulu North Satellite Center",
+          location: "Matungulu North Ward",
+          subCounty: "Matungulu",
+          ward: "Matungulu North",
+          centerType: "satellite",
+          mainCenterId: "AC003",
+          manager: "James Kioko",
           currentStock: 0,
-          capacity: 5000,
-          activeFarmers: 18,
+          capacity: 1000,
+          activeFarmers: 6,
           status: "maintenance",
           stockInToday: 0,
           stockOutToday: 0,
           alerts: ["Center under maintenance"],
         },
-      ]);
+        {
+          id: "SAT006",
+          name: "Yatta South Satellite Center",
+          location: "Yatta South Ward",
+          subCounty: "Yatta",
+          ward: "Yatta South",
+          centerType: "satellite",
+          mainCenterId: "AC004",
+          manager: "Sarah Ndunge",
+          currentStock: 350,
+          capacity: 1200,
+          activeFarmers: 9,
+          status: "operational",
+          stockInToday: 120,
+          stockOutToday: 80,
+          alerts: [],
+        },
+      ];
+      
+      setCenters(allCenters);
+      
+      const mainCenters = allCenters.filter(c => c.centerType === "main").length;
+      const satelliteCenters = allCenters.filter(c => c.centerType === "satellite").length;
+      const totalStock = allCenters.reduce((sum, c) => sum + c.currentStock, 0);
+      const totalCapacity = allCenters.reduce((sum, c) => sum + c.capacity, 0);
+      const stockInToday = allCenters.reduce((sum, c) => sum + c.stockInToday, 0);
+      const stockOutToday = allCenters.reduce((sum, c) => sum + c.stockOutToday, 0);
+      
       setTotalStats({
-        totalCenters: 3,
-        totalStock: 8200,
-        totalCapacity: 23000,
-        stockInToday: 2000,
-        stockOutToday: 1300,
+        totalCenters: allCenters.length,
+        mainCenters,
+        satelliteCenters,
+        totalStock,
+        totalCapacity,
+        stockInToday,
+        stockOutToday,
       });
       setIsLoading(false);
     }, 1000);
@@ -120,7 +269,7 @@ export function Centers() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -129,6 +278,30 @@ export function Centers() {
                 <p className="text-2xl font-bold">{totalStats.totalCenters}</p>
               </div>
               <IconMapPin className="h-8 w-8 text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Main Centers</p>
+                <p className="text-2xl font-bold">{totalStats.mainCenters}</p>
+                <p className="text-xs text-muted-foreground mt-1">Subcounty Level</p>
+              </div>
+              <IconBuilding className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Satellite Centers</p>
+                <p className="text-2xl font-bold">{totalStats.satelliteCenters}</p>
+                <p className="text-xs text-muted-foreground mt-1">Ward Level</p>
+              </div>
+              <IconBuildingCommunity className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -180,28 +353,90 @@ export function Centers() {
         </Card>
       </div>
 
+      {/* Filter Section */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold">Filter Centers</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                View all centers or filter by type
+              </p>
+            </div>
+            <div className="w-64">
+              <Select value={centerFilter} onValueChange={(value: any) => setCenterFilter(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    All Centers ({totalStats.totalCenters})
+                  </SelectItem>
+                  <SelectItem value="main">
+                    Main Centers ({totalStats.mainCenters})
+                  </SelectItem>
+                  <SelectItem value="satellite">
+                    Satellite Centers ({totalStats.satelliteCenters})
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Centers Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {isLoading
-          ? [1, 2, 3].map((i) => (
-              <Card key={i}>
-                <CardContent className="pt-6">
-                  <div className="h-48 bg-muted animate-pulse rounded-lg" />
-                </CardContent>
-              </Card>
-            ))
-          : centers.map((center) => {
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold">
+            {centerFilter === "all" ? "All Centers" : centerFilter === "main" ? "Main Centers (Subcounty Level)" : "Satellite Centers (Ward Level)"}
+          </h2>
+          <Badge variant="outline" className="text-sm">
+            {filteredCenters.length} {filteredCenters.length === 1 ? "Center" : "Centers"}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {isLoading
+            ? [1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardContent className="pt-6">
+                    <div className="h-48 bg-muted animate-pulse rounded-lg" />
+                  </CardContent>
+                </Card>
+              ))
+            : filteredCenters.map((center) => {
               const utilizationPercent = (center.currentStock / center.capacity) * 100;
               return (
                 <Card key={center.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          {center.centerType === "main" ? (
+                            <IconBuilding className="h-5 w-5 text-blue-600" />
+                          ) : (
+                            <IconBuildingCommunity className="h-5 w-5 text-purple-600" />
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={
+                              center.centerType === "main"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-purple-100 text-purple-800"
+                            }
+                          >
+                            {center.centerType === "main" ? "Main Center" : "Satellite"}
+                          </Badge>
+                        </div>
                         <CardTitle className="text-lg">{center.name}</CardTitle>
-                        <CardDescription className="mt-1">
+                        <CardDescription className="mt-1 space-y-1">
                           <div className="flex items-center gap-1">
                             <IconMapPin className="h-3 w-3" />
-                            {center.location}, {center.subCounty}
+                            {center.location}
+                            {center.ward && `, ${center.ward}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {center.centerType === "main" ? `${center.subCounty} Subcounty` : `${center.subCounty} Subcounty - ${center.ward} Ward`}
                           </div>
                         </CardDescription>
                       </div>
@@ -281,6 +516,7 @@ export function Centers() {
                 </Card>
               );
             })}
+        </div>
       </div>
 
       {/* Centers Summary Table */}
@@ -294,6 +530,7 @@ export function Centers() {
             <TableHeader>
               <TableRow>
                 <TableHead>Center</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Current Stock</TableHead>
                 <TableHead>Capacity</TableHead>
@@ -304,15 +541,30 @@ export function Centers() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {centers.map((center) => {
+              {filteredCenters.map((center) => {
                 const utilizationPercent = (center.currentStock / center.capacity) * 100;
                 return (
                   <TableRow key={center.id}>
                     <TableCell className="font-medium">{center.name}</TableCell>
                     <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={
+                          center.centerType === "main"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-purple-100 text-purple-800"
+                        }
+                      >
+                        {center.centerType === "main" ? "Main" : "Satellite"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="text-sm">
                         <div>{center.location}</div>
-                        <div className="text-muted-foreground">{center.subCounty}</div>
+                        <div className="text-muted-foreground">
+                          {center.subCounty}
+                          {center.ward && ` - ${center.ward} Ward`}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>{center.currentStock.toLocaleString()} kg</TableCell>

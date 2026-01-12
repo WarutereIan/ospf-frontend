@@ -11,6 +11,8 @@ import { BuyerDashboard } from "@/pages/dashboard/BuyerDashboard";
 import { OfficerDashboard } from "@/pages/dashboard/OfficerDashboard";
 import { StaffDashboard } from "@/pages/dashboard/StaffDashboard";
 import { AggregationManagerDashboard } from "@/pages/dashboard/AggregationManagerDashboard";
+import InputProviderDashboard from "@/pages/dashboard/InputProviderDashboard";
+import TransportProviderDashboard from "@/pages/dashboard/TransportProviderDashboard";
 import { ProduceManagement } from "@/pages/farmer/ProduceManagement";
 import { FarmerOrders } from "@/pages/farmer/FarmerOrders";
 import { PeerLeaderboard } from "@/pages/farmer/PeerLeaderboard";
@@ -25,6 +27,10 @@ import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { RateFarmerPage } from "@/pages/buyer/RateFarmerPage";
 import { RecurringOrders } from "@/pages/marketplace/RecurringOrders";
+import InputManagement from "@/pages/inputs/InputManagement";
+import InputMarketplace from "@/pages/marketplace/InputMarketplace";
+import TransportRequests from "@/pages/transport/TransportRequests";
+import ActiveDeliveries from "@/pages/transport/ActiveDeliveries";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
@@ -50,6 +56,8 @@ export function App() {
             <Route path="/dashboard/officer" element={<OfficerDashboard />} />
             <Route path="/dashboard/staff" element={<StaffDashboard />} />
             <Route path="/dashboard/aggregation" element={<AggregationManagerDashboard />} />
+            <Route path="/dashboard/input-provider" element={<InputProviderDashboard />} />
+            <Route path="/dashboard/transport-provider" element={<TransportProviderDashboard />} />
             
             {/* Farmer Routes */}
             <Route path="/dashboard/produce" element={<ProduceManagement />} />
@@ -76,6 +84,21 @@ export function App() {
             
             {/* Payment Routes */}
             <Route path="/dashboard/payments" element={<PaymentHistory />} />
+            
+            {/* Input Provider Routes */}
+            <Route path="/dashboard/inputs" element={<InputManagement />} />
+            <Route path="/dashboard/input-inventory" element={<InputManagement />} />
+            <Route path="/dashboard/input-orders" element={<FarmerOrders />} /> {/* Reusing FarmerOrders for now */}
+            <Route path="/dashboard/customers" element={<PeerLeaderboard />} /> {/* Placeholder */}
+            
+            {/* Input Marketplace for Farmers */}
+            <Route path="/marketplace/inputs" element={<InputMarketplace />} />
+            
+            {/* Transport Provider Routes */}
+            <Route path="/dashboard/transport-requests" element={<TransportRequests />} />
+            <Route path="/dashboard/deliveries" element={<ActiveDeliveries />} />
+            <Route path="/dashboard/completed-deliveries" element={<ActiveDeliveries />} /> {/* Can filter by status */}
+            <Route path="/dashboard/earnings" element={<PaymentHistory />} /> {/* Reusing PaymentHistory for now */}
           </Route>
           
           {/* 404 */}

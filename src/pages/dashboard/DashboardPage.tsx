@@ -16,6 +16,10 @@ export function DashboardPage() {
       return <Navigate to="/dashboard/staff" replace />;
     case "aggregation_manager":
       return <Navigate to="/dashboard/aggregation" replace />;
+    case "input_provider":
+      return <Navigate to="/dashboard/input-provider" replace />;
+    case "transport_provider":
+      return <Navigate to="/dashboard/transport-provider" replace />;
     default:
       // Default to farmer dashboard if role not set
       return <Navigate to="/dashboard/farmer" replace />;

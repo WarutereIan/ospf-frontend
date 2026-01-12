@@ -246,7 +246,7 @@ export function WastageTracking() {
             Export Report
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
+            <DialogTrigger>
               <Button size="sm">
                 <IconPlus className="mr-2 h-4 w-4" />
                 Record Wastage
@@ -277,7 +277,7 @@ export function WastageTracking() {
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select batch from farmer" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {sampleInventory.map((inv) => (

@@ -21,11 +21,14 @@ import {
   IconPackage,
   IconTrendingUp,
   IconSparkles,
+  IconBuilding,
+  IconBuildingCommunity,
 } from "@tabler/icons-react";
 import { useUserRole } from "@/contexts/UserRoleContext";
 import { NegotiationDialog } from "@/components/messaging/NegotiationDialog";
 import { SmartMatching } from "@/components/marketplace/SmartMatching";
 import { BulkOrderCart } from "./BulkOrderCart";
+import { allAggregationCenters, formatCenterLabel } from "@/data/aggregationCenters";
 
 interface ProduceListing {
   id: string;
@@ -378,11 +381,11 @@ export function MarketplacePage() {
         </div>
 
         {/* Filter Row */}
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium mb-2 block">Variety</label>
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <label className="text-sm font-medium whitespace-nowrap">Variety</label>
             <Select value={selectedVariety} onValueChange={(value) => setSelectedVariety(value || "all")}>
-              <SelectTrigger>
+              <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -395,10 +398,10 @@ export function MarketplacePage() {
             </Select>
           </div>
 
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium mb-2 block">Quality Grade</label>
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <label className="text-sm font-medium whitespace-nowrap">Quality Grade</label>
             <Select value={selectedGrade} onValueChange={(value) => setSelectedGrade(value || "all")}>
-              <SelectTrigger>
+              <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -411,10 +414,10 @@ export function MarketplacePage() {
             </Select>
           </div>
 
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium mb-2 block">Location</label>
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <label className="text-sm font-medium whitespace-nowrap">Location</label>
             <Select value={selectedLocation} onValueChange={(value) => setSelectedLocation(value || "all")}>
-              <SelectTrigger>
+              <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -427,10 +430,10 @@ export function MarketplacePage() {
             </Select>
           </div>
 
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium mb-2 block">Sort By</label>
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            <label className="text-sm font-medium whitespace-nowrap">Sort By</label>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value || "date_desc")}>
-              <SelectTrigger>
+              <SelectTrigger className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -670,10 +673,11 @@ export function MarketplacePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="kangundo">Kangundo Aggregation Center</SelectItem>
-                    <SelectItem value="kathiani">Kathiani Aggregation Center</SelectItem>
-                    <SelectItem value="masinga">Masinga Aggregation Center</SelectItem>
-                    <SelectItem value="yatta">Yatta Aggregation Center</SelectItem>
+                    {allAggregationCenters.map((center) => (
+                      <SelectItem key={center.value} value={center.value}>
+                        {formatCenterLabel(center)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -730,10 +734,11 @@ export function MarketplacePage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="kangundo">Kangundo Aggregation Center</SelectItem>
-                    <SelectItem value="kathiani">Kathiani Aggregation Center</SelectItem>
-                    <SelectItem value="masinga">Masinga Aggregation Center</SelectItem>
-                    <SelectItem value="yatta">Yatta Aggregation Center</SelectItem>
+                    {allAggregationCenters.map((center) => (
+                      <SelectItem key={center.value} value={center.value}>
+                        {formatCenterLabel(center)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

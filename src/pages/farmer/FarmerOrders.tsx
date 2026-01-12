@@ -72,7 +72,7 @@ const sampleOrders: FarmerOrder[] = [
     totalAmount: 75000,
     status: "order_placed",
     createdAt: new Date().toISOString(),
-    deliveryLocation: "Kangundo Aggregation Center",
+    deliveryLocation: "Kangundo Main Aggregation Center (Main - Kangundo Subcounty)",
     paymentStatus: "pending",
   },
   {
@@ -86,7 +86,7 @@ const sampleOrders: FarmerOrder[] = [
     totalAmount: 36000,
     status: "order_accepted",
     createdAt: new Date().toISOString(),
-    deliveryLocation: "Kathiani Aggregation Center",
+    deliveryLocation: "Tala Satellite Center (Satellite - Tala Ward, Kangundo)",
     paymentStatus: "in_escrow",
     paymentAmount: 36000,
   },
@@ -101,7 +101,7 @@ const sampleOrders: FarmerOrder[] = [
     totalAmount: 20000,
     status: "quality_approved",
     createdAt: new Date().toISOString(),
-    deliveryLocation: "Masinga Aggregation Center",
+    deliveryLocation: "Yatta Main Aggregation Center (Main - Yatta Subcounty)",
     paymentStatus: "ready_for_release",
     paymentAmount: 20000,
     photos: [

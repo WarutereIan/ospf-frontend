@@ -42,6 +42,18 @@ const MOCK_CREDENTIALS: Record<string, { role: UserRole; name: string; phone: st
     phone: "+254756789012",
     password: "manager123",
   },
+  input_provider: {
+    role: "input_provider",
+    name: "Grace Njeri",
+    phone: "+254767890123",
+    password: "input123",
+  },
+  transport_provider: {
+    role: "transport_provider",
+    name: "James Omondi",
+    phone: "+254778901234",
+    password: "transport123",
+  },
 };
 
 export function LoginPage() {

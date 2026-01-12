@@ -3,8 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   IconUser,
   IconClock,
-  IconCheckCircle,
-  IconXCircle,
+  IconCircleCheck,
+  IconCircleX,
   IconAlertTriangle,
 } from "@tabler/icons-react";
 // Using native Date methods instead of date-fns
@@ -63,9 +63,9 @@ const getStatusIcon = (status: OrderStatus) => {
     case "quality_approved":
     case "delivered":
     case "completed":
-      return IconCheckCircle;
+      return IconCircleCheck;
     case "rejected":
-      return IconXCircle;
+      return IconCircleX;
     case "disputed":
       return IconAlertTriangle;
     default:

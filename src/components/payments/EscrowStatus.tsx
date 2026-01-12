@@ -1,12 +1,13 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   IconCreditCard,
   IconLoader2,
-  IconCheckCircle,
+  IconCircleCheck,
   IconClock,
   IconAlertTriangle,
-  IconXCircle,
+  IconCircleX,
   IconRefresh,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ const statusConfig: Record<
   ready_for_release: {
     label: "Ready for Release",
     description: "QC passed, awaiting confirmation",
-    icon: IconCheckCircle,
+    icon: IconCircleCheck,
     color: "text-blue-800",
     bgColor: "bg-blue-100 border-blue-300",
     moneyLocation: "Escrow account",
@@ -91,7 +92,7 @@ const statusConfig: Record<
   released: {
     label: "Released",
     description: "Payment sent to farmer",
-    icon: IconCheckCircle,
+    icon: IconCircleCheck,
     color: "text-green-800",
     bgColor: "bg-green-100 border-green-300",
     moneyLocation: "In transit to farmer",
@@ -100,7 +101,7 @@ const statusConfig: Record<
   completed: {
     label: "Completed",
     description: "Farmer received payment",
-    icon: IconCheckCircle,
+    icon: IconCircleCheck,
     color: "text-green-800",
     bgColor: "bg-green-100 border-green-300",
     moneyLocation: "Farmer's account",
@@ -118,7 +119,7 @@ const statusConfig: Record<
   refunded: {
     label: "Refunded",
     description: "Cancelled/rejected",
-    icon: IconXCircle,
+    icon: IconCircleX,
     color: "text-gray-800",
     bgColor: "bg-gray-100 border-gray-300",
     moneyLocation: "Returned to buyer",
