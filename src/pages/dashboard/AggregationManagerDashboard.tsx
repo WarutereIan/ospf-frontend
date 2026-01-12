@@ -15,6 +15,15 @@ import {
   IconBuildingCommunity,
   IconMapPin,
 } from "@tabler/icons-react";
+import {
+  StatCard,
+  SemiCircleGauge,
+  HorizontalBarChart,
+  LineChart,
+  PieChart,
+  ProgressBar,
+  AlertCard,
+} from "@/components/visualizations";
 
 interface ManagerStats {
   currentStock: number;
@@ -23,6 +32,29 @@ interface ManagerStats {
   qualityChecksToday: number;
   pendingChecks: number;
   capacityUtilization: number;
+  maxCapacity: number;
+}
+
+interface StockByVariety {
+  name: string;
+  value: number;
+}
+
+interface StockMovement {
+  day: string;
+  stockIn: number;
+  stockOut: number;
+}
+
+interface StockAging {
+  category: string;
+  value: number;
+  color: string;
+}
+
+interface QualityDistribution {
+  name: string;
+  value: number;
 }
 
 interface StockActivity {
@@ -45,8 +77,13 @@ export function AggregationManagerDashboard() {
     qualityChecksToday: 0,
     pendingChecks: 0,
     capacityUtilization: 0,
+    maxCapacity: 0,
   });
   const [recentActivity, setRecentActivity] = useState<StockActivity[]>([]);
+  const [stockByVariety, setStockByVariety] = useState<StockByVariety[]>([]);
+  const [stockMovement, setStockMovement] = useState<StockMovement[]>([]);
+  const [stockAging, setStockAging] = useState<StockAging[]>([]);
+  const [qualityDistribution, setQualityDistribution] = useState<QualityDistribution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const centerName = "Kangundo Main Aggregation Center"; // TODO: Get from context
   const centerType = "main"; // TODO: Get from context - "main" or "satellite"
@@ -57,19 +94,20 @@ export function AggregationManagerDashboard() {
     // TODO: Replace with actual API calls
     setTimeout(() => {
       setStats({
-        currentStock: 5000,
-        stockInToday: 1200,
-        stockOutToday: 800,
+        currentStock: 3500,
+        stockInToday: 450,
+        stockOutToday: 280,
         qualityChecksToday: 15,
         pendingChecks: 3,
-        capacityUtilization: 65,
+        capacityUtilization: 70,
+        maxCapacity: 5000,
       });
       setRecentActivity([
         {
           id: "STK-001",
           type: "in",
           farmerName: "James Mutua",
-          quantity: 500,
+          quantity: 150,
           qualityGrade: "A",
           timestamp: new Date().toISOString(),
           status: "completed",
@@ -78,11 +116,39 @@ export function AggregationManagerDashboard() {
           id: "STK-002",
           type: "out",
           buyerName: "John Mwangi",
-          quantity: 300,
+          quantity: 280,
           qualityGrade: "A",
           timestamp: new Date().toISOString(),
           status: "completed",
         },
+      ]);
+      // Stock by variety
+      setStockByVariety([
+        { name: "Kenya", value: 2000 },
+        { name: "SPK004", value: 1000 },
+        { name: "Kabode", value: 500 },
+      ]);
+      // Stock movement (7 days)
+      setStockMovement([
+        { day: "Mon", stockIn: 400, stockOut: 250 },
+        { day: "Tue", stockIn: 350, stockOut: 300 },
+        { day: "Wed", stockIn: 500, stockOut: 280 },
+        { day: "Thu", stockIn: 450, stockOut: 320 },
+        { day: "Fri", stockIn: 480, stockOut: 290 },
+        { day: "Sat", stockIn: 300, stockOut: 200 },
+        { day: "Sun", stockIn: 450, stockOut: 280 },
+      ]);
+      // Stock aging
+      setStockAging([
+        { category: "Fresh (0-3d)", value: 60, color: "#22C55E" },
+        { category: "Aging (4-6d)", value: 25, color: "#F59E0B" },
+        { category: "Critical (7+)", value: 15, color: "#EF4444" },
+      ]);
+      // Quality distribution
+      setQualityDistribution([
+        { name: "Grade A", value: 75 },
+        { name: "Grade B", value: 20 },
+        { name: "Grade C", value: 5 },
       ]);
       setIsLoading(false);
     }, 1000);
@@ -136,24 +202,36 @@ export function AggregationManagerDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="h-24 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Current Stock</p>
+                <p className="text-2xl font-bold">{stats.currentStock} kg</p>
+                <ProgressBar
+                  value={stats.capacityUtilization}
+                  maxValue={100}
+                  color={stats.capacityUtilization > 80 ? "danger" : stats.capacityUtilization > 60 ? "warning" : "success"}
+                  size="sm"
+                />
+                <p className="text-xs text-muted-foreground">{stats.capacityUtilization}% capacity</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
         <StatCard
-          label="Current Stock"
-          value={`${stats.currentStock} kg`}
-          description={`${stats.capacityUtilization}% capacity`}
-          icon={<IconPackage className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Stock In Today"
+          label="Today's In"
           value={`${stats.stockInToday} kg`}
-          description="Received today"
+          description={`From ${stats.stockInToday > 0 ? 8 : 0} farmers`}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Stock Out Today"
+          label="Today's Out"
           value={`${stats.stockOutToday} kg`}
-          description="Dispatched today"
+          description={`To ${stats.stockOutToday > 0 ? 3 : 0} orders`}
           icon={<IconTrendingDown className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
@@ -165,6 +243,101 @@ export function AggregationManagerDashboard() {
           isLoading={isLoading}
         />
       </div>
+
+      {/* Capacity and Stock Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Capacity Gauge</CardTitle>
+            <CardDescription>Current storage utilization</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-48 bg-muted animate-pulse rounded" />
+            ) : (
+              <SemiCircleGauge
+                value={stats.capacityUtilization}
+                maxValue={100}
+                size={200}
+                color={stats.capacityUtilization > 80 ? "#EF4444" : stats.capacityUtilization > 60 ? "#F59E0B" : "#22C55E"}
+              />
+            )}
+          </CardContent>
+        </Card>
+        <HorizontalBarChart
+          data={stockByVariety}
+          title="Stock by Variety"
+          description="Current stock breakdown by OFSP variety"
+          color="#3B82F6"
+          height={250}
+        />
+      </div>
+
+      {/* Stock Movement Chart */}
+      <LineChart
+        data={stockMovement.map((m) => ({ name: m.day, stockIn: m.stockIn, stockOut: m.stockOut }))}
+        lines={[
+          { dataKey: "stockIn", name: "Stock In", color: "#22C55E" },
+          { dataKey: "stockOut", name: "Stock Out", color: "#F59E0B" },
+        ]}
+        title="Stock Movement (7 Days)"
+        description="Daily stock in and out trends"
+        height={300}
+      />
+
+      {/* Stock Aging and Quality */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Stock Aging</CardTitle>
+            <CardDescription>Stock distribution by age category</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-48 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="space-y-4">
+                {stockAging.map((item, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{item.category}</span>
+                      <span className="font-medium">{item.value}%</span>
+                    </div>
+                    <ProgressBar
+                      value={item.value}
+                      maxValue={100}
+                      color={item.color === "#22C55E" ? "success" : item.color === "#F59E0B" ? "warning" : "danger"}
+                      size="md"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <PieChart
+          data={qualityDistribution}
+          title="Quality Today"
+          description="Grade distribution of today's stock"
+          height={300}
+          colors={["#22C55E", "#F59E0B", "#EF4444"]}
+        />
+      </div>
+
+      {/* Alerts */}
+      {stats.capacityUtilization > 70 && (
+        <div className="space-y-3">
+          <AlertCard
+            type={stats.capacityUtilization > 80 ? "error" : "warning"}
+            title={stats.capacityUtilization > 80 ? "Critical Capacity Alert" : "Capacity Warning"}
+            message={
+              stats.capacityUtilization > 80
+                ? `${stats.currentStock} kg critical stock (>7 days) - prioritize dispatch`
+                : `Capacity at ${stats.capacityUtilization}% - prepare for incoming deliveries`
+            }
+          />
+        </div>
+      )}
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -312,39 +485,6 @@ export function AggregationManagerDashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  isLoading?: boolean;
-}
-
-function StatCard({ label, value, description, icon, isLoading }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-            <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-            <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <div className="rounded-full p-3 bg-primary/10">{icon}</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

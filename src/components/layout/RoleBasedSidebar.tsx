@@ -47,8 +47,8 @@ const buyerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
   { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
 
-  { name: "My Orders", path: "/dashboard/orders", icon: IconPackage },
-  { name: "Rate Farmers", path: "/dashboard/ratings", icon: IconStar },
+  { name: "My Orders", path: "/dashboard/buyer/orders", icon: IconPackage },
+  { name: "Rate Farmers", path: "/dashboard/buyer/ratings", icon: IconStar },
 ];
 
 // Officer menu items

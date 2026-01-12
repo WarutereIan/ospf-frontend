@@ -7,6 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { IconArrowLeft, IconTrophy, IconTrendingUp, IconUsers, IconCurrency } from "@tabler/icons-react";
 import { AchievementBadges } from "@/components/leaderboard/AchievementBadges";
 import { GrowthChart } from "@/components/leaderboard/GrowthChart";
+import {
+  PositionMarker,
+  HorizontalBarChart,
+  ProgressBar,
+} from "@/components/visualizations";
 
 interface LeaderboardEntry {
   rank: number;
@@ -146,6 +151,46 @@ export function PeerLeaderboard() {
     { period: "Week 4", value: 250, peerAverage: 220 },
   ];
 
+  // Get user entry and calculate position
+  const userEntry = sortedLeaderboard.find((e) => e.isCurrentUser);
+  const userRank = userEntry?.rank || 12;
+  const totalFarmers = 150;
+  const topPercent = (userRank / totalFarmers) * 100; // Top 8% for rank 12
+  const positionFromLeft = 100 - topPercent; // 92% from left for top 8%
+
+  // Top performers data for horizontal bar chart
+  const topPerformers = sortedLeaderboard
+    .filter((entry) => !entry.isCurrentUser)
+    .slice(0, 14)
+    .map((entry) => ({
+      name: `${getRankIcon(entry.rank)} ${entry.farmerName}`,
+      value: entry.totalSales,
+    }));
+
+  // Add current user if not in top 14
+  if (userEntry) {
+    const userIndex = topPerformers.findIndex((p) => p.name.includes(userEntry.farmerName));
+    if (userIndex === -1) {
+      topPerformers.push({
+        name: `${userEntry.rank}. You`,
+        value: userEntry.totalSales,
+      });
+    } else {
+      // Update existing entry to show "You"
+      topPerformers[userIndex] = {
+        name: `${userEntry.rank}. You`,
+        value: userEntry.totalSales,
+      };
+    }
+  }
+
+  // Category rankings
+  const categoryRankings = {
+    volume: { percentile: 15, label: "Volume" },
+    quality: { percentile: 20, label: "Quality" },
+    consistency: { percentile: 10, label: "Consistency" },
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -163,6 +208,52 @@ export function PeerLeaderboard() {
           </p>
         </div>
       </div>
+
+      {/* Your Position - Distribution Bar */}
+      <PositionMarker
+        percentile={positionFromLeft}
+        label={`You are here (Top ${topPercent.toFixed(0)}%)`}
+        title="Your Position"
+        description="Your ranking in the farmer distribution"
+      />
+
+      {/* Top Performers - Horizontal Bar Chart */}
+      <HorizontalBarChart
+        data={topPerformers}
+        title="Top Performers"
+        description="Ranked by total sales volume"
+        color="#22C55E"
+        height={400}
+        sorted={true}
+        formatter={(value) => `${value} kg`}
+      />
+
+      {/* Category Rankings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Category Rankings</CardTitle>
+          <CardDescription>Your performance across different metrics</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {Object.entries(categoryRankings).map(([key, ranking]) => (
+              <div key={key} className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">{ranking.label}</span>
+                  <span className="text-muted-foreground">Top {ranking.percentile}%</span>
+                </div>
+                <ProgressBar
+                  value={ranking.percentile}
+                  maxValue={100}
+                  color="success"
+                  size="mini"
+                  showValue={false}
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <Card>

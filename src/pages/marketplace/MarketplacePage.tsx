@@ -29,6 +29,10 @@ import { NegotiationDialog } from "@/components/messaging/NegotiationDialog";
 import { SmartMatching } from "@/components/marketplace/SmartMatching";
 import { BulkOrderCart } from "./BulkOrderCart";
 import { allAggregationCenters, formatCenterLabel } from "@/data/aggregationCenters";
+import {
+  PriceDistributionBar,
+  StarRating,
+} from "@/components/visualizations";
 
 interface ProduceListing {
   id: string;
@@ -369,6 +373,16 @@ export function MarketplacePage() {
             )}
           </div>
         )}
+
+        {/* Price Distribution Bar */}
+        <PriceDistributionBar
+          minPrice={90}
+          maxPrice={180}
+          mostCommonPrice={150}
+          title="Price Range (Current Market)"
+          description="Distribution of current market prices"
+        />
+
         {/* Search Bar */}
         <div className="relative">
           <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -552,10 +566,12 @@ export function MarketplacePage() {
                 )}
 
                 <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                    <span className="font-medium">{listing.farmerRating}</span>
-                  </div>
+                  <StarRating
+                    rating={listing.farmerRating}
+                    maxRating={5}
+                    size="sm"
+                    showValue={true}
+                  />
                   {listing.distance && (
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <IconMapPin className="h-4 w-4" />

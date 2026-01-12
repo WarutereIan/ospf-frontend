@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { IconArrowLeft, IconTrendingUp, IconTrendingDown, IconChartBar } from "@tabler/icons-react";
+import { IconArrowLeft, IconTrendingUp, IconTrendingDown, IconChartBar, IconFlame } from "@tabler/icons-react";
+import {
+  PriceCard,
+  LineChart,
+  AlertCard,
+} from "@/components/visualizations";
 
 interface MarketPrice {
   variety: string;
@@ -89,12 +94,37 @@ const marketPrices: MarketPrice[] = [
 export function MarketInfo() {
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedVariety, setSelectedVariety] = useState("all");
+  const [priceTrendData, setPriceTrendData] = useState<Array<{ date: string; kenya: number; spk004: number; kabode: number }>>([]);
+
+  useEffect(() => {
+    // Generate 30 days of price trend data
+    const days = 30;
+    const trendData = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      trendData.push({
+        date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        kenya: 150 - Math.random() * 10 + (i / days) * 5,
+        spk004: 120 - Math.random() * 8 + (i / days) * 2,
+        kabode: 100 - Math.random() * 5,
+      });
+    }
+    setPriceTrendData(trendData);
+  }, []);
 
   const filteredPrices = marketPrices.filter((price) => {
     const matchesLocation = selectedLocation === "all" || price.location.toLowerCase() === selectedLocation;
     const matchesVariety = selectedVariety === "all" || price.variety.toLowerCase() === selectedVariety;
     return matchesLocation && matchesVariety;
   });
+
+  // Get current prices for main varieties (Grade A)
+  const currentPrices = {
+    kenya: marketPrices.find((p) => p.variety === "Kenya" && p.grade === "A"),
+    spk004: marketPrices.find((p) => p.variety === "SPK004" && p.grade === "A"),
+    kabode: marketPrices.find((p) => p.variety === "Kabode" && p.grade === "A"),
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-KE", {
@@ -124,11 +154,106 @@ export function MarketInfo() {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Current Prices */}
       <Card>
         <CardHeader>
-          <CardTitle>Market Prices</CardTitle>
-          <CardDescription>Current OFSP prices by variety, grade, and location</CardDescription>
+          <CardTitle>Current Prices</CardTitle>
+          <CardDescription>Real-time market prices with trends</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {currentPrices.kenya && (
+              <PriceCard
+                variety="Kenya"
+                price={currentPrices.kenya.currentPrice}
+                trend={{
+                  value: Math.abs(currentPrices.kenya.changePercent),
+                  direction: currentPrices.kenya.change >= 0 ? "up" : "down",
+                }}
+                priceRange={{
+                  min: 100,
+                  max: 180,
+                  current: currentPrices.kenya.currentPrice,
+                }}
+                level="high"
+              />
+            )}
+            {currentPrices.spk004 && (
+              <PriceCard
+                variety="SPK004"
+                price={currentPrices.spk004.currentPrice}
+                trend={{
+                  value: Math.abs(currentPrices.spk004.changePercent),
+                  direction: currentPrices.spk004.change >= 0 ? "up" : "down",
+                }}
+                priceRange={{
+                  min: 100,
+                  max: 180,
+                  current: currentPrices.spk004.currentPrice,
+                }}
+                level="medium"
+              />
+            )}
+            {currentPrices.kabode && (
+              <PriceCard
+                variety="Kabode"
+                price={currentPrices.kabode.currentPrice}
+                trend={{
+                  value: Math.abs(currentPrices.kabode.changePercent),
+                  direction: currentPrices.kabode.change >= 0 ? "up" : "neutral",
+                }}
+                priceRange={{
+                  min: 100,
+                  max: 180,
+                  current: currentPrices.kabode.currentPrice,
+                }}
+                level="low"
+              />
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Price Trend Chart */}
+      <LineChart
+        data={priceTrendData}
+        lines={[
+          {
+            dataKey: "kenya",
+            name: "Kenya",
+            color: "#F97316",
+          },
+          {
+            dataKey: "spk004",
+            name: "SPK004",
+            color: "#8B5CF6",
+          },
+          {
+            dataKey: "kabode",
+            name: "Kabode",
+            color: "#14B8A6",
+          },
+        ]}
+        title="Price Trend (Last 30 Days)"
+        description="Historical price movement for all varieties"
+        height={300}
+        formatter={(value) => `KES ${value.toFixed(0)}/kg`}
+        showLegend={true}
+      />
+
+      {/* Demand Indicator */}
+      <AlertCard
+        type="warning"
+        title="🔥 HIGH DEMAND: Kenya variety this week"
+        message="Best centres: Kangundo, Tala"
+        className="border-orange-200 bg-orange-50"
+      />
+
+      {/* Detailed Price Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Detailed Market Prices</CardTitle>
+          <CardDescription>All prices by variety, grade, and location</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -157,7 +282,7 @@ export function MarketInfo() {
             </Select>
           </div>
 
-          {/* Price Cards */}
+          {/* Price Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredPrices.map((price, index) => (
               <Card key={index}>

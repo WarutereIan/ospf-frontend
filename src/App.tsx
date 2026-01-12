@@ -26,6 +26,7 @@ import { QualityCheck } from "@/pages/aggregation/QualityCheck";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { RateFarmerPage } from "@/pages/buyer/RateFarmerPage";
+import { Ratings } from "@/pages/buyer/Ratings";
 import { RecurringOrders } from "@/pages/marketplace/RecurringOrders";
 import InputManagement from "@/pages/inputs/InputManagement";
 import InputMarketplace from "@/pages/marketplace/InputMarketplace";
@@ -69,6 +70,7 @@ export function App() {
             
             {/* Buyer Routes */}
             <Route path="/dashboard/buyer/orders" element={<BuyerOrders />} />
+            <Route path="/dashboard/buyer/ratings" element={<Ratings />} />
             <Route path="/dashboard/buyer/rate/:orderId" element={<RateFarmerPage />} />
             
             {/* Aggregation Manager Routes */}

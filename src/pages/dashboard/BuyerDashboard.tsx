@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   IconShoppingBag,
   IconPackage,
@@ -11,6 +12,12 @@ import {
   IconArrowRight,
   IconSearch,
 } from "@tabler/icons-react";
+import {
+  StatCard,
+  PieChart,
+  HorizontalBarChart,
+  AreaChart,
+} from "@/components/visualizations";
 
 interface BuyerStats {
   totalPurchases: number;
@@ -19,6 +26,27 @@ interface BuyerStats {
   totalSpent: number;
   avgOrderValue: number;
   ratedFarmers: number;
+  spendThisMonth: number;
+  spendLastMonth: number;
+  quantityReceived: number;
+  quantityLastMonth: number;
+  suppliers: number;
+  newSuppliers: number;
+}
+
+interface SpendByVariety {
+  name: string;
+  value: number;
+}
+
+interface OrderStatusData {
+  name: string;
+  value: number;
+}
+
+interface MonthlySpending {
+  month: string;
+  amount: number;
 }
 
 interface RecentOrder {
@@ -26,6 +54,7 @@ interface RecentOrder {
   farmerName: string;
   variety: string;
   quantity: number;
+  qualityGrade?: string;
   totalAmount: number;
   status: string;
   createdAt: string;
@@ -40,8 +69,17 @@ export function BuyerDashboard() {
     totalSpent: 0,
     avgOrderValue: 0,
     ratedFarmers: 0,
+    spendThisMonth: 0,
+    spendLastMonth: 0,
+    quantityReceived: 0,
+    quantityLastMonth: 0,
+    suppliers: 0,
+    newSuppliers: 0,
   });
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [spendByVariety, setSpendByVariety] = useState<SpendByVariety[]>([]);
+  const [orderStatus, setOrderStatus] = useState<OrderStatusData[]>([]);
+  const [monthlySpending, setMonthlySpending] = useState<MonthlySpending[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -54,28 +92,64 @@ export function BuyerDashboard() {
         totalSpent: 450000,
         avgOrderValue: 37500,
         ratedFarmers: 6,
+        spendThisMonth: 450000,
+        spendLastMonth: 380000,
+        quantityReceived: 3500,
+        quantityLastMonth: 2800,
+        suppliers: 15,
+        newSuppliers: 2,
       });
       setRecentOrders([
         {
-          id: "ORD-001",
+          id: "ORD-045",
           farmerName: "James Mutua",
           variety: "Kenya",
           quantity: 500,
+          qualityGrade: "A",
           totalAmount: 75000,
-          status: "in_transit",
-          createdAt: new Date().toISOString(),
-          canRate: false,
-        },
-        {
-          id: "ORD-002",
-          farmerName: "Mary Wanjiku",
-          variety: "SPK004",
-          quantity: 300,
-          totalAmount: 36000,
           status: "delivered",
           createdAt: new Date().toISOString(),
           canRate: true,
         },
+        {
+          id: "ORD-044",
+          farmerName: "Mary W.",
+          variety: "SPK004",
+          quantity: 200,
+          qualityGrade: "",
+          totalAmount: 24000,
+          status: "in_transit",
+          createdAt: new Date().toISOString(),
+          canRate: false,
+        },
+      ]);
+      // Spend by variety data
+      setSpendByVariety([
+        { name: "Kenya", value: 247500 },
+        { name: "SPK004", value: 135000 },
+        { name: "Kabode", value: 67500 },
+      ]);
+      // Order status data
+      setOrderStatus([
+        { name: "Completed", value: 38 },
+        { name: "In Transit", value: 3 },
+        { name: "Processing", value: 2 },
+        { name: "Pending", value: 1 },
+      ]);
+      // Monthly spending (12 months)
+      setMonthlySpending([
+        { month: "Jan", amount: 320000 },
+        { month: "Feb", amount: 350000 },
+        { month: "Mar", amount: 380000 },
+        { month: "Apr", amount: 400000 },
+        { month: "May", amount: 420000 },
+        { month: "Jun", amount: 410000 },
+        { month: "Jul", amount: 430000 },
+        { month: "Aug", amount: 440000 },
+        { month: "Sep", amount: 420000 },
+        { month: "Oct", amount: 400000 },
+        { month: "Nov", amount: 380000 },
+        { month: "Dec", amount: 450000 },
       ]);
       setIsLoading(false);
     }, 1000);
@@ -117,34 +191,83 @@ export function BuyerDashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Purchases"
-          value={stats.totalPurchases.toString()}
-          description={`${stats.completedOrders} completed`}
+          label="Spend This Month"
+          value={`KES ${(stats.spendThisMonth / 1000).toFixed(0)}K`}
+          description="Monthly spending"
+          trend={{
+            value: stats.spendLastMonth > 0
+              ? ((stats.spendThisMonth - stats.spendLastMonth) / stats.spendLastMonth) * 100
+              : 0,
+            direction: stats.spendThisMonth >= stats.spendLastMonth ? "up" : "down",
+          }}
           icon={<IconShoppingBag className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Active Orders"
+          label="Orders Active"
           value={stats.activeOrders.toString()}
-          description="In progress"
+          description="3 pending"
           icon={<IconPackage className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Total Spent"
-          value={`KES ${stats.totalSpent.toLocaleString()}`}
-          description="All-time purchases"
+          label="Quantity Received"
+          value={`${stats.quantityReceived.toLocaleString()} kg`}
+          description="This month"
+          trend={{
+            value: stats.quantityLastMonth > 0
+              ? ((stats.quantityReceived - stats.quantityLastMonth) / stats.quantityLastMonth) * 100
+              : 0,
+            direction: stats.quantityReceived >= stats.quantityLastMonth ? "up" : "down",
+          }}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Rated Farmers"
-          value={stats.ratedFarmers.toString()}
-          description="Farmers reviewed"
+          label="Suppliers"
+          value={stats.suppliers.toString()}
+          description={`+${stats.newSuppliers} new`}
           icon={<IconStar className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
       </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <PieChart
+          data={spendByVariety}
+          title="Spend by Variety"
+          description="Breakdown of spending by OFSP variety"
+          formatter={(value) => `KES ${value.toLocaleString()}`}
+          height={300}
+          innerRadius={60}
+          showLegend={true}
+        />
+        <HorizontalBarChart
+          data={orderStatus}
+          title="Order Status"
+          description="Distribution of orders by status"
+          color="#3B82F6"
+          height={300}
+        />
+      </div>
+
+      {/* Spending Trend */}
+      <AreaChart
+        data={monthlySpending.map((m) => ({ name: m.month, amount: m.amount }))}
+        areas={[
+          {
+            dataKey: "amount",
+            name: "Spending",
+            color: "#3B82F6",
+            gradient: true,
+          },
+        ]}
+        title="Spending Trend (12 months)"
+        description="Monthly spending over time"
+        formatter={(value) => `KES ${value.toLocaleString()}`}
+        height={300}
+      />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -166,48 +289,48 @@ export function BuyerDashboard() {
                 ))}
               </div>
             ) : recentOrders.length > 0 ? (
-              <div className="space-y-4">
-                {recentOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted rounded-lg gap-4"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="bg-background p-3 rounded-lg">
-                        <IconPackage className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Order #{order.id}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {order.farmerName} • {order.quantity} kg • {order.variety}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-semibold">KES {order.totalAmount.toLocaleString()}</p>
-                        <Badge variant="outline" className={getStatusColor(order.status)}>
-                          {order.status}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        <Link to={`/dashboard/orders/${order.id}`}>
-                          <Button size="sm" variant="outline">
-                            <IconArrowRight className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        {order.canRate && (
-                          <Button size="sm" variant="outline">
-                            <IconStar className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order ID</TableHead>
+                      <TableHead>Farmer</TableHead>
+                      <TableHead>Variety</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentOrders.map((order) => {
+                      const statusIcon =
+                        order.status === "delivered" || order.status === "completed"
+                          ? "●"
+                          : order.status === "in_transit"
+                          ? "◐"
+                          : "○";
+                      const statusLabel =
+                        order.status === "delivered" || order.status === "completed"
+                          ? "Delivered"
+                          : order.status === "in_transit"
+                          ? "In Transit"
+                          : order.status.replace(/_/g, " ");
+
+                      return (
+                        <TableRow key={order.id}>
+                          <TableCell className="font-medium">{order.id}</TableCell>
+                          <TableCell>{order.farmerName}</TableCell>
+                          <TableCell>
+                            {order.quantity} kg {order.variety} {order.qualityGrade || ""}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={getStatusColor(order.status)}>
+                              {statusIcon} {statusLabel}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             ) : (
               <div className="text-center py-8">
@@ -220,7 +343,7 @@ export function BuyerDashboard() {
             )}
           </CardContent>
           <CardFooter>
-            <Link to="/dashboard/orders" className="w-full">
+            <Link to="/dashboard/buyer/orders" className="w-full">
               <Button variant="outline" className="w-full">View All Orders</Button>
             </Link>
           </CardFooter>
@@ -239,13 +362,13 @@ export function BuyerDashboard() {
                   Browse Marketplace
                 </Button>
               </Link>
-              <Link to="/dashboard/orders" className="w-full">
+              <Link to="/dashboard/buyer/orders" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   My Orders
                 </Button>
               </Link>
-              <Link to="/dashboard/ratings" className="w-full">
+              <Link to="/dashboard/buyer/ratings" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconStar className="mr-2 h-4 w-4" />
                   Rate Farmers
@@ -280,39 +403,6 @@ export function BuyerDashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  isLoading?: boolean;
-}
-
-function StatCard({ label, value, description, icon, isLoading }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-            <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-            <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <div className="rounded-full p-3 bg-primary/10">{icon}</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

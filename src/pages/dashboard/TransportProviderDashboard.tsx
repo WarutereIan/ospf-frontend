@@ -3,17 +3,37 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { IconTruck, IconMapPin, IconClock, IconCurrency, IconChecklist, IconTrendingUp } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import {
+  StatCard,
+  SimpleBarChart,
+  StarRating,
+} from "@/components/visualizations";
 
 export default function TransportProviderDashboard() {
-  // Mock data - replace with actual API calls
-  const stats = {
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
     activeDeliveries: 5,
     pendingRequests: 12,
     completedToday: 8,
-    totalEarnings: "KES 48,500",
-    weeklyEarnings: "KES 185,000",
+    totalEarnings: 4850,
+    weeklyEarnings: 185000,
     rating: 4.8,
-  };
+    reviews: 156,
+  });
+  const [weeklyEarnings, setWeeklyEarnings] = useState([
+    { day: "Mon", amount: 4200 },
+    { day: "Tue", amount: 3800 },
+    { day: "Wed", amount: 4500 },
+    { day: "Thu", amount: 4100 },
+    { day: "Fri", amount: 4850 },
+  ]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+  }, []);
 
   const activeDeliveries = [
     {
@@ -96,72 +116,72 @@ export default function TransportProviderDashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Deliveries</CardTitle>
-            <IconTruck className="h-4 w-4 text-muted-foreground" />
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Today's Earnings</CardTitle>
+            <CardDescription>Earnings from today's deliveries</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeDeliveries}</div>
-            <p className="text-xs text-muted-foreground">Currently in progress</p>
+            {isLoading ? (
+              <div className="h-32 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-4xl font-bold">KES {stats.totalEarnings.toLocaleString()}</p>
+                <p className="text-sm text-muted-foreground mt-2">from {stats.completedToday} trips</p>
+              </div>
+            )}
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
-            <IconClock className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle>Active Deliveries</CardTitle>
+            <CardDescription>Currently in progress</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingRequests}</div>
-            <p className="text-xs text-muted-foreground">Awaiting acceptance</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
-            <IconChecklist className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completedToday}</div>
-            <p className="text-xs text-success">+3 from yesterday</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Earnings</CardTitle>
-            <IconCurrency className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalEarnings}</div>
-            <p className="text-xs text-muted-foreground">From {stats.completedToday} deliveries</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weekly Earnings</CardTitle>
-            <IconTrendingUp className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.weeklyEarnings}</div>
-            <p className="text-xs text-success">+22% from last week</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rating</CardTitle>
-            <IconTrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.rating} ⭐</div>
-            <p className="text-xs text-muted-foreground">Based on 156 reviews</p>
+            {isLoading ? (
+              <div className="h-32 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-4xl font-bold">{stats.activeDeliveries}</p>
+                <div className="flex items-center justify-center gap-2 mt-2 text-sm text-muted-foreground">
+                  <span>● 2 In Transit</span>
+                  <span>◐ 3 Pickup</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Earnings Chart */}
+      <SimpleBarChart
+        data={weeklyEarnings.map((w) => ({ name: w.day, value: w.amount }))}
+        title="Earnings This Week"
+        description="Daily earnings breakdown"
+        formatter={(value) => `KES ${value.toLocaleString()}`}
+        color="#22C55E"
+        height={300}
+      />
+
+      {/* Rating Display */}
+      <Card>
+        <CardHeader>
+          <CardTitle>My Rating</CardTitle>
+          <CardDescription>Customer feedback</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="h-32 bg-muted animate-pulse rounded" />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-6">
+              <StarRating rating={stats.rating} maxRating={5} size="lg" showValue={true} />
+              <p className="text-sm text-muted-foreground mt-2">
+                Based on {stats.reviews} reviews
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card>

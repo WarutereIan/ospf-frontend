@@ -12,6 +12,13 @@ import {
   IconTrophy,
   IconChartBar,
 } from "@tabler/icons-react";
+import {
+  StatCard,
+  CircularProgress,
+  ProgressBar,
+  SimpleBarChart,
+  StarRating,
+} from "@/components/visualizations";
 
 interface FarmerStats {
   totalRevenue: number;
@@ -22,6 +29,22 @@ interface FarmerStats {
   avgOrderValue: number;
   peerRank: number;
   totalFarmers: number;
+  earningsThisMonth: number;
+  earningsLastMonth: number;
+  quantityDelivered: number;
+  quantityLastMonth: number;
+  qualityScore: number;
+  rankingPercentile: number;
+}
+
+interface MonthlyEarnings {
+  month: string;
+  amount: number;
+}
+
+interface QualityHistory {
+  month: string;
+  rating: number;
 }
 
 interface RecentOrder {
@@ -45,8 +68,16 @@ export function FarmerDashboard() {
     avgOrderValue: 0,
     peerRank: 0,
     totalFarmers: 0,
+    earningsThisMonth: 0,
+    earningsLastMonth: 0,
+    quantityDelivered: 0,
+    quantityLastMonth: 0,
+    qualityScore: 0,
+    rankingPercentile: 0,
   });
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [monthlyEarnings, setMonthlyEarnings] = useState<MonthlyEarnings[]>([]);
+  const [qualityHistory, setQualityHistory] = useState<QualityHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -62,6 +93,12 @@ export function FarmerDashboard() {
         avgOrderValue: 5208,
         peerRank: 12,
         totalFarmers: 150,
+        earningsThisMonth: 45000,
+        earningsLastMonth: 40000,
+        quantityDelivered: 850,
+        quantityLastMonth: 780,
+        qualityScore: 92,
+        rankingPercentile: 15,
       });
       setRecentOrders([
         {
@@ -84,6 +121,21 @@ export function FarmerDashboard() {
           variety: "SPK004",
           qualityGrade: "A",
         },
+      ]);
+      // Last 6 months earnings data
+      setMonthlyEarnings([
+        { month: "Jul", amount: 28000 },
+        { month: "Aug", amount: 32000 },
+        { month: "Sep", amount: 35000 },
+        { month: "Oct", amount: 38000 },
+        { month: "Nov", amount: 40000 },
+        { month: "Dec", amount: 45000 },
+      ]);
+      // Quality history (last 3 months)
+      setQualityHistory([
+        { month: "Oct", rating: 4.0 },
+        { month: "Nov", rating: 5.0 },
+        { month: "Dec", rating: 4.5 },
       ]);
       setIsLoading(false);
     }, 1000);
@@ -134,36 +186,106 @@ export function FarmerDashboard() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Main Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Revenue"
-          value={`KES ${stats.totalRevenue.toLocaleString()}`}
-          description="All-time earnings"
+          label="Earnings This Month"
+          value={`KES ${stats.earningsThisMonth.toLocaleString()}`}
+          description="Monthly earnings"
+          trend={{
+            value: stats.earningsLastMonth > 0
+              ? ((stats.earningsThisMonth - stats.earningsLastMonth) / stats.earningsLastMonth) * 100
+              : 0,
+            direction: stats.earningsThisMonth >= stats.earningsLastMonth ? "up" : "down",
+          }}
           icon={<IconCurrency className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Total Orders"
-          value={stats.orderCount.toString()}
-          description={`${stats.completedOrders} completed, ${stats.pendingOrders} pending`}
+          label="Quantity Delivered"
+          value={`${stats.quantityDelivered} kg`}
+          description="This month"
+          trend={{
+            value: stats.quantityLastMonth > 0
+              ? ((stats.quantityDelivered - stats.quantityLastMonth) / stats.quantityLastMonth) * 100
+              : 0,
+            direction: stats.quantityDelivered >= stats.quantityLastMonth ? "up" : "down",
+          }}
           icon={<IconPackage className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
-        <StatCard
-          label="Active Listings"
-          value={stats.activeListings.toString()}
-          description="Produce currently listed"
-          icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
+        <Card>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="h-24 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="flex flex-col items-center">
+                <CircularProgress
+                  value={stats.qualityScore}
+                  maxValue={100}
+                  text={`${stats.qualityScore}`}
+                  size={100}
+                  color={stats.qualityScore >= 90 ? "#22C55E" : stats.qualityScore >= 75 ? "#F59E0B" : "#EF4444"}
+                />
+                <p className="text-sm text-muted-foreground mt-2">Quality Score</p>
+                <Badge variant="outline" className="mt-1">
+                  Grade {stats.qualityScore >= 90 ? "A" : stats.qualityScore >= 75 ? "B" : "C"}
+                </Badge>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            {isLoading ? (
+              <div className="h-24 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Ranking</p>
+                <p className="text-2xl font-bold">Top {stats.rankingPercentile}%</p>
+                <ProgressBar
+                  value={100 - stats.rankingPercentile}
+                  maxValue={100}
+                  color="success"
+                  size="md"
+                />
+                <p className="text-xs text-muted-foreground">Position in distribution</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SimpleBarChart
+          data={monthlyEarnings.map((e) => ({ name: e.month, value: e.amount }))}
+          title="Earnings Trend (6 months)"
+          description="Monthly earnings comparison"
+          formatter={(value) => `KES ${value.toLocaleString()}`}
+          color="#22C55E"
+          height={250}
         />
-        <StatCard
-          label="Peer Ranking"
-          value={`#${stats.peerRank}`}
-          description={`Out of ${stats.totalFarmers} farmers`}
-          icon={<IconTrophy className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Quality History</CardTitle>
+            <CardDescription>Monthly quality ratings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-48 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="space-y-4">
+                {qualityHistory.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">{item.month}</span>
+                    <StarRating rating={item.rating} maxRating={5} size="sm" showValue={false} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main Content Grid */}
@@ -339,38 +461,5 @@ export function FarmerDashboard() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  isLoading?: boolean;
-}
-
-function StatCard({ label, value, description, icon, isLoading }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-            <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-            <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <div className="rounded-full p-3 bg-primary/10">{icon}</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }

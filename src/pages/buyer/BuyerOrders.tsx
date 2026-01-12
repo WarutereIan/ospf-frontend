@@ -25,6 +25,10 @@ import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/component
 import { PaymentDialog } from "@/components/payments/PaymentDialog";
 import { RateFarmer } from "./RateFarmer";
 import { Link } from "react-router-dom";
+import {
+  FunnelChart,
+  SimpleBarChart,
+} from "@/components/visualizations";
 
 interface BuyerOrder {
   id: string;
@@ -100,6 +104,24 @@ export function BuyerOrders() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
 
+  // Calculate order funnel data
+  const orderFunnel = [
+    { name: "Placed", count: 50, color: "#3B82F6" },
+    { name: "Accepted", count: 45, color: "#22C55E" },
+    { name: "Delivered", count: 40, color: "#F59E0B" },
+    { name: "Completed", count: 38, color: "#8B5CF6" },
+  ];
+
+  // Calculate orders by month
+  const ordersByMonth = [
+    { name: "Jan", value: 8 },
+    { name: "Feb", value: 12 },
+    { name: "Mar", value: 10 },
+    { name: "Apr", value: 15 },
+    { name: "May", value: 18 },
+    { name: "Jun", value: 14 },
+  ];
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "order_placed":
@@ -137,6 +159,22 @@ export function BuyerOrders() {
           </p>
         </div>
       </div>
+
+      {/* Order Funnel */}
+      <FunnelChart
+        stages={orderFunnel}
+        title="Order Funnel"
+        description="Order flow through different stages"
+      />
+
+      {/* Orders by Month */}
+      <SimpleBarChart
+        data={ordersByMonth}
+        title="Orders by Month"
+        description="Monthly order count"
+        color="#3B82F6"
+        height={300}
+      />
 
       {/* Filters */}
       <Card>

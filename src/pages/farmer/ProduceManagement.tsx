@@ -28,6 +28,11 @@ import {
   IconArrowLeft,
   IconPhoto,
 } from "@tabler/icons-react";
+import {
+  StackedBarChart,
+  StatusIndicator,
+  ProgressBar,
+} from "@/components/visualizations";
 
 // OFSP Varieties
 const ofspVarieties = [
@@ -177,6 +182,25 @@ export function ProduceManagement() {
   const getSubCountyName = (value: string) => {
     const subCounty = subCounties.find((s) => s.value === value);
     return subCounty?.label || value;
+  };
+
+  // Calculate variety breakdown
+  const varietyBreakdown = ofspVarieties.map((variety) => {
+    const varietyListings = listings.filter((l) => l.variety === variety.value);
+    const totalQuantity = varietyListings.reduce((sum, l) => sum + l.quantity, 0);
+    const allQuantity = listings.reduce((sum, l) => sum + l.quantity, 0);
+    return {
+      name: variety.label,
+      quantity: totalQuantity,
+      percentage: allQuantity > 0 ? (totalQuantity / allQuantity) * 100 : 0,
+    };
+  });
+
+  // Calculate listing status counts
+  const statusCounts = {
+    active: listings.filter((l) => l.status === "active").length,
+    pending: listings.filter((l) => l.status === "inactive").length,
+    sold: listings.filter((l) => l.status === "sold").length,
   };
 
   return (
@@ -339,6 +363,104 @@ export function ProduceManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Visualizations */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <StackedBarChart
+          data={varietyBreakdown.map((v) => ({
+            name: v.name,
+            quantity: v.quantity,
+          }))}
+          bars={[
+            {
+              dataKey: "quantity",
+              name: "Quantity (kg)",
+              color: "#22C55E",
+            },
+          ]}
+          title="Variety Breakdown"
+          description="Distribution of produce by variety"
+          layout="horizontal"
+          height={200}
+          formatter={(value) => `${value} kg`}
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Listing Status</CardTitle>
+            <CardDescription>Current listing status overview</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <StatusIndicator status="Active" count={statusCounts.active} color="green" />
+              <StatusIndicator status="Pending" count={statusCounts.pending} color="yellow" />
+              <StatusIndicator status="Sold" count={statusCounts.sold} color="blue" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Active Listings with Stock Progress */}
+      {listings.filter((l) => l.status === "active").length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Listings</CardTitle>
+            <CardDescription>Your currently active produce listings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {listings
+                .filter((l) => l.status === "active")
+                .map((listing) => {
+                  // Calculate remaining stock (assuming some has been sold/ordered)
+                  const initialQuantity = listing.quantity;
+                  const remainingQuantity = initialQuantity * 0.8; // Mock: 80% remaining
+                  const remainingPercent = (remainingQuantity / initialQuantity) * 100;
+                  const daysAgo = Math.floor(
+                    (Date.now() - new Date(listing.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+                  );
+
+                  return (
+                    <div
+                      key={listing.id}
+                      className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
+                        <IconPackage className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">
+                              {getVarietyName(listing.variety)}, Grade {listing.qualityGrade}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {listing.quantity} kg @ KES {listing.pricePerKg}/kg
+                            </p>
+                          </div>
+                          <Badge variant="outline" className={getGradeColor(listing.qualityGrade)}>
+                            Grade {listing.qualityGrade}
+                          </Badge>
+                        </div>
+                        <div className="space-y-1">
+                          <ProgressBar
+                            value={remainingPercent}
+                            maxValue={100}
+                            color="success"
+                            size="md"
+                            showValue={false}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {remainingPercent.toFixed(0)}% remaining • Listed {daysAgo} days ago
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>

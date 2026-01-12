@@ -25,10 +25,18 @@ import {
   IconCircleCheck,
   IconAlertCircle,
   IconLoader2,
+  IconShoppingCart,
+  IconCurrency,
+  IconBuilding,
+  IconClipboardCheck,
 } from "@tabler/icons-react";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
+import {
+  StatCard,
+  OrderPipeline,
+} from "@/components/visualizations";
 
 interface FarmerOrder {
   id: string;
@@ -243,77 +251,112 @@ export function FarmerOrders() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Status Count Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
-            <p className="text-xs text-muted-foreground">All-time orders</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {orders.filter((o) => o.status === "order_placed").length}
-            </div>
-            <p className="text-xs text-muted-foreground">Requires action</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {
-                orders.filter(
-                  (o) =>
-                    o.status === "order_accepted" ||
-                    o.status === "payment_secured" ||
-                    o.status === "in_transit" ||
-                    o.status === "at_aggregation" ||
-                    o.status === "quality_approved" ||
-                    o.status === "out_for_delivery"
-                ).length
-              }
-            </div>
-            <p className="text-xs text-muted-foreground">Active orders</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {orders.filter((o) => o.status === "completed" || o.status === "delivered").length}
-            </div>
-            <p className="text-xs text-muted-foreground">Successfully delivered</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          label="Pending"
+          value={orders.filter((o) => o.status === "order_placed").length.toString()}
+          description="Awaiting action"
+          icon={<IconAlertCircle className="h-5 w-5 text-primary" />}
+        />
+        <StatCard
+          label="Active"
+          value={
+            orders.filter(
+              (o) =>
+                o.status === "order_accepted" ||
+                o.status === "payment_secured" ||
+                o.status === "in_transit" ||
+                o.status === "at_aggregation" ||
+                o.status === "quality_approved" ||
+                o.status === "out_for_delivery"
+            ).length.toString()
+          }
+          description="In progress"
+          icon={<IconTruck className="h-5 w-5 text-primary" />}
+        />
+        <StatCard
+          label="Complete"
+          value={orders.filter((o) => o.status === "completed" || o.status === "delivered").length.toString()}
+          description="Finished orders"
+          icon={<IconCircleCheck className="h-5 w-5 text-primary" />}
+        />
+        <StatCard
+          label="Total"
+          value={`KES ${(orders.reduce((sum, o) => sum + o.totalAmount, 0) / 1000).toFixed(0)}K`}
+          description={`${orders.length} orders`}
+          icon={<IconPackage className="h-5 w-5 text-primary" />}
+        />
       </div>
 
-      {/* Orders Table */}
+      {/* Order Pipeline - 8 Stages */}
+      <OrderPipeline
+        stages={[
+          {
+            name: "1. Order Placed",
+            count: orders.filter((o) => o.status === "order_placed").length,
+            icon: <IconShoppingCart className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "2. Order Accepted",
+            count: orders.filter((o) => o.status === "order_accepted").length,
+            icon: <IconCircleCheck className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "3. Payment Secured",
+            count: orders.filter((o) => o.status === "payment_secured").length,
+            icon: <IconCurrency className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "4. In Transit",
+            count: orders.filter((o) => o.status === "in_transit").length,
+            icon: <IconTruck className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "5. At Aggregation Center",
+            count: orders.filter((o) => o.status === "at_aggregation").length,
+            icon: <IconBuilding className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "6. Quality Approved",
+            count: orders.filter((o) => o.status === "quality_approved").length,
+            icon: <IconClipboardCheck className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "7. Out for Delivery",
+            count: orders.filter((o) => o.status === "out_for_delivery").length,
+            icon: <IconTruck className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+          {
+            name: "8. Delivered & Complete",
+            count: orders.filter((o) => o.status === "delivered" || o.status === "completed").length,
+            icon: <IconCircleCheck className="h-4 w-4" />,
+            color: "#3B82F6",
+          },
+        ]}
+        title="Order Pipeline"
+        description="Real-time order journey through 8 stages"
+      />
+
+      {/* Filters and Order List */}
       <Card>
         <CardHeader>
-          <CardTitle>Orders</CardTitle>
-          <CardDescription>View and manage your orders</CardDescription>
+          <CardTitle>Order List</CardTitle>
+          <CardDescription>Filterable list of all your orders</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search orders..."
+                placeholder="Search by order ID or buyer name..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -324,21 +367,17 @@ export function FarmerOrders() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Orders</SelectItem>
-                <SelectItem value="order_placed">Order Placed</SelectItem>
-                <SelectItem value="order_accepted">Order Accepted</SelectItem>
-                <SelectItem value="payment_secured">Payment Secured</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="order_placed">Pending</SelectItem>
+                <SelectItem value="order_accepted">Accepted</SelectItem>
                 <SelectItem value="in_transit">In Transit</SelectItem>
-                <SelectItem value="at_aggregation">At Aggregation</SelectItem>
-                <SelectItem value="quality_approved">Quality Approved</SelectItem>
-                <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
                 <SelectItem value="delivered">Delivered</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="disputed">Disputed</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
+          {/* Orders Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -347,9 +386,8 @@ export function FarmerOrders() {
                   <TableHead>Buyer</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Quantity</TableHead>
-                  <TableHead>Total Amount</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -358,36 +396,20 @@ export function FarmerOrders() {
                   filteredOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell className="font-medium">{order.id}</TableCell>
+                      <TableCell>{order.buyerName}</TableCell>
                       <TableCell>
-                        <div>
-                          <p className="font-medium">{order.buyerName}</p>
-                          <p className="text-xs text-muted-foreground">{order.buyerPhone}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {order.variety} (Grade {order.qualityGrade})
+                        {order.variety} <Badge variant="outline" className="ml-2">Grade {order.qualityGrade}</Badge>
                       </TableCell>
                       <TableCell>{order.quantity} kg</TableCell>
-                      <TableCell className="font-semibold">
-                        KES {order.totalAmount.toLocaleString()}
-                      </TableCell>
+                      <TableCell>KES {order.totalAmount.toLocaleString()}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={getStatusColor(order.status)}>
-                          <span className="flex items-center gap-1">
-                            {getStatusIcon(order.status)}
-                            {formatStatus(order.status)}
-                          </span>
+                          {getStatusIcon(order.status)}
+                          <span className="ml-1">{formatStatus(order.status)}</span>
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(order.createdAt)}
-                      </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleViewOrder(order)}
-                        >
+                        <Button size="sm" variant="ghost" onClick={() => handleViewOrder(order)}>
                           <IconEye className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -395,14 +417,12 @@ export function FarmerOrders() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="flex flex-col items-center">
                         <IconPackage className="h-10 w-10 text-muted-foreground mb-2" />
-                        <p className="text-lg font-medium text-muted-foreground">
-                          No orders found
-                        </p>
+                        <p className="text-lg font-medium text-muted-foreground">No orders found</p>
                         <p className="text-sm text-muted-foreground">
-                          Once buyers place orders, they will appear here
+                          Try adjusting your search or filters
                         </p>
                       </div>
                     </TableCell>

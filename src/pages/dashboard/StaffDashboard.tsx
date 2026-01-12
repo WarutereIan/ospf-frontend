@@ -10,6 +10,11 @@ import {
   IconDatabase,
   IconShield,
 } from "@tabler/icons-react";
+import {
+  StatCard,
+  ProgressBar,
+  LineChart,
+} from "@/components/visualizations";
 
 interface StaffStats {
   totalUsers: number;
@@ -18,6 +23,18 @@ interface StaffStats {
   totalOrders: number;
   platformRevenue: number;
   systemHealth: "healthy" | "warning" | "critical";
+}
+
+interface ProgramIndicator {
+  name: string;
+  current: number;
+  target: number;
+  unit?: string;
+}
+
+interface BeneficiaryGrowth {
+  month: string;
+  farmers: number;
 }
 
 export function StaffDashboard() {
@@ -29,6 +46,8 @@ export function StaffDashboard() {
     platformRevenue: 0,
     systemHealth: "healthy",
   });
+  const [programIndicators, setProgramIndicators] = useState<ProgramIndicator[]>([]);
+  const [beneficiaryGrowth, setBeneficiaryGrowth] = useState<BeneficiaryGrowth[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +61,24 @@ export function StaffDashboard() {
         platformRevenue: 135000,
         systemHealth: "healthy",
       });
+      // Program indicators
+      setProgramIndicators([
+        { name: "Beneficiaries", current: 1500, target: 2000, unit: "farmers" },
+        { name: "Volume (tonnes)", current: 85, target: 100, unit: "tons" },
+        { name: "Quality (Gr A)", current: 92, target: 80, unit: "%" },
+        { name: "Income increase", current: 60, target: 50, unit: "%" },
+      ]);
+      // Beneficiary growth (cumulative)
+      setBeneficiaryGrowth([
+        { month: "Jan", farmers: 800 },
+        { month: "Feb", farmers: 900 },
+        { month: "Mar", farmers: 1000 },
+        { month: "Apr", farmers: 1100 },
+        { month: "May", farmers: 1200 },
+        { month: "Jun", farmers: 1300 },
+        { month: "Jul", farmers: 1400 },
+        { month: "Aug", farmers: 1500 },
+      ]);
       setIsLoading(false);
     }, 1000);
   }, []);
@@ -103,6 +140,64 @@ export function StaffDashboard() {
           isLoading={isLoading}
         />
       </div>
+
+      {/* Program Indicators */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Program Indicators</CardTitle>
+          <CardDescription>Progress towards program targets</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-16 bg-muted animate-pulse rounded" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {programIndicators.map((indicator, index) => {
+                const percentage = (indicator.current / indicator.target) * 100;
+                return (
+                  <div key={index} className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">{indicator.name}</span>
+                      <span className="text-muted-foreground">
+                        {indicator.current.toLocaleString()}{indicator.unit ? ` ${indicator.unit}` : ""} of {indicator.target.toLocaleString()}{indicator.unit ? ` ${indicator.unit}` : ""} target
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={percentage}
+                      maxValue={100}
+                      color={percentage >= 100 ? "success" : percentage >= 75 ? "warning" : "default"}
+                      size="lg"
+                      showValue={false}
+                    />
+                    <div className="text-xs text-muted-foreground text-right">
+                      {percentage.toFixed(0)}% of target
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Beneficiary Growth */}
+      <LineChart
+        data={beneficiaryGrowth.map((b) => ({ name: b.month, farmers: b.farmers }))}
+        lines={[
+          {
+            dataKey: "farmers",
+            name: "Total Beneficiaries",
+            color: "#22C55E",
+          },
+        ]}
+        title="Beneficiary Growth"
+        description="Cumulative farmer registration over time"
+        height={300}
+      />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -212,39 +307,6 @@ export function StaffDashboard() {
         </Card>
       </div>
     </div>
-  );
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  isLoading?: boolean;
-}
-
-function StatCard({ label, value, description, icon, isLoading }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-            <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-            <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <div className="rounded-full p-3 bg-primary/10">{icon}</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 

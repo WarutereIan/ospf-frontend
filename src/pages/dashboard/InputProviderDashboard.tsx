@@ -2,17 +2,51 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { IconSeeding, IconShoppingCart, IconPackage, IconTrendingUp, IconUsers, IconCurrency } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import {
+  StatCard,
+  HorizontalBarChart,
+  SimpleBarChart,
+  AlertCard,
+} from "@/components/visualizations";
 
 export default function InputProviderDashboard() {
-  // Mock data - replace with actual API calls
-  const stats = {
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
     totalInputs: 24,
     activeOrders: 8,
-    totalRevenue: "KES 245,000",
+    totalRevenue: 245000,
+    revenueLastMonth: 207000,
     customers: 156,
+    newCustomers: 8,
     pendingOrders: 3,
     lowStock: 5,
-  };
+  });
+  const [salesByCategory, setSalesByCategory] = useState([
+    { name: "Planting", value: 45 },
+    { name: "Fertilizer", value: 30 },
+    { name: "Tools", value: 15 },
+    { name: "Other", value: 10 },
+  ]);
+  const [monthlySales, setMonthlySales] = useState([
+    { month: "Jul", amount: 180000 },
+    { month: "Aug", amount: 195000 },
+    { month: "Sep", amount: 210000 },
+    { month: "Oct", amount: 220000 },
+    { month: "Nov", amount: 230000 },
+    { month: "Dec", amount: 245000 },
+  ]);
+  const [inventoryStatus, setInventoryStatus] = useState({
+    inStock: 19,
+    lowStock: 4,
+    outOfStock: 1,
+  });
+
+  useEffect(() => {
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
+  }, []);
 
   const recentOrders = [
     { id: "1", farmer: "John Kamau", input: "OFSP Vines (Kenya)", quantity: "500 cuttings", amount: "KES 15,000", status: "pending" },
@@ -37,75 +71,98 @@ export default function InputProviderDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Inputs</CardTitle>
-            <IconSeeding className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalInputs}</div>
-            <p className="text-xs text-muted-foreground">Active listings</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Revenue This Month"
+          value={`KES ${(stats.totalRevenue / 1000).toFixed(0)}K`}
+          description="Monthly revenue"
+          trend={{
+            value: stats.revenueLastMonth > 0
+              ? ((stats.totalRevenue - stats.revenueLastMonth) / stats.revenueLastMonth) * 100
+              : 0,
+            direction: "up",
+          }}
+          icon={<IconCurrency className="h-5 w-5 text-primary" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Orders Active"
+          value={stats.activeOrders.toString()}
+          description={`${stats.pendingOrders} pending`}
+          icon={<IconShoppingCart className="h-5 w-5 text-primary" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Products Listed"
+          value={stats.totalInputs.toString()}
+          description={`${stats.lowStock} low stock`}
+          icon={<IconSeeding className="h-5 w-5 text-primary" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Customers"
+          value={stats.customers.toString()}
+          description={`+${stats.newCustomers} new`}
+          icon={<IconUsers className="h-5 w-5 text-primary" />}
+          isLoading={isLoading}
+        />
+      </div>
 
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <HorizontalBarChart
+          data={salesByCategory}
+          title="Sales by Category"
+          description="Revenue breakdown by product category"
+          color="#3B82F6"
+          height={300}
+        />
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Orders</CardTitle>
-            <IconShoppingCart className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle>Inventory Status</CardTitle>
+            <CardDescription>Current stock levels</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.activeOrders}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.pendingOrders} pending approval
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <IconCurrency className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalRevenue}</div>
-            <p className="text-xs text-success">+12% from last month</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Customers</CardTitle>
-            <IconUsers className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.customers}</div>
-            <p className="text-xs text-muted-foreground">Active farmers</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Low Stock</CardTitle>
-            <IconPackage className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">{stats.lowStock}</div>
-            <p className="text-xs text-muted-foreground">Items need restocking</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Growth</CardTitle>
-            <IconTrendingUp className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">+18%</div>
-            <p className="text-xs text-muted-foreground">Sales this quarter</p>
+            {isLoading ? (
+              <div className="h-48 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="text-sm font-medium">In Stock</span>
+                  </div>
+                  <span className="text-lg font-bold">{inventoryStatus.inStock}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                    <span className="text-sm font-medium">Low Stock</span>
+                  </div>
+                  <span className="text-lg font-bold">{inventoryStatus.lowStock}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500" />
+                    <span className="text-sm font-medium">Out of Stock</span>
+                  </div>
+                  <span className="text-lg font-bold">{inventoryStatus.outOfStock}</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Sales Trend */}
+      <SimpleBarChart
+        data={monthlySales.map((m) => ({ name: m.month, value: m.amount }))}
+        title="Sales Trend (6 Months)"
+        description="Monthly revenue over time"
+        formatter={(value) => `KES ${value.toLocaleString()}`}
+        color="#22C55E"
+        height={300}
+      />
 
       {/* Quick Actions */}
       <Card>
@@ -185,36 +242,21 @@ export default function InputProviderDashboard() {
       </Card>
 
       {/* Low Stock Alerts */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Low Stock Alerts</CardTitle>
-          <CardDescription>Items that need restocking</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {lowStockInputs.map((input, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg bg-warning/5">
-                <div className="flex-1">
-                  <div className="font-medium">{input.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Current: {input.current} {input.unit} | Minimum: {input.minimum} {input.unit}
-                  </div>
-                </div>
-                <Button size="sm" variant="outline">
-                  Restock
-                </Button>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4">
-            <Link to="/dashboard/input-inventory">
-              <Button variant="link" className="w-full">
-                Manage All Inventory →
+      <div className="space-y-3">
+        {lowStockInputs.map((input, index) => (
+          <AlertCard
+            key={index}
+            type={input.current === 0 ? "error" : "warning"}
+            title={input.current === 0 ? `${input.name}: OUT OF STOCK` : `${input.name}: Low Stock`}
+            message={`Current: ${input.current} ${input.unit} | Minimum: ${input.minimum} ${input.unit}`}
+            action={
+              <Button size="sm" variant="outline">
+                Restock
               </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+            }
+          />
+        ))}
+      </div>
     </div>
   );
 }

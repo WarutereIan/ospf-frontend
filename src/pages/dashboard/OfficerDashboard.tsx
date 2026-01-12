@@ -12,6 +12,12 @@ import {
   IconAlertCircle,
   IconDownload,
 } from "@tabler/icons-react";
+import {
+  StatCard,
+  AreaChart,
+  LineChart,
+  HorizontalBarChart,
+} from "@/components/visualizations";
 
 interface OfficerStats {
   totalFarmers: number;
@@ -20,6 +26,24 @@ interface OfficerStats {
   totalRevenue: number;
   aggregationCenters: number;
   pendingAdvisories: number;
+  volume: number;
+  quality: number;
+  value: number;
+}
+
+interface MonthlyProduction {
+  month: string;
+  volume: number;
+}
+
+interface FarmerGrowth {
+  month: string;
+  farmers: number;
+}
+
+interface CentrePerformance {
+  name: string;
+  utilization: number;
 }
 
 interface FarmerActivity {
@@ -40,20 +64,29 @@ export function OfficerDashboard() {
     totalRevenue: 0,
     aggregationCenters: 4,
     pendingAdvisories: 0,
+    volume: 0,
+    quality: 0,
+    value: 0,
   });
   const [recentActivity, setRecentActivity] = useState<FarmerActivity[]>([]);
+  const [monthlyProduction, setMonthlyProduction] = useState<MonthlyProduction[]>([]);
+  const [farmerGrowth, setFarmerGrowth] = useState<FarmerGrowth[]>([]);
+  const [centrePerformance, setCentrePerformance] = useState<CentrePerformance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // TODO: Replace with actual API calls
     setTimeout(() => {
       setStats({
-        totalFarmers: 150,
-        activeFarmers: 120,
+        totalFarmers: 1245,
+        activeFarmers: 1200,
         totalOrders: 450,
         totalRevenue: 6750000,
-        aggregationCenters: 4,
+        aggregationCenters: 8,
         pendingAdvisories: 3,
+        volume: 45,
+        quality: 82,
+        value: 6700000,
       });
       setRecentActivity([
         {
@@ -74,6 +107,42 @@ export function OfficerDashboard() {
           lastActivity: new Date().toISOString(),
           status: "active",
         },
+      ]);
+      // Monthly production (12 months)
+      setMonthlyProduction([
+        { month: "Jan", volume: 35 },
+        { month: "Feb", volume: 38 },
+        { month: "Mar", volume: 40 },
+        { month: "Apr", volume: 42 },
+        { month: "May", volume: 43 },
+        { month: "Jun", volume: 44 },
+        { month: "Jul", volume: 43 },
+        { month: "Aug", volume: 44 },
+        { month: "Sep", volume: 45 },
+        { month: "Oct", volume: 44 },
+        { month: "Nov", volume: 45 },
+        { month: "Dec", volume: 45 },
+      ]);
+      // Farmer growth (cumulative)
+      setFarmerGrowth([
+        { month: "Jan", farmers: 800 },
+        { month: "Feb", farmers: 850 },
+        { month: "Mar", farmers: 900 },
+        { month: "Apr", farmers: 950 },
+        { month: "May", farmers: 1000 },
+        { month: "Jun", farmers: 1050 },
+        { month: "Jul", farmers: 1100 },
+        { month: "Aug", farmers: 1150 },
+        { month: "Sep", farmers: 1180 },
+        { month: "Oct", farmers: 1200 },
+        { month: "Nov", farmers: 1220 },
+        { month: "Dec", farmers: 1245 },
+      ]);
+      // Centre performance
+      setCentrePerformance([
+        { name: "Kangundo Main", utilization: 95 },
+        { name: "Tala Satellite", utilization: 88 },
+        { name: "Kathiani Main", utilization: 75 },
       ]);
       setIsLoading(false);
     }, 1000);
@@ -104,36 +173,86 @@ export function OfficerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
-          label="Total Farmers"
+          label="Farmers"
           value={stats.totalFarmers.toString()}
-          description={`${stats.activeFarmers} active`}
+          description={`+${stats.totalFarmers - 1200} new`}
           icon={<IconUsers className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Total Orders"
-          value={stats.totalOrders.toString()}
-          description="All-time orders"
+          label="Volume"
+          value={`${stats.volume} tons`}
+          description="Total production"
+          trend={{ value: 15, direction: "up" }}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Total Revenue"
-          value={`KES ${(stats.totalRevenue / 1000000).toFixed(1)}M`}
-          description="Farmer earnings"
+          label="Centres"
+          value={stats.aggregationCenters.toString()}
+          description="Active"
+          icon={<IconMapPin className="h-5 w-5 text-primary" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          label="Quality"
+          value={`${stats.quality}%`}
+          description="Grade A"
           icon={<IconChartBar className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
-          label="Aggregation Centers"
-          value={stats.aggregationCenters.toString()}
-          description="Active centers"
-          icon={<IconMapPin className="h-5 w-5 text-primary" />}
+          label="Value"
+          value={`KES ${(stats.value / 1000000).toFixed(1)}M`}
+          description="Total value"
+          trend={{ value: 22, direction: "up" }}
+          icon={<IconChartBar className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
       </div>
+
+      {/* Production Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AreaChart
+          data={monthlyProduction.map((m) => ({ name: m.month, volume: m.volume }))}
+          areas={[
+            {
+              dataKey: "volume",
+              name: "Production",
+              color: "#3B82F6",
+              gradient: true,
+            },
+          ]}
+          title="Production Trend (12 months)"
+          description="Monthly production volume in tons"
+          height={300}
+        />
+        <LineChart
+          data={farmerGrowth.map((f) => ({ name: f.month, farmers: f.farmers }))}
+          lines={[
+            {
+              dataKey: "farmers",
+              name: "Total Farmers",
+              color: "#22C55E",
+            },
+          ]}
+          title="Farmer Growth"
+          description="Cumulative farmer registration"
+          height={300}
+        />
+      </div>
+
+      {/* Centre Performance */}
+      <HorizontalBarChart
+        data={centrePerformance.map((c) => ({ name: c.name, value: c.utilization }))}
+        title="Top Performing Centres"
+        description="Centre utilization rates"
+        color="#22C55E"
+        height={250}
+        sorted={true}
+      />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -255,39 +374,6 @@ export function OfficerDashboard() {
         </div>
       </div>
     </div>
-  );
-}
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  isLoading?: boolean;
-}
-
-function StatCard({ label, value, description, icon, isLoading }: StatCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-6">
-        {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-            <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-            <div className="h-3 w-40 bg-muted animate-pulse rounded" />
-          </div>
-        ) : (
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-2xl font-bold">{value}</p>
-              <p className="text-xs text-muted-foreground">{description}</p>
-            </div>
-            <div className="rounded-full p-3 bg-primary/10">{icon}</div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
