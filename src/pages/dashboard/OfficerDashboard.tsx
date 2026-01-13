@@ -163,7 +163,7 @@ export function OfficerDashboard() {
             <IconDownload className="mr-2 h-4 w-4" />
             Export Report
           </Button>
-          <Link to="/dashboard/advisory">
+          <Link to="/dashboard/county-officer/advisory">
             <Button size="sm">
               <IconAlertCircle className="mr-2 h-4 w-4" />
               Send Advisory
@@ -301,7 +301,7 @@ export function OfficerDashboard() {
                       >
                         {farmer.status}
                       </Badge>
-                      <Link to={`/dashboard/farmers/${farmer.id}`}>
+                      <Link to={`/dashboard/county-officer/farmers/${farmer.id}`}>
                         <Button size="sm" variant="outline">View Details</Button>
                       </Link>
                     </div>
@@ -324,25 +324,25 @@ export function OfficerDashboard() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link to="/dashboard/farmers" className="w-full">
+              <Link to="/dashboard/county-officer/farmers" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconUsers className="mr-2 h-4 w-4" />
                   View All Farmers
                 </Button>
               </Link>
-              <Link to="/dashboard/reports" className="w-full">
+              <Link to="/dashboard/county-officer/reports" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconFileText className="mr-2 h-4 w-4" />
                   Generate Reports
                 </Button>
               </Link>
-              <Link to="/dashboard/centers" className="w-full">
+              <Link to="/dashboard/county-officer/centers" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconMapPin className="mr-2 h-4 w-4" />
                   Manage Centers
                 </Button>
               </Link>
-              <Link to="/dashboard/advisory" className="w-full">
+              <Link to="/dashboard/county-officer/advisory" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconAlertCircle className="mr-2 h-4 w-4" />
                   Send Advisory

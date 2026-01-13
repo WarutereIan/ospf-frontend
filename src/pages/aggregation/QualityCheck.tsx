@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import {
   IconPhoto,
   IconLoader2,
   IconAlertTriangle,
+  IconArrowLeft,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,8 @@ const sizeOptions = [
 ];
 
 export function QualityCheck() {
+  const { id } = useParams<{ id: string }>();
+  const isNew = !id || id === "new";
   const [formData, setFormData] = useState<QualityCheckForm>({
     stockId: "",
     variety: "",
@@ -55,6 +59,30 @@ export function QualityCheck() {
   });
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(!isNew);
+
+  useEffect(() => {
+    if (!isNew && id) {
+      // TODO: Load existing quality check data from API
+      setIsLoading(true);
+      setTimeout(() => {
+        // Sample data for existing check
+        setFormData({
+          stockId: "INV-002",
+          variety: "SPK004",
+          quantity: 300,
+          qualityGrade: null,
+          size: null,
+          colorScore: 5,
+          damagePercentage: 0,
+          photos: [],
+          notes: "",
+          approved: null,
+        });
+        setIsLoading(false);
+      }, 1000);
+    }
+  }, [id, isNew]);
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -111,11 +139,27 @@ export function QualityCheck() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Quality Check</h1>
+        <Link to="/dashboard/aggregation/quality-checks">
+          <Button variant="ghost" size="sm" className="mb-2">
+            <IconArrowLeft className="mr-2 h-4 w-4" />
+            Back to Quality Checks
+          </Button>
+        </Link>
+        <h1 className="text-2xl sm:text-3xl font-bold">
+          {isNew ? "New Quality Check" : `Quality Check ${id}`}
+        </h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1">
           Assess and grade OFSP produce quality
         </p>
       </div>
+
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+          ))}
+        </div>
+      ) : (
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Form */}
@@ -435,6 +479,7 @@ export function QualityCheck() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }

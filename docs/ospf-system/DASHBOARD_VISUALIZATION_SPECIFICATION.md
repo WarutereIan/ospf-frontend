@@ -1007,7 +1007,7 @@ npm install react-leaflet leaflet  # If maps needed
 
 | Element | Visualization | Library |
 |---------|--------------|---------|
-| Target Progress | **Progress Bars** with targets | Custom |
+| Target Progress | **Progress Bars** with targets | Recharts/suitable library |
 | Beneficiary Growth | **Cumulative Line** | Recharts |
 | Geographic Reach | **Choropleth Map** | React-Leaflet / ECharts |
 | Indicator Sparklines | **Sparkline Grid** | Recharts `<LineChart>` (mini) |

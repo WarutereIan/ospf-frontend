@@ -1,5 +1,5 @@
+import { FunnelChart as RechartsFunnelChart, Funnel, Tooltip, LabelList, ResponsiveContainer, Cell } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
 interface FunnelStage {
   name: string;
@@ -12,49 +12,61 @@ interface FunnelChartProps {
   title?: string;
   description?: string;
   className?: string;
+  height?: number;
 }
 
-export function FunnelChart({ stages, title, description, className }: FunnelChartProps) {
-  const maxCount = Math.max(...stages.map((s) => s.count), 1);
-  const maxWidth = 100; // Maximum width percentage
+const DEFAULT_COLORS = ["#3B82F6", "#22C55E", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4"];
 
-  return (
-    <Card className={className}>
-      {title && (
+export function FunnelChart({ stages, title, description, className, height = 300 }: FunnelChartProps) {
+  // Convert stages to Recharts format
+  const data = stages.map((stage) => ({
+    name: stage.name,
+    value: stage.count,
+    color: stage.color,
+  }));
+
+  const chart = (
+    <ResponsiveContainer width="100%" height={height}>
+      <RechartsFunnelChart>
+        <Tooltip
+          formatter={(value: number) => value.toLocaleString()}
+          contentStyle={{
+            backgroundColor: "#fff",
+            border: "1px solid #E5E7EB",
+            borderRadius: "6px",
+          }}
+        />
+        <Funnel dataKey="value" data={data} isAnimationActive>
+          <LabelList
+            position="right"
+            fill="#374151"
+            stroke="none"
+            dataKey="name"
+            fontSize={12}
+            fontWeight="500"
+          />
+          {data.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+            />
+          ))}
+        </Funnel>
+      </RechartsFunnelChart>
+    </ResponsiveContainer>
+  );
+
+  if (title) {
+    return (
+      <Card className={className}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
-      )}
-      <CardContent>
-        <div className="space-y-2">
-          {stages.map((stage, index) => {
-            const width = (stage.count / maxCount) * maxWidth;
-            const color = stage.color || "#3B82F6";
-            const leftOffset = (maxWidth - width) / 2;
+        <CardContent>{chart}</CardContent>
+      </Card>
+    );
+  }
 
-            return (
-              <div key={stage.name} className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">{stage.name}</span>
-                  <span className="text-sm font-bold">{stage.count}</span>
-                </div>
-                <div className="relative h-8">
-                  <div
-                    className="absolute rounded-md transition-all duration-300"
-                    style={{
-                      left: `${leftOffset}%`,
-                      width: `${width}%`,
-                      height: "100%",
-                      backgroundColor: color,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <div className={className}>{chart}</div>;
 }

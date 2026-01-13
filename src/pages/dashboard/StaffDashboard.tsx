@@ -14,16 +14,11 @@ import {
   StatCard,
   ProgressBar,
   LineChart,
+  Sparkline,
+  SlopeChart,
+  SankeyChart,
+  GeographicMap,
 } from "@/components/visualizations";
-
-interface StaffStats {
-  totalUsers: number;
-  totalFarmers: number;
-  totalBuyers: number;
-  totalOrders: number;
-  platformRevenue: number;
-  systemHealth: "healthy" | "warning" | "critical";
-}
 
 interface ProgramIndicator {
   name: string;
@@ -37,30 +32,29 @@ interface BeneficiaryGrowth {
   farmers: number;
 }
 
+interface SparklineData {
+  label: string;
+  value: number;
+  data: Array<{ name: string; value: number }>;
+  color?: string;
+}
+
+interface OutcomeData {
+  category: string;
+  before: number;
+  after: number;
+}
+
 export function StaffDashboard() {
-  const [stats, setStats] = useState<StaffStats>({
-    totalUsers: 0,
-    totalFarmers: 0,
-    totalBuyers: 0,
-    totalOrders: 0,
-    platformRevenue: 0,
-    systemHealth: "healthy",
-  });
   const [programIndicators, setProgramIndicators] = useState<ProgramIndicator[]>([]);
   const [beneficiaryGrowth, setBeneficiaryGrowth] = useState<BeneficiaryGrowth[]>([]);
+  const [sparklineData, setSparklineData] = useState<SparklineData[]>([]);
+  const [outcomeData, setOutcomeData] = useState<OutcomeData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // TODO: Replace with actual API calls
     setTimeout(() => {
-      setStats({
-        totalUsers: 200,
-        totalFarmers: 150,
-        totalBuyers: 50,
-        totalOrders: 500,
-        platformRevenue: 135000,
-        systemHealth: "healthy",
-      });
       // Program indicators
       setProgramIndicators([
         { name: "Beneficiaries", current: 1500, target: 2000, unit: "farmers" },
@@ -68,6 +62,7 @@ export function StaffDashboard() {
         { name: "Quality (Gr A)", current: 92, target: 80, unit: "%" },
         { name: "Income increase", current: 60, target: 50, unit: "%" },
       ]);
+
       // Beneficiary growth (cumulative)
       setBeneficiaryGrowth([
         { month: "Jan", farmers: 800 },
@@ -79,6 +74,107 @@ export function StaffDashboard() {
         { month: "Jul", farmers: 1400 },
         { month: "Aug", farmers: 1500 },
       ]);
+
+      // Sparkline data for indicators
+      setSparklineData([
+        {
+          label: "Farmers",
+          value: 1500,
+          data: [
+            { name: "1", value: 800 },
+            { name: "2", value: 900 },
+            { name: "3", value: 1000 },
+            { name: "4", value: 1100 },
+            { name: "5", value: 1200 },
+            { name: "6", value: 1300 },
+            { name: "7", value: 1400 },
+            { name: "8", value: 1500 },
+          ],
+          color: "#3B82F6",
+        },
+        {
+          label: "Quality",
+          value: 82,
+          data: [
+            { name: "1", value: 75 },
+            { name: "2", value: 78 },
+            { name: "3", value: 80 },
+            { name: "4", value: 81 },
+            { name: "5", value: 82 },
+            { name: "6", value: 82 },
+            { name: "7", value: 82 },
+            { name: "8", value: 82 },
+          ],
+          color: "#22C55E",
+        },
+        {
+          label: "Centres",
+          value: 8,
+          data: [
+            { name: "1", value: 4 },
+            { name: "2", value: 5 },
+            { name: "3", value: 6 },
+            { name: "4", value: 7 },
+            { name: "5", value: 7 },
+            { name: "6", value: 8 },
+            { name: "7", value: 8 },
+            { name: "8", value: 8 },
+          ],
+          color: "#8B5CF6",
+        },
+        {
+          label: "Volume",
+          value: 45,
+          data: [
+            { name: "1", value: 20 },
+            { name: "2", value: 25 },
+            { name: "3", value: 30 },
+            { name: "4", value: 35 },
+            { name: "5", value: 40 },
+            { name: "6", value: 42 },
+            { name: "7", value: 44 },
+            { name: "8", value: 45 },
+          ],
+          color: "#F59E0B",
+        },
+        {
+          label: "Income",
+          value: 25,
+          data: [
+            { name: "1", value: 10 },
+            { name: "2", value: 15 },
+            { name: "3", value: 18 },
+            { name: "4", value: 20 },
+            { name: "5", value: 22 },
+            { name: "6", value: 23 },
+            { name: "7", value: 24 },
+            { name: "8", value: 25 },
+          ],
+          color: "#10B981",
+        },
+        {
+          label: "Trans.",
+          value: 2340,
+          data: [
+            { name: "1", value: 1000 },
+            { name: "2", value: 1200 },
+            { name: "3", value: 1500 },
+            { name: "4", value: 1800 },
+            { name: "5", value: 2000 },
+            { name: "6", value: 2200 },
+            { name: "7", value: 2300 },
+            { name: "8", value: 2340 },
+          ],
+          color: "#EF4444",
+        },
+      ]);
+
+      // Outcome comparison data
+      setOutcomeData([
+        { category: "Income", before: 45, after: 65 },
+        { category: "Quality", before: 32, after: 82 },
+      ]);
+
       setIsLoading(false);
     }, 1000);
   }, []);
@@ -88,57 +184,25 @@ export function StaffDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Project Staff Dashboard (M&E)</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Full platform access and system management
+            Monitoring and evaluation of program indicators and outcomes
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/dashboard/users">
+          <Link to="/dashboard/reports">
             <Button size="sm" variant="outline">
-              <IconUsers className="mr-2 h-4 w-4" />
-              Manage Users
+              <IconFileText className="mr-2 h-4 w-4" />
+              Reports
             </Button>
           </Link>
           <Link to="/dashboard/settings">
             <Button size="sm">
               <IconSettings className="mr-2 h-4 w-4" />
-              System Settings
+              Settings
             </Button>
           </Link>
         </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Users"
-          value={stats.totalUsers.toString()}
-          description={`${stats.totalFarmers} farmers, ${stats.totalBuyers} buyers`}
-          icon={<IconUsers className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Total Orders"
-          value={stats.totalOrders.toString()}
-          description="All-time orders"
-          icon={<IconChartBar className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Platform Revenue"
-          value={`KES ${stats.platformRevenue.toLocaleString()}`}
-          description="2% transaction fees"
-          icon={<IconDatabase className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="System Health"
-          value={stats.systemHealth}
-          description="All systems operational"
-          icon={<IconShield className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
       </div>
 
       {/* Program Indicators */}
@@ -163,7 +227,10 @@ export function StaffDashboard() {
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">{indicator.name}</span>
                       <span className="text-muted-foreground">
-                        {indicator.current.toLocaleString()}{indicator.unit ? ` ${indicator.unit}` : ""} of {indicator.target.toLocaleString()}{indicator.unit ? ` ${indicator.unit}` : ""} target
+                        {indicator.current.toLocaleString()}
+                        {indicator.unit ? ` ${indicator.unit}` : ""} of{" "}
+                        {indicator.target.toLocaleString()}
+                        {indicator.unit ? ` ${indicator.unit}` : ""} target
                       </span>
                     </div>
                     <ProgressBar
@@ -184,129 +251,101 @@ export function StaffDashboard() {
         </CardContent>
       </Card>
 
-      {/* Beneficiary Growth */}
-      <LineChart
-        data={beneficiaryGrowth.map((b) => ({ name: b.month, farmers: b.farmers }))}
-        lines={[
-          {
-            dataKey: "farmers",
-            name: "Total Beneficiaries",
-            color: "#22C55E",
-          },
-        ]}
-        title="Beneficiary Growth"
-        description="Cumulative farmer registration over time"
-        height={300}
-      />
+      {/* Beneficiary Growth & Geographic Reach */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <LineChart
+          data={beneficiaryGrowth.map((b) => ({ name: b.month, farmers: b.farmers }))}
+          lines={[
+            {
+              dataKey: "farmers",
+              name: "Total Beneficiaries",
+              color: "#22C55E",
+            },
+          ]}
+          title="Beneficiary Growth"
+          description="Cumulative farmer registration over time"
+          height={300}
+        />
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Admin Functions */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Administrative Functions</CardTitle>
-            <CardDescription>Platform management and configuration</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link to="/dashboard/users">
-                <Card className="hover:bg-muted transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <IconUsers className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">User Management</p>
-                        <p className="text-xs text-muted-foreground">Manage all users</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link to="/dashboard/analytics">
-                <Card className="hover:bg-muted transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <IconChartBar className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Analytics & Reports</p>
-                        <p className="text-xs text-muted-foreground">View platform analytics</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link to="/dashboard/settings">
-                <Card className="hover:bg-muted transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <IconSettings className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">System Settings</p>
-                        <p className="text-xs text-muted-foreground">Configure platform</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-              <Link to="/dashboard/data-export">
-                <Card className="hover:bg-muted transition-colors cursor-pointer">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <IconFileText className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Data Export</p>
-                        <p className="text-xs text-muted-foreground">Export platform data</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
+        <GeographicMap
+          title="Geographic Reach"
+          description="Visual map of aggregation centers in Machakos County"
+          height={300}
+          activeCoverage={65}
+          targetCoverage={35}
+        />
+      </div>
+
+      {/* Indicator Sparklines */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Indicator Sparklines</CardTitle>
+          <CardDescription>All KPIs at a glance</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="h-20 bg-muted animate-pulse rounded" />
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {sparklineData.map((sparkline, index) => (
+                <div
+                  key={index}
+                  className="p-4 border rounded-lg space-y-2 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {sparkline.label}
+                    </span>
+                    <span className="text-lg font-bold">
+                      {sparkline.value.toLocaleString()}
+                      {sparkline.label === "Quality" || sparkline.label === "Income"
+                        ? "%"
+                        : sparkline.label === "Volume"
+                        ? "t"
+                        : ""}
+                    </span>
+                  </div>
+                  <div className="h-12">
+                    <Sparkline data={sparkline.data} color={sparkline.color} height={48} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Link to="/dashboard/users" className="w-full">
-              <Button variant="outline" className="w-full justify-start">
-                <IconUsers className="mr-2 h-4 w-4" />
-                User Management
-              </Button>
-            </Link>
-            <Link to="/dashboard/analytics" className="w-full">
-              <Button variant="outline" className="w-full justify-start">
-                <IconChartBar className="mr-2 h-4 w-4" />
-                Analytics
-              </Button>
-            </Link>
-            <Link to="/dashboard/reports" className="w-full">
-              <Button variant="outline" className="w-full justify-start">
-                <IconFileText className="mr-2 h-4 w-4" />
-                Reports
-              </Button>
-            </Link>
-            <Link to="/dashboard/settings" className="w-full">
-              <Button variant="outline" className="w-full justify-start">
-                <IconSettings className="mr-2 h-4 w-4" />
-                Settings
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+      {/* Outcome Comparison & Value Chain Flow */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SlopeChart
+          data={outcomeData}
+          title="Outcome Comparison"
+          description="Before and after program implementation"
+          height={300}
+          beforeLabel="Before"
+          afterLabel="After"
+          formatter={(value) => `${value}%`}
+        />
+
+        <SankeyChart
+          nodes={[
+            { name: "Farmers", value: 1500, color: "#3B82F6" },
+            { name: "Centres", value: 45, color: "#22C55E" },
+            { name: "Buyers", value: 25, color: "#F59E0B" },
+          ]}
+          links={[
+            { source: "Farmers", target: "Centres", value: 45 },
+            { source: "Centres", target: "Buyers", value: 25 },
+          ]}
+          title="Value Chain Flow"
+          description="Flow of produce from farmers through centers to buyers"
+          height={300}
+        />
       </div>
     </div>
   );
 }
-

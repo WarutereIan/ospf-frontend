@@ -1,3 +1,4 @@
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 
 interface ProgressBarProps {
@@ -10,19 +11,19 @@ interface ProgressBarProps {
   className?: string;
 }
 
-const colorClasses = {
-  default: "bg-primary",
-  success: "bg-green-500",
-  warning: "bg-yellow-500",
-  danger: "bg-red-500",
-  info: "bg-blue-500",
+const colorMap = {
+  default: "#3B82F6",
+  success: "#22C55E",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  info: "#06B6D4",
 };
 
-const sizeClasses = {
-  sm: "h-1.5",
-  md: "h-2",
-  lg: "h-3",
-  mini: "h-1",
+const sizeMap = {
+  sm: 6,
+  md: 8,
+  lg: 12,
+  mini: 4,
 };
 
 export function ProgressBar({
@@ -35,6 +36,19 @@ export function ProgressBar({
   className,
 }: ProgressBarProps) {
   const percentage = Math.min(Math.max((value / maxValue) * 100, 0), 100);
+  const remaining = 100 - percentage;
+
+  // Data for stacked bar chart: [completed, remaining]
+  const data = [
+    {
+      name: "progress",
+      completed: percentage,
+      remaining: remaining,
+    },
+  ];
+
+  const barHeight = sizeMap[size];
+  const barColor = colorMap[color];
 
   return (
     <div className={cn("w-full", className)}>
@@ -48,14 +62,29 @@ export function ProgressBar({
           )}
         </div>
       )}
-      <div className={cn("w-full bg-muted rounded-full overflow-hidden", sizeClasses[size])}>
-        <div
-          className={cn("h-full transition-all duration-300 rounded-full", colorClasses[color])}
-          style={{ width: `${percentage}%` }}
-        />
+      <div style={{ height: `${barHeight}px` }} className="w-full rounded-full overflow-hidden bg-muted">
+        <ResponsiveContainer width="100%" height={barHeight}>
+          <BarChart
+            data={data}
+            layout="horizontal"
+            margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+            barCategoryGap={0}
+          >
+            <XAxis type="number" domain={[0, 100]} hide />
+            <YAxis type="category" dataKey="name" hide width={0} />
+            <Bar dataKey="completed" stackId="progress" radius={[0, barHeight / 2, barHeight / 2, 0]}>
+              <Cell fill={barColor} />
+            </Bar>
+            <Bar dataKey="remaining" stackId="progress" radius={[barHeight / 2, 0, 0, barHeight / 2]}>
+              <Cell fill="#E5E7EB" />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
       {showValue && !label && (
-        <div className="mt-1 text-xs text-muted-foreground text-right">{percentage.toFixed(0)}%</div>
+        <div className="mt-1 text-xs text-muted-foreground text-right">
+          {percentage.toFixed(0)}%
+        </div>
       )}
     </div>
   );

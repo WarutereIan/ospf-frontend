@@ -53,11 +53,11 @@ const buyerMenuItems: MenuItem[] = [
 
 // Officer menu items
 const officerMenuItems: MenuItem[] = [
-  { name: "My Dashboard", path: "/dashboard/officer", icon: IconChartBar },
-  { name: "Farmers", path: "/dashboard/farmers", icon: IconUsers },
-  { name: "Reports", path: "/dashboard/reports", icon: IconFileText },
-  { name: "Centers", path: "/dashboard/centers", icon: IconMapPin },
-  { name: "Advisory", path: "/dashboard/advisory", icon: IconInfoCircle },
+  { name: "My Dashboard", path: "/dashboard/county-officer", icon: IconChartBar },
+  { name: "Farmers", path: "/dashboard/county-officer/farmers", icon: IconUsers },
+  { name: "Reports", path: "/dashboard/county-officer/reports", icon: IconFileText },
+  { name: "Centers", path: "/dashboard/county-officer/centers", icon: IconMapPin },
+  { name: "Advisory", path: "/dashboard/county-officer/advisory", icon: IconInfoCircle },
 ];
 
 // Staff menu items
@@ -72,11 +72,11 @@ const staffMenuItems: MenuItem[] = [
 // Aggregation Manager menu items
 const aggregationManagerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/aggregation", icon: IconChartBar },
-  { name: "Stock In", path: "/dashboard/stock-in", icon: IconTrendingUp },
-  { name: "Stock Out", path: "/dashboard/stock-out", icon: IconTrendingDown },
-  { name: "Quality Checks", path: "/dashboard/quality-checks", icon: IconClipboardCheck },
-  { name: "Inventory", path: "/dashboard/inventory", icon: IconPackage },
-  { name: "Farmers", path: "/dashboard/farmers", icon: IconUsers },
+  { name: "Stock In", path: "/dashboard/aggregation/stock-in", icon: IconTrendingUp },
+  { name: "Stock Out", path: "/dashboard/aggregation/stock-out", icon: IconTrendingDown },
+  { name: "Quality Checks", path: "/dashboard/aggregation/quality-checks", icon: IconClipboardCheck },
+  { name: "Inventory", path: "/dashboard/aggregation/inventory", icon: IconPackage },
+  { name: "Farmers", path: "/dashboard/aggregation/farmers", icon: IconUsers },
 ];
 
 // Input Provider menu items

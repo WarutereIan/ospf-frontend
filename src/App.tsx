@@ -17,12 +17,17 @@ import { ProduceManagement } from "@/pages/farmer/ProduceManagement";
 import { FarmerOrders } from "@/pages/farmer/FarmerOrders";
 import { PeerLeaderboard } from "@/pages/farmer/PeerLeaderboard";
 import { MarketInfo } from "@/pages/farmer/MarketInfo";
+import { Farmers } from "@/pages/officer/Farmers";
+import { Reports } from "@/pages/officer/Reports";
+import { Centers } from "@/pages/officer/Centers";
+import { Advisory } from "@/pages/officer/Advisory";
 import { StockInForm } from "@/pages/aggregation/StockInForm";
 import { StockOutForm } from "@/pages/aggregation/StockOutForm";
 import { InventoryManagement } from "@/pages/aggregation/InventoryManagement";
 import { StorageManagement } from "@/pages/aggregation/StorageManagement";
 import { CapacityManagement } from "@/pages/aggregation/CapacityManagement";
 import { QualityCheck } from "@/pages/aggregation/QualityCheck";
+import { QualityChecksList } from "@/pages/aggregation/QualityChecksList";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { RateFarmerPage } from "@/pages/buyer/RateFarmerPage";
@@ -54,7 +59,7 @@ export function App() {
             {/* Role-based Dashboards */}
             <Route path="/dashboard/farmer" element={<FarmerDashboard />} />
             <Route path="/dashboard/buyer" element={<BuyerDashboard />} />
-            <Route path="/dashboard/officer" element={<OfficerDashboard />} />
+            <Route path="/dashboard/county-officer" element={<OfficerDashboard />} />
             <Route path="/dashboard/staff" element={<StaffDashboard />} />
             <Route path="/dashboard/aggregation" element={<AggregationManagerDashboard />} />
             <Route path="/dashboard/input-provider" element={<InputProviderDashboard />} />
@@ -74,12 +79,22 @@ export function App() {
             <Route path="/dashboard/buyer/rate/:orderId" element={<RateFarmerPage />} />
             
             {/* Aggregation Manager Routes */}
-            <Route path="/dashboard/stock-in" element={<StockInForm />} />
-            <Route path="/dashboard/stock-out" element={<StockOutForm />} />
-            <Route path="/dashboard/inventory" element={<InventoryManagement />} />
-            <Route path="/dashboard/storage" element={<StorageManagement />} />
-            <Route path="/dashboard/capacity" element={<CapacityManagement />} />
-            <Route path="/dashboard/quality-check" element={<QualityCheck />} />
+            <Route path="/dashboard/aggregation/stock-in" element={<StockInForm />} />
+            <Route path="/dashboard/aggregation/stock-out" element={<StockOutForm />} />
+            <Route path="/dashboard/aggregation/inventory" element={<InventoryManagement />} />
+            <Route path="/dashboard/aggregation/storage" element={<StorageManagement />} />
+            <Route path="/dashboard/aggregation/capacity" element={<CapacityManagement />} />
+            <Route path="/dashboard/aggregation/quality-checks" element={<QualityChecksList />} />
+            <Route path="/dashboard/aggregation/quality-checks/new" element={<QualityCheck />} />
+            <Route path="/dashboard/aggregation/quality-checks/:id" element={<QualityCheck />} />
+            <Route path="/dashboard/aggregation/farmers" element={<PeerLeaderboard />} />
+            
+            {/* County Officer Routes */}
+            <Route path="/dashboard/county-officer/farmers" element={<Farmers />} />
+            <Route path="/dashboard/county-officer/farmers/:id" element={<Farmers />} />
+            <Route path="/dashboard/county-officer/reports" element={<Reports />} />
+            <Route path="/dashboard/county-officer/centers" element={<Centers />} />
+            <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
             
             {/* Buyer Additional Routes */}
             <Route path="/dashboard/recurring-orders" element={<RecurringOrders />} />

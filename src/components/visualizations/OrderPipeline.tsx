@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Steps } from "antd";
+import type { StepsProps } from "antd";
 import { ReactNode } from "react";
-import { IconArrowRight } from "@tabler/icons-react";
 
 interface PipelineStage {
   name: string;
@@ -15,9 +15,37 @@ interface OrderPipelineProps {
   title?: string;
   description?: string;
   className?: string;
+  currentStep?: number;
 }
 
-export function OrderPipeline({ stages, title, description, className }: OrderPipelineProps) {
+export function OrderPipeline({
+  stages,
+  title,
+  description,
+  className,
+  currentStep,
+}: OrderPipelineProps) {
+  // Convert stages to Ant Design Steps format
+  const stepItems: StepsProps["items"] = stages.map((stage, index) => ({
+    title: (
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-xs font-medium text-muted-foreground">{stage.name}</span>
+        <span className="text-sm font-bold">{stage.count}</span>
+      </div>
+    ),
+    icon: stage.icon ? (
+      <div className="flex items-center justify-center">{stage.icon}</div>
+    ) : undefined,
+    status:
+      currentStep !== undefined
+        ? index < currentStep
+          ? "finish"
+          : index === currentStep
+          ? "process"
+          : "wait"
+        : undefined,
+  }));
+
   return (
     <Card className={className}>
       {title && (
@@ -27,36 +55,13 @@ export function OrderPipeline({ stages, title, description, className }: OrderPi
         </CardHeader>
       )}
       <CardContent>
-        <div className="flex items-center gap-2 overflow-x-auto pb-4">
-          {stages.map((stage, index) => {
-            const isLast = index === stages.length - 1;
-
-            return (
-              <div key={stage.name} className="flex items-center gap-2 flex-shrink-0">
-                <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                  <div className="flex items-center gap-2">
-                    {stage.icon && (
-                      <div className="text-muted-foreground flex-shrink-0">
-                        {stage.icon}
-                      </div>
-                    )}
-                    <span className="text-xs font-medium text-muted-foreground text-center">
-                      {stage.name}
-                    </span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-lg font-bold">{stage.count}</span>
-                  </div>
-                </div>
-                {!isLast && (
-                  <div className="flex items-center text-muted-foreground mx-1">
-                    <IconArrowRight className="h-5 w-5" />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <Steps
+          items={stepItems}
+          direction="horizontal"
+          size="small"
+          labelPlacement="vertical"
+          className="w-full"
+        />
       </CardContent>
     </Card>
   );

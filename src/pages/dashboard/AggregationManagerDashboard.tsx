@@ -138,7 +138,7 @@ export function AggregationManagerDashboard() {
         { day: "Sat", stockIn: 300, stockOut: 200 },
         { day: "Sun", stockIn: 450, stockOut: 280 },
       ]);
-      // Stock aging
+      // Stock aging (in percentages)
       setStockAging([
         { category: "Fresh (0-3d)", value: 60, color: "#22C55E" },
         { category: "Aging (4-6d)", value: 25, color: "#F59E0B" },
@@ -189,11 +189,11 @@ export function AggregationManagerDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" onClick={() => navigate("/dashboard/stock-in")}>
+          <Button size="sm" onClick={() => navigate("/dashboard/aggregation/stock-in")}>
             <IconTrendingUp className="mr-2 h-4 w-4" />
             Stock In
           </Button>
-          <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/stock-out")}>
+          <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/aggregation/stock-out")}>
             <IconTrendingDown className="mr-2 h-4 w-4" />
             Stock Out
           </Button>
@@ -201,7 +201,7 @@ export function AggregationManagerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
             {isLoading ? (
@@ -209,37 +209,31 @@ export function AggregationManagerDashboard() {
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">Current Stock</p>
-                <p className="text-2xl font-bold">{stats.currentStock} kg</p>
+                <p className="text-2xl font-bold">{stats.currentStock.toLocaleString()} kg</p>
                 <ProgressBar
                   value={stats.capacityUtilization}
                   maxValue={100}
                   color={stats.capacityUtilization > 80 ? "danger" : stats.capacityUtilization > 60 ? "warning" : "success"}
-                  size="sm"
+                  size="md"
+                  showValue={false}
                 />
-                <p className="text-xs text-muted-foreground">{stats.capacityUtilization}% capacity</p>
+                <p className="text-xs text-muted-foreground">{stats.capacityUtilization}% Capacity</p>
               </div>
             )}
           </CardContent>
         </Card>
         <StatCard
           label="Today's In"
-          value={`${stats.stockInToday} kg`}
-          description={`From ${stats.stockInToday > 0 ? 8 : 0} farmers`}
+          value={`${stats.stockInToday.toLocaleString()} kg`}
+          description={`▲ From ${stats.stockInToday > 0 ? 8 : 0} farmers`}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
           label="Today's Out"
-          value={`${stats.stockOutToday} kg`}
+          value={`${stats.stockOutToday.toLocaleString()} kg`}
           description={`To ${stats.stockOutToday > 0 ? 3 : 0} orders`}
           icon={<IconTrendingDown className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Quality Checks"
-          value={stats.qualityChecksToday.toString()}
-          description={`${stats.pendingChecks} pending`}
-          icon={<IconClipboardCheck className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
       </div>
@@ -255,21 +249,24 @@ export function AggregationManagerDashboard() {
             {isLoading ? (
               <div className="h-48 bg-muted animate-pulse rounded" />
             ) : (
-              <SemiCircleGauge
-                value={stats.capacityUtilization}
-                maxValue={100}
-                size={200}
-                color={stats.capacityUtilization > 80 ? "#EF4444" : stats.capacityUtilization > 60 ? "#F59E0B" : "#22C55E"}
-              />
+              <div className="flex justify-center">
+                <SemiCircleGauge
+                  value={stats.capacityUtilization}
+                  maxValue={100}
+                  size={200}
+                  color={stats.capacityUtilization > 80 ? "#EF4444" : stats.capacityUtilization > 60 ? "#F59E0B" : "#22C55E"}
+                />
+              </div>
             )}
           </CardContent>
         </Card>
         <HorizontalBarChart
-          data={stockByVariety}
+          data={stockByVariety.map((v) => ({ name: v.name, value: v.value }))}
           title="Stock by Variety"
           description="Current stock breakdown by OFSP variety"
           color="#3B82F6"
           height={250}
+          formatter={(value) => `${value} kg`}
         />
       </div>
 
@@ -300,15 +297,18 @@ export function AggregationManagerDashboard() {
                 {stockAging.map((item, index) => (
                   <div key={index} className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{item.category}</span>
-                      <span className="font-medium">{item.value}%</span>
+                      <span className="font-medium">{item.category}</span>
+                      <span className="text-muted-foreground">{item.value}%</span>
                     </div>
-                    <ProgressBar
-                      value={item.value}
-                      maxValue={100}
-                      color={item.color === "#22C55E" ? "success" : item.color === "#F59E0B" ? "warning" : "danger"}
-                      size="md"
-                    />
+                    <div className="relative w-full h-6 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${item.value}%`,
+                          backgroundColor: item.color,
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -320,24 +320,28 @@ export function AggregationManagerDashboard() {
           title="Quality Today"
           description="Grade distribution of today's stock"
           height={300}
-          colors={["#22C55E", "#F59E0B", "#EF4444"]}
+          showLegend={true}
         />
       </div>
 
       {/* Alerts */}
-      {stats.capacityUtilization > 70 && (
-        <div className="space-y-3">
+      <div className="space-y-3">
+        {stockAging.find((a) => a.category === "Critical (7+)")?.value && 
+         stockAging.find((a) => a.category === "Critical (7+)")!.value > 0 && (
           <AlertCard
-            type={stats.capacityUtilization > 80 ? "error" : "warning"}
-            title={stats.capacityUtilization > 80 ? "Critical Capacity Alert" : "Capacity Warning"}
-            message={
-              stats.capacityUtilization > 80
-                ? `${stats.currentStock} kg critical stock (>7 days) - prioritize dispatch`
-                : `Capacity at ${stats.capacityUtilization}% - prepare for incoming deliveries`
-            }
+            type="error"
+            title="🔴 150 kg critical stock (>7 days) - prioritize dispatch"
+            message="Stock older than 7 days requires immediate attention"
           />
-        </div>
-      )}
+        )}
+        {stats.capacityUtilization >= 70 && (
+          <AlertCard
+            type="warning"
+            title="🟡 Capacity at 70% - prepare for incoming deliveries"
+            message={`Current capacity utilization is ${stats.capacityUtilization}%`}
+          />
+        )}
+      </div>
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -394,7 +398,7 @@ export function AggregationManagerDashboard() {
                         {activity.status}
                       </Badge>
                       {activity.type === "in" && activity.status === "pending" && (
-                        <Link to={`/dashboard/quality-check/${activity.id}`}>
+                        <Link to={`/dashboard/aggregation/quality-checks/${activity.id}`}>
                           <Button size="sm">Quality Check</Button>
                         </Link>
                       )}
@@ -418,31 +422,31 @@ export function AggregationManagerDashboard() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link to="/dashboard/stock-in" className="w-full">
+              <Link to="/dashboard/aggregation/stock-in" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrendingUp className="mr-2 h-4 w-4" />
                   Stock In
                 </Button>
               </Link>
-              <Link to="/dashboard/stock-out" className="w-full">
+              <Link to="/dashboard/aggregation/stock-out" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconTrendingDown className="mr-2 h-4 w-4" />
                   Stock Out
                 </Button>
               </Link>
-              <Link to="/dashboard/quality-checks" className="w-full">
+              <Link to="/dashboard/aggregation/quality-checks" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconClipboardCheck className="mr-2 h-4 w-4" />
                   Quality Checks
                 </Button>
               </Link>
-              <Link to="/dashboard/inventory" className="w-full">
+              <Link to="/dashboard/aggregation/inventory" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   Inventory Report
                 </Button>
               </Link>
-              <Link to="/dashboard/farmers" className="w-full">
+              <Link to="/dashboard/aggregation/farmers" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconUsers className="mr-2 h-4 w-4" />
                   Farmer Coordination

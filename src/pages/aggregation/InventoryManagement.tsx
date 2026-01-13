@@ -15,6 +15,10 @@ import {
   IconSearch,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import {
+  TreemapChart,
+  AgingHeatmap,
+} from "@/components/visualizations";
 
 interface InventoryItem {
   id: string;
@@ -35,7 +39,14 @@ export function InventoryManagement() {
   const [varietyFilter, setVarietyFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [cardFilter, setCardFilter] = useState<"all" | "fresh" | "aging" | "critical">("all");
   const [isLoading, setIsLoading] = useState(true);
+
+  const [treemapData, setTreemapData] = useState<Array<{ name: string; value: number; color: string }>>([]);
+  const [agingHeatmapData, setAgingHeatmapData] = useState<Array<{
+    batchId: string;
+    days: Array<{ day: number; status: "fresh" | "aging" | "critical" }>;
+  }>>([]);
 
   useEffect(() => {
     // TODO: Replace with actual API call
@@ -45,38 +56,117 @@ export function InventoryManagement() {
           id: "INV-001",
           variety: "Kenya",
           qualityGrade: "A",
-          quantity: 500,
-          storageDuration: 2,
+          quantity: 1200,
+          storageDuration: 3,
           farmerId: "F001",
-          farmerName: "James Mutua",
-          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          farmerName: "James M.",
+          stockInDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
           status: "fresh",
         },
         {
           id: "INV-002",
-          variety: "SPK004",
-          qualityGrade: "A",
-          quantity: 300,
+          variety: "Kenya",
+          qualityGrade: "B",
+          quantity: 400,
           storageDuration: 5,
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
+          farmerId: "F004",
+          farmerName: "John D.",
           stockInDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: "aging",
         },
         {
           id: "INV-003",
+          variety: "SPK004",
+          qualityGrade: "A",
+          quantity: 800,
+          storageDuration: 2,
+          farmerId: "F002",
+          farmerName: "Mary W.",
+          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          status: "fresh",
+        },
+        {
+          id: "INV-004",
+          variety: "SPK004",
+          qualityGrade: "B",
+          quantity: 350,
+          storageDuration: 6,
+          farmerId: "F005",
+          farmerName: "Sarah K.",
+          stockInDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+          status: "aging",
+        },
+        {
+          id: "INV-005",
+          variety: "Kabode",
+          qualityGrade: "A",
+          quantity: 200,
+          storageDuration: 4,
+          farmerId: "F003",
+          farmerName: "Peter K.",
+          stockInDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          status: "fresh",
+        },
+        {
+          id: "INV-006",
           variety: "Kabode",
           qualityGrade: "B",
-          quantity: 200,
+          quantity: 150,
           storageDuration: 8,
-          farmerId: "F003",
-          farmerName: "Peter Kamau",
+          farmerId: "F006",
+          farmerName: "David M.",
           stockInDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
           status: "critical",
         },
       ];
       setInventory(sampleInventory);
       setFilteredInventory(sampleInventory);
+
+      // Prepare treemap data
+      const treemap: Array<{ name: string; value: number; color: string }> = [];
+      sampleInventory.forEach((item) => {
+        const name = `${item.variety} Grade ${item.qualityGrade}`;
+        const existing = treemap.find((t) => t.name === name);
+        if (existing) {
+          existing.value += item.quantity;
+        } else {
+          const colors: Record<string, string> = {
+            "Kenya": "#3B82F6",
+            "SPK004": "#22C55E",
+            "Kabode": "#F59E0B",
+          };
+          treemap.push({
+            name,
+            value: item.quantity,
+            color: colors[item.variety] || "#8B5CF6",
+          });
+        }
+      });
+      setTreemapData(treemap);
+
+      // Prepare aging heatmap data
+      const heatmap = sampleInventory.map((item) => {
+        const days: Array<{ day: number; status: "fresh" | "aging" | "critical" }> = [];
+        for (let day = 1; day <= 7; day++) {
+          if (item.storageDuration >= day) {
+            let status: "fresh" | "aging" | "critical";
+            if (day <= 3) {
+              status = "fresh";
+            } else if (day <= 6) {
+              status = "aging";
+            } else {
+              status = "critical";
+            }
+            days.push({ day, status });
+          }
+        }
+        return {
+          batchId: item.id,
+          days,
+        };
+      });
+      setAgingHeatmapData(heatmap);
+
       setIsLoading(false);
     }, 1000);
   }, []);
@@ -105,8 +195,13 @@ export function InventoryManagement() {
       filtered = filtered.filter((item) => item.status === statusFilter);
     }
 
+    // Apply card filter
+    if (cardFilter !== "all") {
+      filtered = filtered.filter((item) => item.status === cardFilter);
+    }
+
     setFilteredInventory(filtered);
-  }, [inventory, searchTerm, varietyFilter, gradeFilter, statusFilter]);
+  }, [inventory, searchTerm, varietyFilter, gradeFilter, statusFilter, cardFilter]);
 
   const totalStock = inventory.reduce((sum, item) => sum + item.quantity, 0);
   const agingStock = inventory.filter((item) => item.status === "aging" || item.status === "critical");
@@ -162,7 +257,16 @@ export function InventoryManagement() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            cardFilter === "all" && "ring-2 ring-primary"
+          )}
+          onClick={() => {
+            setCardFilter("all");
+            setStatusFilter("all");
+          }}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Stock</CardTitle>
           </CardHeader>
@@ -171,7 +275,16 @@ export function InventoryManagement() {
             <p className="text-xs text-muted-foreground mt-1">Across all varieties</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            cardFilter === "fresh" && "ring-2 ring-green-500"
+          )}
+          onClick={() => {
+            setCardFilter("fresh");
+            setStatusFilter("fresh");
+          }}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Fresh Stock</CardTitle>
           </CardHeader>
@@ -182,7 +295,16 @@ export function InventoryManagement() {
             <p className="text-xs text-muted-foreground mt-1">&lt; 5 days old</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            cardFilter === "aging" && "ring-2 ring-yellow-500"
+          )}
+          onClick={() => {
+            setCardFilter("aging");
+            setStatusFilter("aging");
+          }}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Aging Stock</CardTitle>
           </CardHeader>
@@ -193,7 +315,16 @@ export function InventoryManagement() {
             <p className="text-xs text-muted-foreground mt-1">5-7 days old</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            cardFilter === "critical" && "ring-2 ring-red-500"
+          )}
+          onClick={() => {
+            setCardFilter("critical");
+            setStatusFilter("critical");
+          }}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Critical Stock</CardTitle>
           </CardHeader>
@@ -206,23 +337,7 @@ export function InventoryManagement() {
         </Card>
       </div>
 
-      {/* Alerts */}
-      {criticalStock.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <IconAlertTriangle className="h-5 w-5 text-red-600" />
-              <div>
-                <p className="font-semibold text-red-900">Critical Stock Alert</p>
-                <p className="text-sm text-red-800">
-                  {criticalStock.length} item(s) have been in storage for more than 7 days. Consider
-                  priority dispatch or processing.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    
 
       {/* Filters */}
       <Card>
@@ -277,7 +392,7 @@ export function InventoryManagement() {
       {/* Inventory Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Current Inventory</CardTitle>
+          <CardTitle>Inventory Table</CardTitle>
           <CardDescription>
             {filteredInventory.length} item(s) found
           </CardDescription>
@@ -297,45 +412,40 @@ export function InventoryManagement() {
                     <TableHead>ID</TableHead>
                     <TableHead>Variety</TableHead>
                     <TableHead>Grade</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Farmer</TableHead>
-                    <TableHead>Storage Duration</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Age</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Stock In Date</TableHead>
+                    <TableHead>Farmer</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInventory.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.id}</TableCell>
-                      <TableCell>{item.variety}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getGradeColor(item.qualityGrade)}>
-                          Grade {item.qualityGrade}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-semibold">{item.quantity} kg</TableCell>
-                      <TableCell>{item.farmerName}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {item.storageDuration > 7 ? (
-                            <IconTrendingDown className="h-4 w-4 text-red-600" />
-                          ) : item.storageDuration > 5 ? (
-                            <IconTrendingUp className="h-4 w-4 text-yellow-600" />
-                          ) : null}
-                          <span>{item.storageDuration} days</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={getStatusColor(item.status)}>
-                          {item.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(item.stockInDate).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredInventory.map((item) => {
+                    const statusEmoji =
+                      item.status === "fresh"
+                        ? "🟢"
+                        : item.status === "aging"
+                        ? "🟡"
+                        : "🔴";
+                    const ageDisplay = `${item.storageDuration}d`;
+
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.id}</TableCell>
+                        <TableCell>{item.variety}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={getGradeColor(item.qualityGrade)}>
+                            {item.qualityGrade}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-semibold">{item.quantity}kg</TableCell>
+                        <TableCell>{ageDisplay}</TableCell>
+                        <TableCell>
+                          <span className="text-lg">{statusEmoji}</span>
+                        </TableCell>
+                        <TableCell>{item.farmerName}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

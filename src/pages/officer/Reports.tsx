@@ -65,126 +65,132 @@ export function Reports() {
           <CardDescription>Select report type and date range</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Report Type</label>
-            <Select value={reportType} onValueChange={setReportType}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {reportTypes.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Report Type</label>
+              <Select value={reportType} onValueChange={setReportType} className="flex-1">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {reportTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Date Range</label>
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Last Week</SelectItem>
-                <SelectItem value="month">Last Month</SelectItem>
-                <SelectItem value="quarter">Last Quarter</SelectItem>
-                <SelectItem value="year">Last Year</SelectItem>
-                <SelectItem value="custom">Custom Range</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Date Range</label>
+              <Select value={dateRange} onValueChange={setDateRange} className="flex-1">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="week">Last Week</SelectItem>
+                  <SelectItem value="month">Last Month</SelectItem>
+                  <SelectItem value="quarter">Last Quarter</SelectItem>
+                  <SelectItem value="year">Last Year</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {dateRange === "custom" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Input type="date" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">Start Date</Label>
+                <Input type="date" className="flex-1" />
               </div>
-              <div className="space-y-2">
-                <Label>End Date</Label>
-                <Input type="date" />
+              <div className="flex items-center gap-4">
+                <Label className="w-32 flex-shrink-0">End Date</Label>
+                <Input type="date" className="flex-1" />
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Sub-County Filter</label>
-            <Select value={subCountyFilter} onValueChange={setSubCountyFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sub-Counties</SelectItem>
-                <SelectItem value="kangundo">Kangundo</SelectItem>
-                <SelectItem value="kathiani">Kathiani</SelectItem>
-                <SelectItem value="masinga">Masinga</SelectItem>
-                <SelectItem value="yatta">Yatta</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Sub-County Filter</label>
+              <Select value={subCountyFilter} onValueChange={setSubCountyFilter} className="flex-1">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sub-Counties</SelectItem>
+                  <SelectItem value="kangundo">Kangundo</SelectItem>
+                  <SelectItem value="kathiani">Kathiani</SelectItem>
+                  <SelectItem value="masinga">Masinga</SelectItem>
+                  <SelectItem value="yatta">Yatta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Farmer Group Filter</label>
+              <Select value={farmerGroupFilter} onValueChange={setFarmerGroupFilter} className="flex-1">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Groups</SelectItem>
+                  <SelectItem value="group1">Group 1</SelectItem>
+                  <SelectItem value="group2">Group 2</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Farmer Group Filter</label>
-            <Select value={farmerGroupFilter} onValueChange={setFarmerGroupFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Groups</SelectItem>
-                <SelectItem value="group1">Group 1</SelectItem>
-                <SelectItem value="group2">Group 2</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Buyer Type Filter</label>
+              <Select value={buyerTypeFilter} onValueChange={setBuyerTypeFilter} className="flex-1">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Buyer Types</SelectItem>
+                  <SelectItem value="retailer">Retailer</SelectItem>
+                  <SelectItem value="wholesaler">Wholesaler</SelectItem>
+                  <SelectItem value="processor">Processor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Buyer Type Filter</label>
-            <Select value={buyerTypeFilter} onValueChange={setBuyerTypeFilter}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Buyer Types</SelectItem>
-                <SelectItem value="retailer">Retailer</SelectItem>
-                <SelectItem value="wholesaler">Wholesaler</SelectItem>
-                <SelectItem value="processor">Processor</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Export Format</label>
-            <div className="flex gap-2">
-              <Button
-                variant={exportFormat === "excel" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => setExportFormat("excel")}
-              >
-                <IconFileSpreadsheet className="mr-2 h-4 w-4" />
-                Excel
-              </Button>
-              <Button
-                variant={exportFormat === "pdf" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => setExportFormat("pdf")}
-              >
-                <IconFileTypePdf className="mr-2 h-4 w-4" />
-                PDF
-              </Button>
-              <Button
-                variant={exportFormat === "csv" ? "default" : "outline"}
-                size="sm"
-                className="flex-1"
-                onClick={() => setExportFormat("csv")}
-              >
-                <IconFileCode className="mr-2 h-4 w-4" />
-                CSV
-              </Button>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium w-32 flex-shrink-0">Export Format</label>
+              <div className="flex gap-2 flex-1">
+                <Button
+                  variant={exportFormat === "excel" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setExportFormat("excel")}
+                >
+                  <IconFileSpreadsheet className="mr-2 h-4 w-4" />
+                  Excel
+                </Button>
+                <Button
+                  variant={exportFormat === "pdf" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setExportFormat("pdf")}
+                >
+                  <IconFileTypePdf className="mr-2 h-4 w-4" />
+                  PDF
+                </Button>
+                <Button
+                  variant={exportFormat === "csv" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setExportFormat("csv")}
+                >
+                  <IconFileCode className="mr-2 h-4 w-4" />
+                  CSV
+                </Button>
+              </div>
             </div>
           </div>
 
