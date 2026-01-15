@@ -22,10 +22,78 @@ interface MarketPrice {
   lastUpdated: string;
 }
 
+interface BuyerDemand {
+  variety: string;
+  grade: string;
+  location: string;
+  demandLevel: "high" | "medium" | "low";
+  buyerCount: number;
+  totalQuantityNeeded: number;
+  color: string;
+}
+
 interface PriceTrend {
   date: string;
   price: number;
 }
+
+// Buyer demand data with colored batches
+const buyerDemand: BuyerDemand[] = [
+  {
+    variety: "Kenya",
+    grade: "A",
+    location: "Kangundo",
+    demandLevel: "high",
+    buyerCount: 15,
+    totalQuantityNeeded: 2500,
+    color: "#EF4444", // Red for high demand
+  },
+  {
+    variety: "Kenya",
+    grade: "B",
+    location: "Kangundo",
+    demandLevel: "medium",
+    buyerCount: 8,
+    totalQuantityNeeded: 1200,
+    color: "#F59E0B", // Orange for medium demand
+  },
+  {
+    variety: "SPK004",
+    grade: "A",
+    location: "Kathiani",
+    demandLevel: "high",
+    buyerCount: 12,
+    totalQuantityNeeded: 1800,
+    color: "#EF4444",
+  },
+  {
+    variety: "SPK004",
+    grade: "B",
+    location: "Kathiani",
+    demandLevel: "low",
+    buyerCount: 5,
+    totalQuantityNeeded: 600,
+    color: "#22C55E", // Green for low demand
+  },
+  {
+    variety: "Kabode",
+    grade: "A",
+    location: "Masinga",
+    demandLevel: "medium",
+    buyerCount: 7,
+    totalQuantityNeeded: 900,
+    color: "#F59E0B",
+  },
+  {
+    variety: "Kabode",
+    grade: "B",
+    location: "Masinga",
+    demandLevel: "low",
+    buyerCount: 3,
+    totalQuantityNeeded: 400,
+    color: "#22C55E",
+  },
+];
 
 // Sample market data
 const marketPrices: MarketPrice[] = [
@@ -153,6 +221,74 @@ export function MarketInfo() {
           </p>
         </div>
       </div>
+
+      {/* Buyer Demand Indicators */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <IconFlame className="h-5 w-5 text-orange-500" />
+            Buyer Demand (Colored Batches)
+          </CardTitle>
+          <CardDescription>
+            See which varieties and grades buyers are looking for. Red = High Demand, Orange = Medium, Green = Low
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {buyerDemand.map((demand, index) => {
+              const demandColors = {
+                high: "bg-red-100 border-red-300 text-red-800",
+                medium: "bg-orange-100 border-orange-300 text-orange-800",
+                low: "bg-green-100 border-green-300 text-green-800",
+              };
+              return (
+                <div
+                  key={index}
+                  className={`p-4 rounded-lg border-2 ${demandColors[demand.demandLevel]}`}
+                  style={{ borderColor: demand.color }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-lg">
+                        {demand.variety} - Grade {demand.grade}
+                      </h3>
+                      <p className="text-sm opacity-80">{demand.location}</p>
+                    </div>
+                    <div
+                      className="w-8 h-8 rounded-full border-2"
+                      style={{ backgroundColor: demand.color, borderColor: demand.color }}
+                    />
+                  </div>
+                  <div className="space-y-1 mt-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-80">Buyers:</span>
+                      <span className="font-semibold">{demand.buyerCount}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-80">Quantity Needed:</span>
+                      <span className="font-semibold">{demand.totalQuantityNeeded} kg</span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-current opacity-30">
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${
+                          demand.demandLevel === "high"
+                            ? "bg-red-200 text-red-900 border-red-400"
+                            : demand.demandLevel === "medium"
+                            ? "bg-orange-200 text-orange-900 border-orange-400"
+                            : "bg-green-200 text-green-900 border-green-400"
+                        }`}
+                      >
+                        {demand.demandLevel.toUpperCase()} DEMAND
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Current Prices */}
       <Card>

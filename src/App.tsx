@@ -30,8 +30,11 @@ import { QualityCheck } from "@/pages/aggregation/QualityCheck";
 import { QualityChecksList } from "@/pages/aggregation/QualityChecksList";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
+import { BuyerOrderDetails } from "@/pages/buyer/BuyerOrderDetails";
 import { RateFarmerPage } from "@/pages/buyer/RateFarmerPage";
 import { Ratings } from "@/pages/buyer/Ratings";
+import { CollectionReceiving } from "@/pages/buyer/CollectionReceiving";
+import { LogisticsDeliveries } from "@/pages/buyer/LogisticsDeliveries";
 import { RecurringOrders } from "@/pages/marketplace/RecurringOrders";
 import InputManagement from "@/pages/inputs/InputManagement";
 import InputMarketplace from "@/pages/marketplace/InputMarketplace";
@@ -52,6 +55,7 @@ export function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/marketplace" element={<MarketplacePage />} />
+            <Route path="/dashboard/buyer/marketplace" element={<MarketplacePage />} />
             
             {/* General Dashboard - redirects based on role */}
             <Route path="/dashboard" element={<DashboardPage />} />
@@ -75,8 +79,11 @@ export function App() {
             
             {/* Buyer Routes */}
             <Route path="/dashboard/buyer/orders" element={<BuyerOrders />} />
+            <Route path="/dashboard/buyer/orders/:id" element={<BuyerOrderDetails />} />
             <Route path="/dashboard/buyer/ratings" element={<Ratings />} />
             <Route path="/dashboard/buyer/rate/:orderId" element={<RateFarmerPage />} />
+            <Route path="/dashboard/buyer/collection" element={<CollectionReceiving />} />
+            <Route path="/dashboard/buyer/deliveries" element={<LogisticsDeliveries />} />
             
             {/* Aggregation Manager Routes */}
             <Route path="/dashboard/aggregation/stock-in" element={<StockInForm />} />
@@ -97,7 +104,7 @@ export function App() {
             <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
             
             {/* Buyer Additional Routes */}
-            <Route path="/dashboard/recurring-orders" element={<RecurringOrders />} />
+            <Route path="/dashboard/buyer/recurring-orders" element={<RecurringOrders />} />
             
             {/* Payment Routes */}
             <Route path="/dashboard/payments" element={<PaymentHistory />} />

@@ -19,6 +19,16 @@ import {
   SimpleBarChart,
   StarRating,
 } from "@/components/visualizations";
+import { AgronomicPracticesGuide } from "@/components/farmer/AgronomicPracticesGuide";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { IconBook } from "@tabler/icons-react";
 
 interface FarmerStats {
   totalRevenue: number;
@@ -393,6 +403,23 @@ export function FarmerDashboard() {
                   Market Prices
                 </Button>
               </Link>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start">
+                    <IconBook className="mr-2 h-4 w-4" />
+                    Farming Guide
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Agronomic Practices Guide</DialogTitle>
+                    <DialogDescription>
+                      Learn recommended practices for growing high-quality OFSP
+                    </DialogDescription>
+                  </DialogHeader>
+                  <AgronomicPracticesGuide />
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
 

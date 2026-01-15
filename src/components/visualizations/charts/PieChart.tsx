@@ -13,6 +13,7 @@ interface PieChartProps {
   description?: string;
   height?: number;
   showLegend?: boolean;
+  showLabels?: boolean;
   innerRadius?: number;
   formatter?: (value: number) => string;
   colors?: string[];
@@ -26,6 +27,7 @@ export function PieChart({
   description,
   height = 300,
   showLegend = true,
+  showLabels = true,
   innerRadius = 0,
   formatter,
   colors = DEFAULT_COLORS,
@@ -46,7 +48,7 @@ export function PieChart({
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+          label={showLabels ? ({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%` : false}
           outerRadius={80}
           innerRadius={innerRadius}
           fill="#8884d8"

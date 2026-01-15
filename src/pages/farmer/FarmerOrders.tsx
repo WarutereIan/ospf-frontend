@@ -33,6 +33,9 @@ import {
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
+import { DigitalReceipt } from "@/components/orders/DigitalReceipt";
+import { TraceabilityView } from "@/components/orders/TraceabilityView";
+import { QualityFeedback } from "@/components/farmer/QualityFeedback";
 import {
   StatCard,
   OrderPipeline,
@@ -677,6 +680,176 @@ export function FarmerOrders() {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* Quality Feedback */}
+              {(selectedOrder.status === "quality_approved" ||
+                selectedOrder.status === "out_for_delivery" ||
+                selectedOrder.status === "delivered" ||
+                selectedOrder.status === "completed") && (
+                <QualityFeedback
+                  orderId={selectedOrder.id}
+                  qualityGrade={selectedOrder.qualityGrade}
+                  overallScore={selectedOrder.qualityGrade === "A" ? 92 : selectedOrder.qualityGrade === "B" ? 78 : 65}
+                  criteria={[
+                    {
+                      name: "Size & Uniformity",
+                      score: selectedOrder.qualityGrade === "A" ? 18 : selectedOrder.qualityGrade === "B" ? 15 : 12,
+                      maxScore: 20,
+                      feedback:
+                        selectedOrder.qualityGrade === "A"
+                          ? "Excellent size uniformity across all roots"
+                          : selectedOrder.qualityGrade === "B"
+                          ? "Good size consistency with minor variations"
+                          : "Variable sizes, acceptable for processing",
+                      passed: selectedOrder.qualityGrade !== "C",
+                    },
+                    {
+                      name: "Appearance & Color",
+                      score: selectedOrder.qualityGrade === "A" ? 19 : selectedOrder.qualityGrade === "B" ? 16 : 13,
+                      maxScore: 20,
+                      feedback:
+                        selectedOrder.qualityGrade === "A"
+                          ? "Perfect color and appearance"
+                          : selectedOrder.qualityGrade === "B"
+                          ? "Good appearance with minor blemishes"
+                          : "Some blemishes present",
+                      passed: selectedOrder.qualityGrade !== "C",
+                    },
+                    {
+                      name: "Damage Assessment",
+                      score: selectedOrder.qualityGrade === "A" ? 20 : selectedOrder.qualityGrade === "B" ? 17 : 14,
+                      maxScore: 20,
+                      feedback:
+                        selectedOrder.qualityGrade === "A"
+                          ? "No visible damage or defects"
+                          : selectedOrder.qualityGrade === "B"
+                          ? "Minimal damage, within acceptable limits"
+                          : "Some damage present",
+                      passed: true,
+                    },
+                    {
+                      name: "Cleanliness",
+                      score: selectedOrder.qualityGrade === "A" ? 18 : selectedOrder.qualityGrade === "B" ? 16 : 14,
+                      maxScore: 20,
+                      feedback:
+                        selectedOrder.qualityGrade === "A"
+                          ? "Very clean, properly sorted"
+                          : selectedOrder.qualityGrade === "B"
+                          ? "Generally clean with minor soil"
+                          : "Some soil present",
+                      passed: true,
+                    },
+                    {
+                      name: "Freshness",
+                      score: selectedOrder.qualityGrade === "A" ? 17 : selectedOrder.qualityGrade === "B" ? 14 : 12,
+                      maxScore: 20,
+                      feedback:
+                        selectedOrder.qualityGrade === "A"
+                          ? "Excellent freshness, recently harvested"
+                          : selectedOrder.qualityGrade === "B"
+                          ? "Good freshness, acceptable condition"
+                          : "Adequate freshness",
+                      passed: true,
+                    },
+                  ]}
+                  feedbackNotes={
+                    selectedOrder.qualityGrade === "A"
+                      ? "Outstanding quality produce. Continue following recommended practices."
+                      : selectedOrder.qualityGrade === "B"
+                      ? "Good quality produce. Minor improvements in sorting could help achieve Grade A."
+                      : "Adequate quality for processing. Focus on better sorting and handling to improve grade."
+                  }
+                  inspectorName="Quality Officer"
+                  inspectionDate={selectedOrder.createdAt}
+                />
+              )}
+
+              {/* Traceability View */}
+              {selectedOrder.status !== "order_placed" && selectedOrder.status !== "rejected" && (
+                <TraceabilityView
+                  orderId={selectedOrder.id}
+                  variety={selectedOrder.variety}
+                  quantity={selectedOrder.quantity}
+                  qualityGrade={selectedOrder.qualityGrade}
+                  steps={[
+                    {
+                      stage: "Harvest",
+                      location: "Your Farm",
+                      timestamp: selectedOrder.createdAt,
+                      actor: "You",
+                      status: "completed",
+                      notes: "OFSP roots harvested according to recommended practices",
+                    },
+                    {
+                      stage: "On-Farm Sorting",
+                      location: "Your Farm",
+                      timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+                      actor: "You",
+                      status: "completed",
+                      notes: "Damaged and spoiled produce removed",
+                    },
+                    {
+                      stage: "Loading",
+                      location: "Your Farm",
+                      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+                      actor: "You",
+                      status: selectedOrder.status === "in_transit" || selectedOrder.status === "at_aggregation" || selectedOrder.status === "quality_approved" || selectedOrder.status === "out_for_delivery" || selectedOrder.status === "delivered" || selectedOrder.status === "completed" ? "completed" : "current",
+                      notes: "Root tubers loaded for transport",
+                    },
+                    {
+                      stage: "In Transit",
+                      location: "En Route",
+                      timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+                      actor: "Transport Provider",
+                      status: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
+                      notes: "Produce in transit to aggregation center",
+                    },
+                    {
+                      stage: "At Aggregation Center",
+                      location: selectedOrder.deliveryLocation || "Aggregation Center",
+                      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+                      actor: "Aggregation Manager",
+                      status: ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
+                      notes: "Produce received at aggregation center",
+                    },
+                    {
+                      stage: "Quality Check",
+                      location: selectedOrder.deliveryLocation || "Aggregation Center",
+                      timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+                      actor: "Quality Officer",
+                      status: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
+                      notes: `Quality grade: ${selectedOrder.qualityGrade}`,
+                    },
+                    {
+                      stage: "Delivery",
+                      location: selectedOrder.deliveryLocation || "Buyer Location",
+                      timestamp: new Date().toISOString(),
+                      actor: "Buyer",
+                      status: ["delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
+                      notes: "Produce delivered to buyer",
+                    },
+                  ]}
+                />
+              )}
+
+              {/* Digital Receipt for Completed/Delivered Orders */}
+              {(selectedOrder.status === "delivered" || selectedOrder.status === "completed") && (
+                <DigitalReceipt
+                  orderId={selectedOrder.id}
+                  farmerName="You" // TODO: Get from user context
+                  buyerName={selectedOrder.buyerName}
+                  buyerPhone={selectedOrder.buyerPhone}
+                  variety={selectedOrder.variety}
+                  qualityGrade={selectedOrder.qualityGrade}
+                  quantity={selectedOrder.quantity}
+                  pricePerKg={selectedOrder.pricePerKg}
+                  totalAmount={selectedOrder.totalAmount}
+                  deliveryLocation={selectedOrder.deliveryLocation || "N/A"}
+                  deliveryDate={selectedOrder.createdAt}
+                  transactionId={selectedOrder.paymentStatus === "released" ? `TXN-${selectedOrder.id}` : undefined}
+                  paymentMethod="M-PESA"
+                />
               )}
 
               {/* Action Buttons */}

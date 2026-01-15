@@ -139,3 +139,4 @@ export const formatCenterLabel = (center: AggregationCenterOption): string => {
     : `${center.subCounty} Subcounty`;
   return `${center.label} (${typeLabel} - ${locationDetails})`;
 };
+

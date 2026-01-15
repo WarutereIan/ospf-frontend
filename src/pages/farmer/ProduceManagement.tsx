@@ -33,6 +33,9 @@ import {
   StatusIndicator,
   ProgressBar,
 } from "@/components/visualizations";
+import { OnFarmSortingGuide } from "@/components/farmer/OnFarmSortingGuide";
+
+import { IconInfoCircle } from "@tabler/icons-react";
 
 // OFSP Varieties
 const ofspVarieties = [
@@ -363,6 +366,40 @@ export function ProduceManagement() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* On-Farm Sorting Guide */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <IconInfoCircle className="h-5 w-5 text-primary" />
+                On-Farm Sorting Guide
+              </CardTitle>
+              <CardDescription>
+                Learn how to properly sort your OFSP roots before delivery
+              </CardDescription>
+            </div>
+            <Dialog>
+              <DialogTrigger>
+                <Button variant="outline">
+                  <IconInfoCircle className="mr-2 h-4 w-4" />
+                  View Guide
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>On-Farm Sorting Guide</DialogTitle>
+                  <DialogDescription>
+                    Follow these steps to prepare your produce for delivery
+                  </DialogDescription>
+                </DialogHeader>
+                <OnFarmSortingGuide />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+      </Card>
 
       {/* Visualizations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

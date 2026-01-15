@@ -8,27 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import {
   IconSearch,
   IconEye,
-  IconPackage,
-  IconDownload,
   IconStar,
 } from "@tabler/icons-react";
-import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { PaymentDialog } from "@/components/payments/PaymentDialog";
 import { RateFarmer } from "./RateFarmer";
-import { Link } from "react-router-dom";
-import {
-  FunnelChart,
-  SimpleBarChart,
-} from "@/components/visualizations";
+import { useNavigate } from "react-router-dom";
 
 interface BuyerOrder {
   id: string;
@@ -95,12 +84,12 @@ const sampleOrders: BuyerOrder[] = [
 ];
 
 export function BuyerOrders() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<BuyerOrder[]>(sampleOrders);
   const [filteredOrders, setFilteredOrders] = useState<BuyerOrder[]>(sampleOrders);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<BuyerOrder | null>(null);
-  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
 
@@ -160,21 +149,7 @@ export function BuyerOrders() {
         </div>
       </div>
 
-      {/* Order Funnel */}
-      <FunnelChart
-        stages={orderFunnel}
-        title="Order Funnel"
-        description="Order flow through different stages"
-      />
-
-      {/* Orders by Month */}
-      <SimpleBarChart
-        data={ordersByMonth}
-        title="Orders by Month"
-        description="Monthly order count"
-        color="#3B82F6"
-        height={300}
-      />
+     
 
       {/* Filters */}
       <Card>
@@ -233,7 +208,11 @@ export function BuyerOrders() {
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => (
-                  <TableRow key={order.id}>
+                  <TableRow 
+                    key={order.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
+                  >
                     <TableCell className="font-medium">{order.id}</TableCell>
                     <TableCell>{order.farmerName}</TableCell>
                     <TableCell>{order.variety}</TableCell>
@@ -255,7 +234,8 @@ export function BuyerOrders() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedOrder(order);
                               setRatingDialogOpen(true);
                             }}
@@ -266,9 +246,9 @@ export function BuyerOrders() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setOrderDetailsOpen(true);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/dashboard/buyer/orders/${order.id}`);
                           }}
                         >
                           <IconEye className="h-4 w-4" />
@@ -283,193 +263,6 @@ export function BuyerOrders() {
         </CardContent>
       </Card>
 
-      {/* Order Details Dialog */}
-      <Dialog open={orderDetailsOpen} onOpenChange={setOrderDetailsOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>Order #{selectedOrder?.id}</DialogDescription>
-          </DialogHeader>
-
-          {selectedOrder && (
-            <div className="space-y-6">
-              {/* Order Timeline */}
-              <OrderTimeline
-                currentStage={selectedOrder.status as OrderStage}
-                stages={[
-                  {
-                    stage: "order_placed",
-                    timestamp: selectedOrder.createdAt,
-                    completed: true,
-                  },
-                  {
-                    stage: "order_accepted",
-                    timestamp:
-                      selectedOrder.status !== "order_placed"
-                        ? new Date(Date.now() - 15 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: selectedOrder.status !== "order_placed",
-                  },
-                  {
-                    stage: "payment_secured",
-                    timestamp:
-                      ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 10 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "in_transit",
-                    timestamp:
-                      ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "at_aggregation",
-                    timestamp:
-                      ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "quality_approved",
-                    timestamp:
-                      ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "out_for_delivery",
-                    timestamp:
-                      ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status)
-                        ? new Date(Date.now() - 30 * 1000).toISOString()
-                        : undefined,
-                    completed: ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status),
-                  },
-                  {
-                    stage: "delivered",
-                    timestamp:
-                      ["delivered", "completed"].includes(selectedOrder.status)
-                        ? new Date().toISOString()
-                        : undefined,
-                    completed: ["delivered", "completed"].includes(selectedOrder.status),
-                  },
-                  {
-                    stage: "completed",
-                    timestamp: selectedOrder.status === "completed" ? new Date().toISOString() : undefined,
-                    completed: selectedOrder.status === "completed",
-                  },
-                ]}
-              />
-
-              {/* Payment Status */}
-              {selectedOrder.paymentStatus && selectedOrder.paymentAmount && (
-                <EscrowStatus
-                  status={selectedOrder.paymentStatus}
-                  amount={selectedOrder.paymentAmount}
-                  orderId={selectedOrder.id}
-                  createdAt={selectedOrder.createdAt}
-                />
-              )}
-
-              {/* Order Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Farmer Information</h3>
-                  <div className="border rounded-md p-4">
-                    <p className="font-medium">{selectedOrder.farmerName}</p>
-                    <p className="text-sm text-muted-foreground">ID: {selectedOrder.farmerId}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Order Details</h3>
-                  <div className="border rounded-md p-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Variety:</span>
-                      <span className="font-medium">{selectedOrder.variety}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Quantity:</span>
-                      <span className="font-medium">{selectedOrder.quantity} kg</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Price per kg:</span>
-                      <span className="font-medium">KES {selectedOrder.pricePerKg}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total:</span>
-                      <span className="font-bold">KES {selectedOrder.totalAmount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Photo Gallery */}
-              {selectedOrder.photos && selectedOrder.photos.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Quality Check Photos</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {selectedOrder.photos.map((photo, index) => (
-                      <div key={index} className="aspect-square rounded-lg overflow-hidden border">
-                        <img
-                          src={photo}
-                          alt={`Quality check ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                {selectedOrder.status === "order_placed" && !selectedOrder.paymentStatus && (
-                  <Button onClick={() => setPaymentDialogOpen(true)}>
-                    Make Payment
-                  </Button>
-                )}
-                {selectedOrder.canRate && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setOrderDetailsOpen(false);
-                      setRatingDialogOpen(true);
-                    }}
-                  >
-                    <IconStar className="mr-2 h-4 w-4" />
-                    Rate Farmer
-                  </Button>
-                )}
-                <Button variant="outline">
-                  <IconDownload className="mr-2 h-4 w-4" />
-                  Download Receipt
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Payment Dialog */}
       {selectedOrder && (

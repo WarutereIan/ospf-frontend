@@ -24,3 +24,4 @@ export function Sparkline({ data, color = "#3B82F6", height = 40 }: SparklinePro
     </ResponsiveContainer>
   );
 }
+

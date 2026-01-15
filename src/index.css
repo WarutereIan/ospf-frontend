@@ -1,136 +1,147 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
+@import "@fontsource-variable/plus-jakarta-sans";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-    /* Base Colors - OFSP Theme */
-    --background: #ffffff; /* White */
-    --foreground: #111827; /* Gray 900 */
-    --card: #ffffff; /* White */
-    --card-foreground: #111827; /* Gray 900 */
-    --popover: #ffffff; /* White */
-    --popover-foreground: #111827; /* Gray 900 */
+    /* Base Colors - Modern Agritech Organic Theme (High Contrast) */
+    --background: #FAF9F6; /* Off-white/Cream */
+    --foreground: #0F172A; /* Slate 900 - High contrast dark text */
+    --card: #ffffff; /* Pure white for maximum contrast */
+    --card-foreground: #0F172A; /* Slate 900 - High contrast */
+    --popover: #ffffff; /* Pure white */
+    --popover-foreground: #0F172A; /* Slate 900 - High contrast */
     
-    /* Primary - OFSP Orange */
-    --primary: #FF6B35; /* Orange 500 */
-    --primary-foreground: #ffffff; /* White */
+    /* Primary - Modern Orange (High Contrast) */
+    --primary: #E67E00; /* Darker orange for better contrast on white */
+    --primary-foreground: #ffffff; /* White text on orange */
     
-    /* Secondary - Agricultural Green */
-    --secondary: #F0FDF4; /* Green 50 */
-    --secondary-foreground: #16A34A; /* Green 600 */
+    /* Secondary - Organic Green (High Contrast) */
+    --secondary: #E8F5E9; /* Light green background */
+    --secondary-foreground: #1B5E20; /* Dark green text - High contrast */
     
-    /* Muted Colors */
-    --muted: #F9FAFB; /* Gray 50 */
-    --muted-foreground: #6B7280; /* Gray 500 */
+    /* Muted Colors (High Contrast) */
+    --muted: #F5F5F0; /* Light cream */
+    --muted-foreground: #374151; /* Gray 700 - Higher contrast than 500 */
     
-    /* Accent - Orange for highlights */
-    --accent: #FF6B35; /* Orange 500 */
+    /* Accent - Orange for highlights (High Contrast) */
+    --accent: #E67E00; /* Darker orange */
     --accent-foreground: #ffffff; /* White */
     
-    /* Destructive - Red for errors */
-    --destructive: #EF4444; /* Red 500 */
+    /* Destructive - Red for errors (High Contrast) */
+    --destructive: #DC2626; /* Red 600 - Darker for better contrast */
     --destructive-foreground: #ffffff; /* White */
     
-    /* Borders & Inputs */
-    --border: #E5E7EB; /* Gray 200 */
-    --input: #E5E7EB; /* Gray 200 */
-    --ring: #E55A2B; /* Orange 600 */
+    /* Borders & Inputs (High Contrast) */
+    --border: #D1D5DB; /* Gray 300 - More visible */
+    --input: #D1D5DB; /* Gray 300 - More visible */
+    --ring: #E67E00; /* Darker orange for focus rings */
     
-    /* Chart Colors - OFSP Theme */
-    --chart-1: #FF6B35; /* Orange 500 */
-    --chart-2: #16A34A; /* Green 600 */
-    --chart-3: #FBBF24; /* Yellow 500 */
-    --chart-4: #3B82F6; /* Blue 500 */
-    --chart-5: #EF4444; /* Red 500 */
+    /* Chart Colors - Modern Agritech Theme (High Contrast) */
+    --chart-1: #E67E00; /* Darker orange */
+    --chart-2: #1B5E20; /* Darker green */
+    --chart-3: #D97706; /* Darker yellow/amber */
+    --chart-4: #1E40AF; /* Darker blue */
+    --chart-5: #DC2626; /* Darker red */
     
     /* Border Radius */
     --radius: 0.625rem;
     
-    /* Sidebar Colors */
-    --sidebar: #F9FAFB; /* Gray 50 */
-    --sidebar-foreground: #111827; /* Gray 900 */
-    --sidebar-primary: #E55A2B; /* Orange 600 */
+    /* Sidebar Colors (High Contrast) */
+    --sidebar: #FAF9F6; /* Off-white/Cream */
+    --sidebar-foreground: #0F172A; /* Slate 900 - High contrast */
+    --sidebar-primary: #E67E00; /* Darker orange */
     --sidebar-primary-foreground: #ffffff; /* White */
-    --sidebar-accent: #FF6B35; /* Orange 500 */
+    --sidebar-accent: #E67E00; /* Darker orange */
     --sidebar-accent-foreground: #ffffff; /* White */
-    --sidebar-border: #E5E7EB; /* Gray 200 */
-    --sidebar-ring: #E55A2B; /* Orange 600 */
+    --sidebar-border: #D1D5DB; /* Gray 300 - More visible */
+    --sidebar-ring: #E67E00; /* Darker orange */
     
-    /* OFSP Specific Colors */
-    --ofsp-orange-50: #FFF5F2;
-    --ofsp-orange-100: #FFE5DC;
-    --ofsp-orange-500: #FF6B35;
-    --ofsp-orange-600: #E55A2B;
-    --ofsp-orange-700: #CC4A21;
+    /* Design System Colors */
+    --ds-orange: #FF8C00; /* Primary Orange */
+    --ds-green: #2E8B57; /* Organic Green */
+    --ds-cream: #FAF9F6; /* Off-white/Cream */
     
-    --ofsp-green-500: #22C55E;
-    --ofsp-green-600: #16A34A;
-    --ofsp-green-700: #15803D;
+    /* OFSP Specific Colors - Updated (High Contrast) */
+    --ofsp-orange-50: #FFF8F0;
+    --ofsp-orange-100: #FFE5CC;
+    --ofsp-orange-500: #FF8C00;
+    --ofsp-orange-600: #E67E00; /* Darker for better contrast */
+    --ofsp-orange-700: #CC7000;
     
-    /* Status Colors */
-    --success: #16A34A; /* Green 600 */
-    --warning: #FBBF24; /* Yellow 500 */
-    --error: #EF4444; /* Red 500 */
-    --info: #3B82F6; /* Blue 500 */
+    --ofsp-green-500: #2E8B57;
+    --ofsp-green-600: #1B5E20; /* Darker for better contrast */
+    --ofsp-green-700: #155724; /* Even darker */
+    
+    /* Status Colors (High Contrast) */
+    --success: #1B5E20; /* Darker green - High contrast */
+    --warning: #D97706; /* Darker amber - High contrast */
+    --error: #DC2626; /* Darker red - High contrast */
+    --info: #1E40AF; /* Darker blue - High contrast */
+    
+    /* High Contrast Text Colors */
+    --text-primary: #0F172A; /* Slate 900 - Maximum contrast */
+    --text-secondary: #374151; /* Gray 700 - High contrast */
+    --text-muted: #6B7280; /* Gray 500 - Still readable */
+    --text-inverse: #ffffff; /* White for dark backgrounds */
 }
 
 .dark {
-    /* Dark Mode - OFSP Theme */
-    --background: #111827; /* Gray 900 */
-    --foreground: #F3F4F6; /* Gray 100 */
-    --card: #1F2937; /* Gray 800 */
-    --card-foreground: #F3F4F6; /* Gray 100 */
-    --popover: #1F2937; /* Gray 800 */
-    --popover-foreground: #F3F4F6; /* Gray 100 */
+    /* Dark Mode - High Contrast Theme */
+    --background: #0F172A; /* Slate 900 - Darker for better contrast */
+    --foreground: #F8FAFC; /* Slate 50 - Very light for high contrast */
+    --card: #1E293B; /* Slate 800 */
+    --card-foreground: #F8FAFC; /* Slate 50 - High contrast */
+    --popover: #1E293B; /* Slate 800 */
+    --popover-foreground: #F8FAFC; /* Slate 50 - High contrast */
     
-    /* Primary - Lighter Orange for Dark Mode */
-    --primary: #FF8C5A; /* Lighter Orange */
-    --primary-foreground: #1F2937; /* Dark text on orange */
+    /* Primary - Lighter Orange for Dark Mode (High Contrast) */
+    --primary: #FFA64D; /* Lighter Orange */
+    --primary-foreground: #0F172A; /* Dark text on orange - High contrast */
     
-    /* Secondary - Dark Green */
-    --secondary: #14532D; /* Dark green background */
-    --secondary-foreground: #F3F4F6; /* Light text */
+    /* Secondary - Dark Green (High Contrast) */
+    --secondary: #1F5F3F; /* Dark green background */
+    --secondary-foreground: #F8FAFC; /* Very light text - High contrast */
     
-    /* Muted Colors */
-    --muted: #1F2937; /* Gray 800 */
-    --muted-foreground: #9CA3AF; /* Gray 400 */
+    /* Muted Colors (High Contrast) */
+    --muted: #1E293B; /* Slate 800 */
+    --muted-foreground: #CBD5E1; /* Slate 300 - Higher contrast */
     
-    /* Accent */
-    --accent: #FF8C5A; /* Lighter Orange */
-    --accent-foreground: #1F2937;
+    /* Accent (High Contrast) */
+    --accent: #FFA64D; /* Lighter Orange */
+    --accent-foreground: #0F172A; /* Dark text - High contrast */
     
-    /* Destructive */
+    /* Destructive (High Contrast) */
     --destructive: #F87171; /* Red */
-    --destructive-foreground: #F3F4F6;
+    --destructive-foreground: #F8FAFC; /* Very light text - High contrast */
     
-    /* Borders & Inputs */
-    --border: rgba(255, 255, 255, 0.1);
-    --input: rgba(255, 255, 255, 0.15);
-    --ring: #FF8C5A; /* Orange ring */
+    /* Borders & Inputs (High Contrast) */
+    --border: rgba(255, 255, 255, 0.2); /* More visible borders */
+    --input: rgba(255, 255, 255, 0.25); /* More visible inputs */
+    --ring: #FFA64D; /* Orange ring */
     
-    /* Chart Colors */
-    --chart-1: #FF8C5A; /* Orange */
+    /* Chart Colors (High Contrast) */
+    --chart-1: #FFA64D; /* Orange */
     --chart-2: #4ADE80; /* Green */
     --chart-3: #FBBF24; /* Yellow */
     --chart-4: #60A5FA; /* Blue */
     --chart-5: #F87171; /* Red */
     
-    /* Sidebar */
-    --sidebar: #1F2937; /* Gray 800 */
-    --sidebar-foreground: #F3F4F6; /* Gray 100 */
-    --sidebar-primary: #FF9D6B; /* Orange */
-    --sidebar-primary-foreground: #1F2937;
-    --sidebar-accent: #FF8C5A; /* Orange */
-    --sidebar-accent-foreground: #1F2937;
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --sidebar-ring: #FF8C5A; /* Orange */
+    /* Sidebar (High Contrast) */
+    --sidebar: #1E293B; /* Slate 800 */
+    --sidebar-foreground: #F8FAFC; /* Slate 50 - High contrast */
+    --sidebar-primary: #FFA64D; /* Orange */
+    --sidebar-primary-foreground: #0F172A; /* Dark text - High contrast */
+    --sidebar-accent: #FFA64D; /* Orange */
+    --sidebar-accent-foreground: #0F172A; /* Dark text - High contrast */
+    --sidebar-border: rgba(255, 255, 255, 0.2); /* More visible */
+    --sidebar-ring: #FFA64D; /* Orange */
 }
 
 @theme inline {
-    --font-sans: 'Inter Variable', sans-serif;
+    --font-sans: 'Plus Jakarta Sans Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -177,8 +188,29 @@
     }
   body {
     @apply font-sans bg-background text-foreground;
+    /* High contrast text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     }
   html {
     @apply font-sans;
     }
+  /* High contrast for interactive elements */
+  button, a, [role="button"] {
+    @apply font-semibold;
+  }
+  /* High contrast for headings */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+    color: var(--foreground);
+  }
+  /* High contrast for body text */
+  p, span, div {
+    color: var(--foreground);
+  }
+  /* High contrast for muted text */
+  .text-muted-foreground {
+    color: var(--muted-foreground) !important;
+  }
 }

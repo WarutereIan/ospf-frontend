@@ -1,408 +1,455 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Link, useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  IconShoppingBag,
-  IconPackage,
+  IconDownload,
+  IconPlus,
   IconTrendingUp,
-  IconStar,
-  IconArrowRight,
-  IconSearch,
+  IconTrendingDown,
+  IconClock,
+  IconBell,
+  IconCalendar,
+  IconUser,
 } from "@tabler/icons-react";
-import {
-  StatCard,
-  PieChart,
-  HorizontalBarChart,
-  AreaChart,
-} from "@/components/visualizations";
+import { LineChart, PieChart } from "@/components/visualizations";
+import { Progress } from "@/components/ui/progress";
 
-interface BuyerStats {
-  totalPurchases: number;
-  activeOrders: number;
-  completedOrders: number;
-  totalSpent: number;
-  avgOrderValue: number;
-  ratedFarmers: number;
-  spendThisMonth: number;
-  spendLastMonth: number;
-  quantityReceived: number;
-  quantityLastMonth: number;
-  suppliers: number;
-  newSuppliers: number;
+interface ProcurementStats {
+  volumeSourced: number; // in tons
+  volumeTarget: number; // quarterly target in tons
+  volumeTrend: number; // percentage change
+  avgPricePerKg: number; // KES
+  priceTrend: number; // percentage change
+  marketAvgPrice: number; // KES
+  qualityAcceptance: number; // percentage
+  activeSuppliers: number;
+  deliveriesThisWeek: number;
 }
 
-interface SpendByVariety {
-  name: string;
-  value: number;
-}
-
-interface OrderStatusData {
-  name: string;
-  value: number;
-}
-
-interface MonthlySpending {
+interface PriceTrendData {
   month: string;
-  amount: number;
+  yourPrice: number;
+  marketAvg: number;
 }
 
-interface RecentOrder {
-  id: string;
-  farmerName: string;
-  variety: string;
-  quantity: number;
-  qualityGrade?: string;
-  totalAmount: number;
-  status: string;
-  createdAt: string;
-  canRate: boolean;
+interface SourcingMixData {
+  name: string;
+  value: number;
+  percentage: number;
+  color: string;
+}
+
+interface SourcingRegion {
+  name: string;
+  volume: number; // in tons
+  percentage: number;
+}
+
+interface RecentDelivery {
+  batchId: string;
+  supplier: string;
+  origin: string;
+  weight: number; // in kg
+  grading: string; // e.g., "92% Grade A"
+  status: "on_route" | "received" | "inspecting" | "approved";
 }
 
 export function BuyerDashboard() {
-  const [stats, setStats] = useState<BuyerStats>({
-    totalPurchases: 0,
-    activeOrders: 0,
-    completedOrders: 0,
-    totalSpent: 0,
-    avgOrderValue: 0,
-    ratedFarmers: 0,
-    spendThisMonth: 0,
-    spendLastMonth: 0,
-    quantityReceived: 0,
-    quantityLastMonth: 0,
-    suppliers: 0,
-    newSuppliers: 0,
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<ProcurementStats>({
+    volumeSourced: 0,
+    volumeTarget: 0,
+    volumeTrend: 0,
+    avgPricePerKg: 0,
+    priceTrend: 0,
+    marketAvgPrice: 0,
+    qualityAcceptance: 0,
+    activeSuppliers: 0,
+    deliveriesThisWeek: 0,
   });
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [spendByVariety, setSpendByVariety] = useState<SpendByVariety[]>([]);
-  const [orderStatus, setOrderStatus] = useState<OrderStatusData[]>([]);
-  const [monthlySpending, setMonthlySpending] = useState<MonthlySpending[]>([]);
+  const [priceTrendData, setPriceTrendData] = useState<PriceTrendData[]>([]);
+  const [sourcingMix, setSourcingMix] = useState<SourcingMixData[]>([]);
+  const [topRegions, setTopRegions] = useState<SourcingRegion[]>([]);
+  const [recentDeliveries, setRecentDeliveries] = useState<RecentDelivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState("q3");
 
   useEffect(() => {
     // TODO: Replace with actual API calls
     setTimeout(() => {
       setStats({
-        totalPurchases: 12,
-        activeOrders: 2,
-        completedOrders: 8,
-        totalSpent: 450000,
-        avgOrderValue: 37500,
-        ratedFarmers: 6,
-        spendThisMonth: 450000,
-        spendLastMonth: 380000,
-        quantityReceived: 3500,
-        quantityLastMonth: 2800,
-        suppliers: 15,
-        newSuppliers: 2,
+        volumeSourced: 24.5,
+        volumeTarget: 37.5,
+        volumeTrend: 12,
+        avgPricePerKg: 38,
+        priceTrend: -4,
+        marketAvgPrice: 40,
+        qualityAcceptance: 96.8,
+        activeSuppliers: 6,
+        deliveriesThisWeek: 2,
       });
-      setRecentOrders([
+
+      setPriceTrendData([
+        { month: "Aug", yourPrice: 36, marketAvg: 42 },
+        { month: "Sep", yourPrice: 37, marketAvg: 41 },
+        { month: "Oct", yourPrice: 35, marketAvg: 40 },
+        { month: "Nov", yourPrice: 35, marketAvg: 39 },
+        { month: "Dec (Est)", yourPrice: 38, marketAvg: 40 },
+      ]);
+
+      setSourcingMix([
+        { name: "Fresh Roots (Grade A)", value: 14.7, percentage: 60, color: "#FF8C00" },
+        { name: "OFSP Flour", value: 6.125, percentage: 25, color: "#475569" },
+        { name: "Vines/Planting", value: 3.675, percentage: 15, color: "#94A3B8" },
+      ]);
+
+      setTopRegions([
+        { name: "Homa Bay", volume: 8.5, percentage: 35 },
+        { name: "Migori", volume: 7.2, percentage: 29 },
+        { name: "Kakamega", volume: 5.8, percentage: 24 },
+        { name: "Bungoma", volume: 3.0, percentage: 12 },
+      ]);
+
+      setRecentDeliveries([
         {
-          id: "ORD-045",
-          farmerName: "James Mutua",
-          variety: "Kenya",
-          quantity: 500,
-          qualityGrade: "A",
-          totalAmount: 75000,
-          status: "delivered",
-          createdAt: new Date().toISOString(),
-          canRate: true,
+          batchId: "BATCH-2024-001",
+          supplier: "James Mutua",
+          origin: "Kangundo",
+          weight: 2500,
+          grading: "92% Grade A",
+          status: "on_route",
         },
         {
-          id: "ORD-044",
-          farmerName: "Mary W.",
-          variety: "SPK004",
-          quantity: 200,
-          qualityGrade: "",
-          totalAmount: 24000,
-          status: "in_transit",
-          createdAt: new Date().toISOString(),
-          canRate: false,
+          batchId: "BATCH-2024-002",
+          supplier: "Mary Wanjiku",
+          origin: "Kathiani",
+          weight: 1800,
+          grading: "88% Grade A",
+          status: "received",
+        },
+        {
+          batchId: "BATCH-2024-003",
+          supplier: "Peter Kamau",
+          origin: "Masinga",
+          weight: 3200,
+          grading: "95% Grade A",
+          status: "inspecting",
         },
       ]);
-      // Spend by variety data
-      setSpendByVariety([
-        { name: "Kenya", value: 247500 },
-        { name: "SPK004", value: 135000 },
-        { name: "Kabode", value: 67500 },
-      ]);
-      // Order status data
-      setOrderStatus([
-        { name: "Completed", value: 38 },
-        { name: "In Transit", value: 3 },
-        { name: "Processing", value: 2 },
-        { name: "Pending", value: 1 },
-      ]);
-      // Monthly spending (12 months)
-      setMonthlySpending([
-        { month: "Jan", amount: 320000 },
-        { month: "Feb", amount: 350000 },
-        { month: "Mar", amount: 380000 },
-        { month: "Apr", amount: 400000 },
-        { month: "May", amount: 420000 },
-        { month: "Jun", amount: 410000 },
-        { month: "Jul", amount: 430000 },
-        { month: "Aug", amount: 440000 },
-        { month: "Sep", amount: 420000 },
-        { month: "Oct", amount: 400000 },
-        { month: "Nov", amount: 380000 },
-        { month: "Dec", amount: 450000 },
-      ]);
+
       setIsLoading(false);
     }, 1000);
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300";
-      case "accepted":
-      case "in_transit":
-        return "bg-blue-100 text-blue-800 border-blue-300";
-      case "delivered":
-      case "completed":
-        return "bg-green-100 text-green-800 border-green-300";
+  const getStatusColor = (status: RecentDelivery["status"]) => {
+    switch (status) {
+      case "on_route":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "received":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "inspecting":
+        return "bg-stone-100 text-stone-800 border-stone-200";
+      case "approved":
+        return "bg-green-100 text-green-800 border-green-200";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-300";
+        return "bg-stone-100 text-stone-800 border-stone-200";
     }
   };
 
+  const getStatusLabel = (status: RecentDelivery["status"]) => {
+    switch (status) {
+      case "on_route":
+        return "On Route";
+      case "received":
+        return "Received";
+      case "inspecting":
+        return "Inspecting";
+      case "approved":
+        return "Approved";
+      default:
+        return status;
+    }
+  };
+
+  const volumeProgress = stats.volumeTarget > 0 ? (stats.volumeSourced / stats.volumeTarget) * 100 : 0;
+  const priceDifference = stats.marketAvgPrice - stats.avgPricePerKg;
+
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Buyer Dashboard</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Manage your OFSP purchases and track orders
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Procurement Overview</h1>
+          <p className="text-stone-500 mt-1">Track your OFSP sourcing volume, quality, and market prices.</p>
         </div>
-        <Link to="/marketplace">
-          <Button size="sm">
-            <IconSearch className="mr-2 h-4 w-4" />
-            Browse Produce
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-stone-200 hover:border-orange-500 hover:text-orange-500"
+          >
+            <IconDownload className="h-4 w-4 mr-2" />
+            Export
           </Button>
-        </Link>
+          <Button
+            size="sm"
+            className="bg-orange-500 hover:bg-orange-600 text-white"
+            onClick={() => navigate("/marketplace")}
+          >
+            <IconPlus className="h-4 w-4 mr-2" />
+            New Order
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Spend This Month"
-          value={`KES ${(stats.spendThisMonth / 1000).toFixed(0)}K`}
-          description="Monthly spending"
-          trend={{
-            value: stats.spendLastMonth > 0
-              ? ((stats.spendThisMonth - stats.spendLastMonth) / stats.spendLastMonth) * 100
-              : 0,
-            direction: stats.spendThisMonth >= stats.spendLastMonth ? "up" : "down",
-          }}
-          icon={<IconShoppingBag className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Orders Active"
-          value={stats.activeOrders.toString()}
-          description="3 pending"
-          icon={<IconPackage className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Quantity Received"
-          value={`${stats.quantityReceived.toLocaleString()} kg`}
-          description="This month"
-          trend={{
-            value: stats.quantityLastMonth > 0
-              ? ((stats.quantityReceived - stats.quantityLastMonth) / stats.quantityLastMonth) * 100
-              : 0,
-            direction: stats.quantityReceived >= stats.quantityLastMonth ? "up" : "down",
-          }}
-          icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
-        <StatCard
-          label="Suppliers"
-          value={stats.suppliers.toString()}
-          description={`+${stats.newSuppliers} new`}
-          icon={<IconStar className="h-5 w-5 text-primary" />}
-          isLoading={isLoading}
-        />
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Volume Sourced */}
+        <Card className="bg-white border-stone-200">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Volume Sourced</div>
+              <div className="text-2xl font-bold text-stone-900">{stats.volumeSourced} tons</div>
+              <div className="flex items-center gap-2">
+                {stats.volumeTrend > 0 ? (
+                  <IconTrendingUp className="h-4 w-4 text-green-600" />
+                ) : (
+                  <IconTrendingDown className="h-4 w-4 text-red-600" />
+                )}
+                <span className={`text-sm font-medium ${stats.volumeTrend > 0 ? "text-green-600" : "text-red-600"}`}>
+                  {Math.abs(stats.volumeTrend)}%
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-stone-500">
+                  <span>{Math.round(volumeProgress)}% of quarterly target achieved</span>
+                </div>
+                <Progress value={volumeProgress} className="h-2" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Avg Price / KG */}
+        <Card className="bg-white border-stone-200">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Avg. Price / KG</div>
+              <div className="text-2xl font-bold text-stone-900">
+                KES {stats.avgPricePerKg}
+                <span className="text-sm font-normal text-stone-500">/kg</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {stats.priceTrend < 0 ? (
+                  <IconTrendingDown className="h-4 w-4 text-green-600" />
+                ) : (
+                  <IconTrendingUp className="h-4 w-4 text-red-600" />
+                )}
+                <span className={`text-sm font-medium ${stats.priceTrend < 0 ? "text-green-600" : "text-red-600"}`}>
+                  {Math.abs(stats.priceTrend)}%
+                </span>
+              </div>
+              <div className="text-xs text-stone-500">
+                KES {priceDifference.toFixed(2)} below market avg
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quality Acceptance */}
+        <Card className="bg-white border-stone-200 relative">
+          <div className="absolute top-3 right-3">
+            <IconClock className="h-4 w-4 text-stone-400" />
+          </div>
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Quality Acceptance</div>
+              <div className="text-2xl font-bold text-stone-900">{stats.qualityAcceptance}%</div>
+              <div className="text-xs text-stone-500">Based on last 5 deliveries</div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Active Suppliers */}
+        <Card className="bg-white border-stone-200">
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Active Suppliers</div>
+              <div className="text-2xl font-bold text-stone-900">{stats.activeSuppliers}</div>
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-2">
+                  <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-700">
+                    JC
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-700">
+                    FM
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-600">
+                    +{stats.activeSuppliers - 2}
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs text-stone-500">
+                {stats.deliveriesThisWeek} deliveries arriving this week
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PieChart
-          data={spendByVariety}
-          title="Spend by Variety"
-          description="Breakdown of spending by OFSP variety"
-          formatter={(value) => `KES ${value.toLocaleString()}`}
-          height={300}
-          innerRadius={60}
-          showLegend={true}
-        />
-        <HorizontalBarChart
-          data={orderStatus}
-          title="Order Status"
-          description="Distribution of orders by status"
-          color="#3B82F6"
-          height={300}
-        />
-      </div>
-
-      {/* Spending Trend */}
-      <AreaChart
-        data={monthlySpending.map((m) => ({ name: m.month, amount: m.amount }))}
-        areas={[
-          {
-            dataKey: "amount",
-            name: "Spending",
-            color: "#3B82F6",
-            gradient: true,
-          },
-        ]}
-        title="Spending Trend (12 months)"
-        description="Monthly spending over time"
-        formatter={(value) => `KES ${value.toLocaleString()}`}
-        height={300}
-      />
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Orders */}
-        <Card className="lg:col-span-2">
+        {/* Price Trend Analysis */}
+        <Card className="bg-white border-stone-200">
           <CardHeader>
-            <CardTitle>Recent Orders</CardTitle>
-            <CardDescription>
-              {stats.activeOrders > 0
-                ? `You have ${stats.activeOrders} active orders.`
-                : "No active orders."}
-            </CardDescription>
+            <CardTitle className="text-stone-900">Your purchase price vs. Market average (KES/kg)</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="space-y-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-20 bg-muted animate-pulse rounded-lg" />
-                ))}
-              </div>
-            ) : recentOrders.length > 0 ? (
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Order ID</TableHead>
-                      <TableHead>Farmer</TableHead>
-                      <TableHead>Variety</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {recentOrders.map((order) => {
-                      const statusIcon =
-                        order.status === "delivered" || order.status === "completed"
-                          ? "●"
-                          : order.status === "in_transit"
-                          ? "◐"
-                          : "○";
-                      const statusLabel =
-                        order.status === "delivered" || order.status === "completed"
-                          ? "Delivered"
-                          : order.status === "in_transit"
-                          ? "In Transit"
-                          : order.status.replace(/_/g, " ");
-
-                      return (
-                        <TableRow key={order.id}>
-                          <TableCell className="font-medium">{order.id}</TableCell>
-                          <TableCell>{order.farmerName}</TableCell>
-                          <TableCell>
-                            {order.quantity} kg {order.variety} {order.qualityGrade || ""}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={getStatusColor(order.status)}>
-                              {statusIcon} {statusLabel}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <IconPackage className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No orders yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Start by browsing the marketplace
-                </p>
-              </div>
-            )}
+            <LineChart
+              data={priceTrendData.map((item) => ({
+                name: item.month,
+                yourPrice: item.yourPrice,
+                marketAvg: item.marketAvg,
+              }))}
+              lines={[
+                {
+                  dataKey: "yourPrice",
+                  name: "Your Price",
+                  color: "#FF8C00",
+                  strokeWidth: 2,
+                },
+                {
+                  dataKey: "marketAvg",
+                  name: "Market Avg",
+                  color: "#94A3B8",
+                  strokeWidth: 2,
+                },
+              ]}
+              height={280}
+              showLegend={true}
+              formatter={(value) => `KES ${value.toFixed(2)}`}
+            />
           </CardContent>
-          <CardFooter>
-            <Link to="/dashboard/buyer/orders" className="w-full">
-              <Button variant="outline" className="w-full">View All Orders</Button>
-            </Link>
-          </CardFooter>
         </Card>
 
-        {/* Quick Actions */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link to="/marketplace" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <IconSearch className="mr-2 h-4 w-4" />
-                  Browse Marketplace
-                </Button>
-              </Link>
-              <Link to="/dashboard/buyer/orders" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <IconPackage className="mr-2 h-4 w-4" />
-                  My Orders
-                </Button>
-              </Link>
-              <Link to="/dashboard/buyer/ratings" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <IconStar className="mr-2 h-4 w-4" />
-                  Rate Farmers
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Purchase Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Purchase Summary</CardTitle>
-              <CardDescription>This month</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Orders</span>
-                  <span className="font-semibold">{stats.totalPurchases}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Total Spent</span>
-                  <span className="font-semibold">KES {stats.totalSpent.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Avg. Order Value</span>
-                  <span className="font-semibold">KES {stats.avgOrderValue.toLocaleString()}</span>
+        {/* Sourcing Mix */}
+        <Card className="bg-white border-stone-200">
+          <CardHeader>
+            <CardTitle className="text-stone-900">Volume distribution by product type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="relative flex items-center justify-center h-[280px]">
+              <PieChart
+                data={sourcingMix.map((item) => ({ name: item.name, value: item.value }))}
+                height={280}
+                innerRadius={60}
+                showLegend={false}
+                showLabels={false}
+                colors={sourcingMix.map((item) => item.color)}
+                formatter={(value) => `${value.toFixed(1)}t`}
+              />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-stone-900">
+                    {sourcingMix.reduce((sum, item) => sum + item.value, 0).toFixed(0)}t
+                  </div>
+                  <div className="text-xs text-stone-500">Total</div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {sourcingMix.map((item) => (
+                <div key={item.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-stone-700">{item.name}</span>
+                  </div>
+                  <span className="font-semibold text-stone-900">{item.percentage}%</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Sourcing Regions */}
+        <Card className="bg-white border-stone-200">
+          <CardHeader>
+            <CardTitle className="text-stone-900">Top Sourcing Regions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {topRegions.map((region) => (
+                <div key={region.name} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-stone-900">{region.name}</span>
+                    <span className="text-stone-600">{region.volume} tons</span>
+                  </div>
+                  <Progress value={region.percentage} className="h-2" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Deliveries */}
+        <Card className="bg-white border-stone-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-stone-900">Recent Deliveries</CardTitle>
+                <CardDescription className="text-stone-500">Status of your inbound logistics</CardDescription>
+              </div>
+              <Link to="/dashboard/buyer/orders">
+                <Button variant="ghost" size="sm" className="text-orange-500 hover:text-orange-600">
+                  View All
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border border-stone-200">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-stone-600">Batch ID</TableHead>
+                    <TableHead className="text-stone-600">Supplier</TableHead>
+                    <TableHead className="text-stone-600">Origin</TableHead>
+                    <TableHead className="text-stone-600">Weight</TableHead>
+                    <TableHead className="text-stone-600">Grading</TableHead>
+                    <TableHead className="text-stone-600">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentDeliveries.map((delivery) => (
+                    <TableRow key={delivery.batchId}>
+                      <TableCell className="font-medium text-stone-900">{delivery.batchId}</TableCell>
+                      <TableCell className="text-stone-700">{delivery.supplier}</TableCell>
+                      <TableCell className="text-stone-600">{delivery.origin}</TableCell>
+                      <TableCell className="text-stone-700">{(delivery.weight / 1000).toFixed(1)}t</TableCell>
+                      <TableCell className="text-stone-700">{delivery.grading}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getStatusColor(delivery.status)}>
+                          {getStatusLabel(delivery.status)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 }
-

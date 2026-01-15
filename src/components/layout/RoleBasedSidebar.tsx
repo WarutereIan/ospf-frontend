@@ -18,6 +18,8 @@ import {
   IconSeeding,
   IconTruck,
   IconShoppingCart,
+  IconTruckDelivery,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,7 +37,6 @@ const farmerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/farmer", icon: IconChartBar },
   { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
   { name: "Inputs", path: "/marketplace/inputs", icon: IconSeeding },
-  
   { name: "My Produce", path: "/dashboard/produce", icon: IconPackage },
   { name: "Orders", path: "/dashboard/orders", icon: IconPackage },
   { name: "Leaderboard", path: "/dashboard/leaderboard", icon: IconTrophy },
@@ -45,9 +46,11 @@ const farmerMenuItems: MenuItem[] = [
 // Buyer menu items
 const buyerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
-  { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
-
+  { name: "Marketplace", path: "/dashboard/buyer/marketplace", icon: IconShoppingBag },
   { name: "My Orders", path: "/dashboard/buyer/orders", icon: IconPackage },
+  { name: "Recurring Orders", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
+  { name: "Deliveries", path: "/dashboard/buyer/deliveries", icon: IconTruck },
+  { name: "Collection", path: "/dashboard/buyer/collection", icon: IconTruckDelivery },
   { name: "Rate Farmers", path: "/dashboard/buyer/ratings", icon: IconStar },
 ];
 
