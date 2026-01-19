@@ -316,7 +316,7 @@ export function BuyerDashboard() {
                 marketAvg: item.marketAvg,
               }))}
               lines={[
-                {
+          {
                   dataKey: "yourPrice",
                   name: "Your Price",
                   color: "#FF8C00",
@@ -327,8 +327,8 @@ export function BuyerDashboard() {
                   name: "Market Avg",
                   color: "#94A3B8",
                   strokeWidth: 2,
-                },
-              ]}
+          },
+        ]}
               height={280}
               showLegend={true}
               formatter={(value) => `KES ${value.toFixed(2)}`}
@@ -351,7 +351,7 @@ export function BuyerDashboard() {
                 showLabels={false}
                 colors={sourcingMix.map((item) => item.color)}
                 formatter={(value) => `${value.toFixed(1)}t`}
-              />
+      />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-stone-900">
@@ -387,7 +387,7 @@ export function BuyerDashboard() {
             <CardTitle className="text-stone-900">Top Sourcing Regions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+              <div className="space-y-4">
               {topRegions.map((region) => (
                 <div key={region.name} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -418,18 +418,18 @@ export function BuyerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="rounded-md border border-stone-200">
-              <Table>
-                <TableHeader>
-                  <TableRow>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
                     <TableHead className="text-stone-600">Batch ID</TableHead>
                     <TableHead className="text-stone-600">Supplier</TableHead>
                     <TableHead className="text-stone-600">Origin</TableHead>
                     <TableHead className="text-stone-600">Weight</TableHead>
                     <TableHead className="text-stone-600">Grading</TableHead>
                     <TableHead className="text-stone-600">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                   {recentDeliveries.map((delivery) => (
                     <TableRow key={delivery.batchId}>
                       <TableCell className="font-medium text-stone-900">{delivery.batchId}</TableCell>
@@ -437,16 +437,16 @@ export function BuyerDashboard() {
                       <TableCell className="text-stone-600">{delivery.origin}</TableCell>
                       <TableCell className="text-stone-700">{(delivery.weight / 1000).toFixed(1)}t</TableCell>
                       <TableCell className="text-stone-700">{delivery.grading}</TableCell>
-                      <TableCell>
+                          <TableCell>
                         <Badge variant="outline" className={getStatusColor(delivery.status)}>
                           {getStatusLabel(delivery.status)}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
                   ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableBody>
+                </Table>
+              </div>
           </CardContent>
         </Card>
       </div>

@@ -1,15 +1,14 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { IconUser, IconLogout } from "@tabler/icons-react";
-import { useUserRole } from "@/contexts/UserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
   const navigate = useNavigate();
-  const { setRole, setUserId, role } = useUserRole();
+  const { logout, user, isAuthenticated } = useAuth();
 
   const handleLogout = () => {
-    setRole(null);
-    setUserId(null);
+    logout();
     navigate("/login");
   };
 
@@ -28,8 +27,11 @@ export function Header() {
 
         {/* User Actions */}
         <div className="flex items-center gap-2">
-          {role && (
+          {isAuthenticated && user && (
             <>
+              <div className="flex items-center gap-2 mr-2">
+                <span className="text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
+              </div>
               <Button variant="ghost" size="icon" title="Profile">
                 <IconUser className="h-5 w-5" />
               </Button>
@@ -43,7 +45,7 @@ export function Header() {
               </Button>
             </>
           )}
-          {!role && (
+          {!isAuthenticated && (
             <Link to="/login">
               <Button variant="default" size="sm">
                 Sign In

@@ -23,8 +23,8 @@ import {
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useUserRole } from "@/contexts/UserRoleContext";
-import type { UserRole } from "@/contexts/UserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { UserRole } from "@/contexts/AuthContext";
 
 interface MenuItem {
   name: string;
@@ -48,7 +48,7 @@ const buyerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
   { name: "Marketplace", path: "/dashboard/buyer/marketplace", icon: IconShoppingBag },
   { name: "My Orders", path: "/dashboard/buyer/orders", icon: IconPackage },
-  { name: "Recurring Orders", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
+  { name: "Sourcing Requests", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
   { name: "Deliveries", path: "/dashboard/buyer/deliveries", icon: IconTruck },
   { name: "Collection", path: "/dashboard/buyer/collection", icon: IconTruckDelivery },
   { name: "Rate Farmers", path: "/dashboard/buyer/ratings", icon: IconStar },
@@ -125,7 +125,7 @@ export function RoleBasedSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { collapsed, collapseSidebar } = useProSidebar();
-  const { role } = useUserRole();
+  const { role } = useAuth();
 
   const menuItems = getMenuItemsForRole(role);
 

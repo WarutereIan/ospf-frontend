@@ -86,7 +86,7 @@ export function AggregationManagerDashboard() {
   const [qualityDistribution, setQualityDistribution] = useState<QualityDistribution[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const centerName = "Kangundo Main Aggregation Center"; // TODO: Get from context
-  const centerType = "main"; // TODO: Get from context - "main" or "satellite"
+  const centerType: "main" | "satellite" = "main"; // TODO: Get from context - "main" or "satellite"
   const centerSubCounty = "Kangundo"; // TODO: Get from context
   const centerWard = centerType === "satellite" ? "Kangundo East" : undefined; // TODO: Get from context
 

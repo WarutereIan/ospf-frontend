@@ -23,7 +23,7 @@ import {
   IconMail,
   IconPhone,
 } from "@tabler/icons-react";
-import type { UserRole } from "@/contexts/UserRoleContext";
+import type { UserRole } from "@/contexts/AuthContext";
 
 interface User {
   id: string;

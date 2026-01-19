@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { UserRoleProvider } from "@/contexts/UserRoleContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { Layout } from "@/components/layout/Layout";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -35,7 +35,7 @@ import { RateFarmerPage } from "@/pages/buyer/RateFarmerPage";
 import { Ratings } from "@/pages/buyer/Ratings";
 import { CollectionReceiving } from "@/pages/buyer/CollectionReceiving";
 import { LogisticsDeliveries } from "@/pages/buyer/LogisticsDeliveries";
-import { RecurringOrders } from "@/pages/marketplace/RecurringOrders";
+import { SourcingRequests } from "@/pages/buyer/SourcingRequests";
 import InputManagement from "@/pages/inputs/InputManagement";
 import InputMarketplace from "@/pages/marketplace/InputMarketplace";
 import TransportRequests from "@/pages/transport/TransportRequests";
@@ -44,7 +44,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
   return (
-    <UserRoleProvider>
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
@@ -104,7 +104,8 @@ export function App() {
             <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
             
             {/* Buyer Additional Routes */}
-            <Route path="/dashboard/buyer/recurring-orders" element={<RecurringOrders />} />
+            <Route path="/dashboard/buyer/recurring-orders" element={<SourcingRequests />} />
+            <Route path="/dashboard/buyer/sourcing-requests" element={<SourcingRequests />} />
             
             {/* Payment Routes */}
             <Route path="/dashboard/payments" element={<PaymentHistory />} />
@@ -129,7 +130,7 @@ export function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
-    </UserRoleProvider>
+    </AuthProvider>
   );
 }
 

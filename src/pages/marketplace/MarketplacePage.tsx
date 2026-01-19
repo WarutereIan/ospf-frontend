@@ -31,8 +31,9 @@ import {
   IconChevronDown,
   IconPlant,
   IconStack,
+  IconQrcode,
 } from "@tabler/icons-react";
-import { useUserRole } from "@/contexts/UserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { NegotiationDialog } from "@/components/messaging/NegotiationDialog";
 import { SmartMatching } from "@/components/marketplace/SmartMatching";
 import { BulkOrderCart } from "./BulkOrderCart";
@@ -42,6 +43,7 @@ import {
   PriceDistributionBar,
   StarRating,
 } from "@/components/visualizations";
+import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
 
 interface ProduceListing {
   id: string;
@@ -61,6 +63,8 @@ interface ProduceListing {
   status: "active" | "sold" | "inactive";
   responseTime?: number; // minutes
   distance?: number; // km
+  batchId?: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
 }
 
 const ofspVarieties = [
@@ -95,7 +99,7 @@ const sortOptions = [
 ];
 
 export function MarketplacePage() {
-  const { role } = useUserRole();
+  const { role } = useAuth();
   const [listings, setListings] = useState<ProduceListing[]>([]);
   const [filteredListings, setFilteredListings] = useState<ProduceListing[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -119,6 +123,8 @@ export function MarketplacePage() {
   const [advanceOrderOpen, setAdvanceOrderOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
+  const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
 
   const handleAdvanceOrder = (orderData: AdvanceOrderData) => {
     // TODO: Replace with actual API call
@@ -148,6 +154,8 @@ export function MarketplacePage() {
           responseTime: 15,
           distance: 5.2,
           createdAt: new Date().toISOString(),
+          batchId: "BATCH-2023-001",
+          qrCode: "QR-BATCH-2023-001",
         },
         {
           id: "LST-002",
@@ -166,6 +174,8 @@ export function MarketplacePage() {
           responseTime: 8,
           distance: 12.5,
           createdAt: new Date().toISOString(),
+          batchId: "BATCH-2023-002",
+          qrCode: "QR-BATCH-2023-002",
         },
         {
           id: "LST-003",
@@ -184,6 +194,8 @@ export function MarketplacePage() {
           responseTime: 30,
           distance: 18.3,
           createdAt: new Date().toISOString(),
+          batchId: "BATCH-2023-003",
+          qrCode: "QR-BATCH-2023-003",
         },
       ];
       setListings(sampleListings);
@@ -682,40 +694,55 @@ export function MarketplacePage() {
 
                   {/* Actions */}
                   {role === "buyer" && (
-                    <div className="mt-auto grid grid-cols-[1fr_auto_auto] gap-2">
-                      <Button
-                        className="flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
-                        onClick={() => {
-                          setSelectedListing(listing);
-                          setOrderDialogOpen(true);
-                        }}
-                      >
-                        <IconShoppingCart className="h-4 w-4" />
-                        Order Now
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
-                        onClick={() => {
-                          setSelectedListing(listing);
-                          setNegotiationDialogOpen(true);
-                        }}
-                        title="Message Farmer"
-                      >
-                        <IconMessageCircle className="h-[18px] w-[18px]" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors"
-                        onClick={() => {
-                          setSelectedListing(listing);
-                          setRfqDialogOpen(true);
-                        }}
-                        title="Request Quote"
-                      >
-                        RFQ
-                      </Button>
+                    <div className="mt-auto space-y-2">
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+                        <Button
+                          className="flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
+                          onClick={() => {
+                            setSelectedListing(listing);
+                            setOrderDialogOpen(true);
+                          }}
+                        >
+                          <IconShoppingCart className="h-4 w-4" />
+                          Order Now
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
+                          onClick={() => {
+                            setSelectedListing(listing);
+                            setNegotiationDialogOpen(true);
+                          }}
+                          title="Message Farmer"
+                        >
+                          <IconMessageCircle className="h-[18px] w-[18px]" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors"
+                          onClick={() => {
+                            setSelectedListing(listing);
+                            setRfqDialogOpen(true);
+                          }}
+                          title="Request Quote"
+                        >
+                          RFQ
+                        </Button>
+                      </div>
+                      {listing.batchId && (
+                        <Button
+                          variant="outline"
+                          className="w-full text-xs font-medium text-stone-600 hover:text-orange-600 hover:border-orange-500 border-stone-200 py-2"
+                          onClick={() => {
+                            setSelectedBatchId(listing.batchId);
+                            setTraceabilityDialogOpen(true);
+                          }}
+                        >
+                          <IconQrcode className="h-3.5 w-3.5 mr-2" />
+                          View Batch History
+                        </Button>
+                      )}
                     </div>
                   )}
                   {role !== "buyer" && (
@@ -739,6 +766,13 @@ export function MarketplacePage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Batch Traceability Dialog */}
+      <BatchTraceabilityDialog
+        open={traceabilityDialogOpen}
+        onOpenChange={setTraceabilityDialogOpen}
+        batchId={selectedBatchId}
+      />
 
       {/* Order Dialog */}
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>

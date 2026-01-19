@@ -162,7 +162,7 @@ const marketPrices: MarketPrice[] = [
 export function MarketInfo() {
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedVariety, setSelectedVariety] = useState("all");
-  const [priceTrendData, setPriceTrendData] = useState<Array<{ date: string; kenya: number; spk004: number; kabode: number }>>([]);
+  const [priceTrendData, setPriceTrendData] = useState<Array<{ name: string; date: string; kenya: number; spk004: number; kabode: number }>>([]);
 
   useEffect(() => {
     // Generate 30 days of price trend data
@@ -171,8 +171,10 @@ export function MarketInfo() {
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
+      const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
       trendData.push({
-        date: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        name: dateStr,
+        date: dateStr,
         kenya: 150 - Math.random() * 10 + (i / days) * 5,
         spk004: 120 - Math.random() * 8 + (i / days) * 2,
         kabode: 100 - Math.random() * 5,

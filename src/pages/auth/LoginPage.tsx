@@ -6,85 +6,37 @@ import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-import { useUserRole } from "@/contexts/UserRoleContext";
+import { useAuth, MOCK_CREDENTIALS } from "@/contexts/AuthContext";
 import { IconInfoCircle, IconCopy, IconCheck } from "@tabler/icons-react";
-import type { UserRole } from "@/contexts/UserRoleContext";
-
-// Mock credentials for different user roles
-const MOCK_CREDENTIALS: Record<string, { role: UserRole; name: string; phone: string; password: string }> = {
-  farmer: {
-    role: "farmer",
-    name: "John Mutua",
-    phone: "+254712345678",
-    password: "farmer123",
-  },
-  buyer: {
-    role: "buyer",
-    name: "Sarah Mwangi",
-    phone: "+254723456789",
-    password: "buyer123",
-  },
-  officer: {
-    role: "officer",
-    name: "David Kimani",
-    phone: "+254734567890",
-    password: "officer123",
-  },
-  staff: {
-    role: "staff",
-    name: "Mary Wanjiku",
-    phone: "+254745678901",
-    password: "staff123",
-  },
-  aggregation_manager: {
-    role: "aggregation_manager",
-    name: "Peter Kariuki",
-    phone: "+254756789012",
-    password: "manager123",
-  },
-  input_provider: {
-    role: "input_provider",
-    name: "Grace Njeri",
-    phone: "+254767890123",
-    password: "input123",
-  },
-  transport_provider: {
-    role: "transport_provider",
-    name: "James Omondi",
-    phone: "+254778901234",
-    password: "transport123",
-  },
-};
 
 export function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const [copiedCredential, setCopiedCredential] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { setRole, setUserId } = useUserRole();
+  const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
-    // Normalize phone number (remove spaces, dashes, etc.)
-    const normalizedPhone = phone.replace(/\s+/g, "").replace(/-/g, "");
-
-    // Check against mock credentials
-    const credential = Object.values(MOCK_CREDENTIALS).find(
-      (cred) => cred.phone === normalizedPhone || cred.phone.replace(/\s+/g, "") === normalizedPhone
-    );
-
-    if (credential && credential.password === password) {
-      // Set user role and navigate to dashboard
-      setRole(credential.role);
-      setUserId(`mock-${credential.role}-${Date.now()}`);
+    try {
+      const result = await login(phone, password);
       
-      // Navigate to dashboard (which will redirect to role-specific dashboard)
-      navigate("/dashboard");
-    } else {
-      setError("Invalid phone number or password. Please check the mock credentials below.");
+      if (result.success) {
+        // Navigate to dashboard (which will redirect to role-specific dashboard)
+        navigate("/dashboard");
+      } else {
+        setError(result.error || "Invalid phone number or password. Please check the mock credentials below.");
+      }
+    } catch (err) {
+      setError("An error occurred during login. Please try again.");
+      console.error("Login error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -153,8 +105,8 @@ export function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <Button type="submit" className="w-full">
-                  Sign In
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
               </FieldGroup>
             </form>

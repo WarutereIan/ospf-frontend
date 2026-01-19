@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { useUserRole } from "@/contexts/UserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function DashboardPage() {
-  const { role } = useUserRole();
+  const { role } = useAuth();
 
   // Redirect to role-specific dashboard
   switch (role) {

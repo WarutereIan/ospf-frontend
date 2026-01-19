@@ -21,7 +21,7 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-import { useUserRole } from "@/contexts/UserRoleContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   id: string;
@@ -71,7 +71,7 @@ export function NegotiationDialog({
   const [offerPrice, setOfferPrice] = useState(currentPrice.toString());
   const [offerQuantity, setOfferQuantity] = useState("1");
   const [isSending, setIsSending] = useState(false);
-  const { role } = useUserRole();
+  const { role } = useAuth();
 
   // Load messages - TODO: Replace with API call
   useEffect(() => {

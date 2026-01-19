@@ -68,7 +68,8 @@ export function Reports() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium w-32 flex-shrink-0">Report Type</label>
-              <Select value={reportType} onValueChange={setReportType} className="flex-1">
+              <div className="flex-1">
+                <Select value={reportType} onValueChange={setReportType}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -79,12 +80,14 @@ export function Reports() {
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium w-32 flex-shrink-0">Date Range</label>
-              <Select value={dateRange} onValueChange={setDateRange} className="flex-1">
+              <div className="flex-1">
+                <Select value={dateRange} onValueChange={setDateRange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -95,7 +98,8 @@ export function Reports() {
                   <SelectItem value="year">Last Year</SelectItem>
                   <SelectItem value="custom">Custom Range</SelectItem>
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
           </div>
 
@@ -115,7 +119,8 @@ export function Reports() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium w-32 flex-shrink-0">Sub-County Filter</label>
-              <Select value={subCountyFilter} onValueChange={setSubCountyFilter} className="flex-1">
+              <div className="flex-1">
+                <Select value={subCountyFilter} onValueChange={setSubCountyFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -126,12 +131,14 @@ export function Reports() {
                   <SelectItem value="masinga">Masinga</SelectItem>
                   <SelectItem value="yatta">Yatta</SelectItem>
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium w-32 flex-shrink-0">Farmer Group Filter</label>
-              <Select value={farmerGroupFilter} onValueChange={setFarmerGroupFilter} className="flex-1">
+              <div className="flex-1">
+                <Select value={farmerGroupFilter} onValueChange={setFarmerGroupFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -140,14 +147,16 @@ export function Reports() {
                   <SelectItem value="group1">Group 1</SelectItem>
                   <SelectItem value="group2">Group 2</SelectItem>
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-4">
               <label className="text-sm font-medium w-32 flex-shrink-0">Buyer Type Filter</label>
-              <Select value={buyerTypeFilter} onValueChange={setBuyerTypeFilter} className="flex-1">
+              <div className="flex-1">
+                <Select value={buyerTypeFilter} onValueChange={setBuyerTypeFilter}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -157,7 +166,8 @@ export function Reports() {
                   <SelectItem value="wholesaler">Wholesaler</SelectItem>
                   <SelectItem value="processor">Processor</SelectItem>
                 </SelectContent>
-              </Select>
+                </Select>
+              </div>
             </div>
 
             <div className="flex items-center gap-4">

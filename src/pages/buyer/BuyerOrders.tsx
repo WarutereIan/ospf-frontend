@@ -13,11 +13,13 @@ import {
   IconSearch,
   IconEye,
   IconStar,
+  IconQrcode,
 } from "@tabler/icons-react";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { PaymentDialog } from "@/components/payments/PaymentDialog";
 import { RateFarmer } from "./RateFarmer";
 import { useNavigate } from "react-router-dom";
+import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
 
 interface BuyerOrder {
   id: string;
@@ -46,6 +48,8 @@ interface BuyerOrder {
   paymentAmount?: number;
   photos?: string[];
   canRate: boolean;
+  batchId?: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
 }
 
 const sampleOrders: BuyerOrder[] = [
@@ -64,6 +68,8 @@ const sampleOrders: BuyerOrder[] = [
     paymentStatus: "ready_for_release",
     paymentAmount: 75000,
     canRate: false,
+    batchId: "BATCH-2023-001",
+    qrCode: "QR-BATCH-2023-001",
   },
   {
     id: "ORD-002",
@@ -80,6 +86,8 @@ const sampleOrders: BuyerOrder[] = [
     paymentStatus: "completed",
     paymentAmount: 36000,
     canRate: true,
+    batchId: "BATCH-2023-002",
+    qrCode: "QR-BATCH-2023-002",
   },
 ];
 
@@ -92,6 +100,8 @@ export function BuyerOrders() {
   const [selectedOrder, setSelectedOrder] = useState<BuyerOrder | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
 
   // Calculate order funnel data
   const orderFunnel = [
@@ -230,6 +240,20 @@ export function BuyerOrders() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {order.batchId && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBatchId(order.batchId);
+                              setTraceabilityDialogOpen(true);
+                            }}
+                            title="View Batch History"
+                          >
+                            <IconQrcode className="h-4 w-4" />
+                          </Button>
+                        )}
                         {order.canRate && (
                           <Button
                             size="sm"
@@ -298,6 +322,13 @@ export function BuyerOrders() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Batch Traceability Dialog */}
+      <BatchTraceabilityDialog
+        open={traceabilityDialogOpen}
+        onOpenChange={setTraceabilityDialogOpen}
+        batchId={selectedBatchId}
+      />
     </div>
   );
 }

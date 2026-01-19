@@ -118,7 +118,7 @@ export function AvailableVolumesDashboard({
           <div className="mb-4">
             <Select value={selectedLocation} onValueChange={onLocationChange}>
               <SelectTrigger className="w-full md:w-[250px]">
-                <SelectValue placeholder="Select location" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Locations</SelectItem>

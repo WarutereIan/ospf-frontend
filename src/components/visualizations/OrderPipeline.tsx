@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Steps } from "antd";
 import type { StepsProps } from "antd";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 interface PipelineStage {
   name: string;

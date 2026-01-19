@@ -79,7 +79,7 @@ export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) 
                   onValueChange={(value) => setFormData({ ...formData, variety: value || "" })}
                 >
                   <SelectTrigger id="variety">
-                    <SelectValue placeholder="Select variety" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {ofspVarieties.map((variety) => (
@@ -98,7 +98,7 @@ export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) 
                   onValueChange={(value) => setFormData({ ...formData, qualityGrade: value || "" })}
                 >
                   <SelectTrigger id="qualityGrade">
-                    <SelectValue placeholder="Select grade" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {qualityGrades.map((grade) => (
@@ -131,7 +131,7 @@ export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) 
                 onValueChange={(value) => setFormData({ ...formData, deliveryLocation: value || "" })}
               >
                 <SelectTrigger id="deliveryLocation">
-                  <SelectValue placeholder="Select aggregation centre" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="kangundo-main">Kangundo Main Aggregation Center</SelectItem>

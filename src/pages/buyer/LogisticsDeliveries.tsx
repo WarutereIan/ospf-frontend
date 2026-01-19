@@ -118,6 +118,11 @@ export function LogisticsDeliveries() {
           weight: 500,
           productType: "Fresh Root",
           arrivalDate: "Yesterday",
+          timeline: [
+            { stage: "Dispatched", location: "Kathiani", timestamp: "08:00 AM", status: "completed" },
+            { stage: "In Transit", location: "Masinga", timestamp: "11:30 AM", status: "completed" },
+            { stage: "Delivered", location: "Kangundo", timestamp: "Yesterday", status: "completed" },
+          ],
         },
         {
           id: "3",
@@ -128,6 +133,11 @@ export function LogisticsDeliveries() {
           weight: 2100,
           productType: "Fresh Root",
           qualityCheckStatus: "In Progress",
+          timeline: [
+            { stage: "Dispatched", location: "Yatta", timestamp: "09:00 AM", status: "completed" },
+            { stage: "In Transit", location: "Masinga", timestamp: "12:00 PM", status: "completed" },
+            { stage: "Quality Check", location: "Kathiani", timestamp: "Current", status: "current" },
+          ],
         },
         {
           id: "4",

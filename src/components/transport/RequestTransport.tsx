@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { IconTruck, IconCalendar, IconMapPin, IconWeight } from "@tabler/icons-react";
-import { aggregationCenters } from "@/data/aggregationCenters";
+import { allAggregationCenters } from "@/data/aggregationCenters";
 
 interface RequestTransportProps {
   defaultType?: "produce_pickup" | "produce_delivery" | "input_delivery";
@@ -53,11 +53,11 @@ export default function RequestTransport({
   ];
 
   // Combine aggregation centers with common market locations
-  const centerLocations = aggregationCenters.map((center) => ({
-    value: center.name,
-    label: center.name,
-    type: center.centerType,
-    location: center.centerType === "main" 
+  const centerLocations = allAggregationCenters.map((center) => ({
+    value: center.value,
+    label: center.label,
+    type: center.type,
+    location: center.type === "main" 
       ? `${center.subCounty} Subcounty`
       : `${center.ward} Ward, ${center.subCounty}`,
   }));
