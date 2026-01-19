@@ -444,68 +444,7 @@ export function ProduceManagement() {
         </Card>
       </div>
 
-      {/* Active Listings with Stock Progress */}
-      {listings.filter((l) => l.status === "active").length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Listings</CardTitle>
-            <CardDescription>Your currently active produce listings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {listings
-                .filter((l) => l.status === "active")
-                .map((listing) => {
-                  // Calculate remaining stock (assuming some has been sold/ordered)
-                  const initialQuantity = listing.quantity;
-                  const remainingQuantity = initialQuantity * 0.8; // Mock: 80% remaining
-                  const remainingPercent = (remainingQuantity / initialQuantity) * 100;
-                  const daysAgo = Math.floor(
-                    (Date.now() - new Date(listing.createdAt).getTime()) / (1000 * 60 * 60 * 24)
-                  );
-
-                  return (
-                    <div
-                      key={listing.id}
-                      className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
-                        <IconPackage className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">
-                              {getVarietyName(listing.variety)}, Grade {listing.qualityGrade}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {listing.quantity} kg @ KES {listing.pricePerKg}/kg
-                            </p>
-                          </div>
-                          <Badge variant="outline" className={getGradeColor(listing.qualityGrade)}>
-                            Grade {listing.qualityGrade}
-                          </Badge>
-                        </div>
-                        <div className="space-y-1">
-                          <ProgressBar
-                            value={remainingPercent}
-                            maxValue={100}
-                            color="success"
-                            size="md"
-                            showValue={false}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {remainingPercent.toFixed(0)}% remaining • Listed {daysAgo} days ago
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+   
 
       {/* Filters */}
       <Card>

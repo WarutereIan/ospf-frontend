@@ -1,5 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, Menu, MenuItem, useProSidebar } from "react-pro-sidebar";
+import { useEffect, useState } from "react";
+import { useSidebarContext } from "@/contexts/SidebarContext";
 import {
   IconShoppingBag,
   IconChartBar,
@@ -68,10 +70,14 @@ const officerMenuItems: MenuItem[] = [
 // Staff menu items
 const staffMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/staff", icon: IconChartBar },
-  { name: "Users", path: "/dashboard/users", icon: IconUsers },
-  { name: "Analytics", path: "/dashboard/analytics", icon: IconChartBar },
-  { name: "Reports", path: "/dashboard/reports", icon: IconFileText },
-  { name: "Settings", path: "/dashboard/settings", icon: IconSettings },
+  { name: "Partners", path: "/dashboard/staff/partners", icon: IconUsers },
+  { name: "Users", path: "/dashboard/staff/users", icon: IconUsers },
+  { name: "Activity Logs", path: "/dashboard/staff/activity-logs", icon: IconFileText },
+  { name: "Data Quality", path: "/dashboard/staff/data-quality", icon: IconClipboardCheck },
+  { name: "Transaction Evidence", path: "/dashboard/staff/transaction-evidence", icon: IconFileText },
+  { name: "Analytics", path: "/dashboard/staff/analytics", icon: IconChartBar },
+  { name: "Reports", path: "/dashboard/staff/reports", icon: IconFileText },
+  
 ];
 
 // Aggregation Manager menu items
@@ -132,12 +138,45 @@ export function RoleBasedSidebar() {
   const navigate = useNavigate();
   const { collapsed, collapseSidebar } = useProSidebar();
   const { role } = useAuth();
+  const { toggled, setToggled } = useSidebarContext();
+  const [isMobile, setIsMobile] = useState(false);
 
   const menuItems = getMenuItemsForRole(role);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setToggled(false);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, [setToggled]);
+
+  // Close sidebar on mobile when route changes
+  useEffect(() => {
+    if (isMobile && toggled) {
+      setToggled(false);
+    }
+  }, [isMobile, location.pathname, toggled, setToggled]);
+
+  // Close sidebar on mobile when menu item is clicked
+  const handleMenuItemClick = (path: string) => {
+    navigate(path);
+    if (isMobile) {
+      setToggled(false);
+    }
+  };
 
   return (
     <Sidebar
       collapsed={collapsed}
+      toggled={toggled}
+      onBackdropClick={() => setToggled(false)}
       breakPoint="md"
       width="250px"
       collapsedWidth="80px"
@@ -151,22 +190,29 @@ export function RoleBasedSidebar() {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border h-16">
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border h-14 sm:h-16">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">O</span>
+            <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+              <span className="text-primary-foreground font-bold text-base sm:text-lg">O</span>
             </div>
-            <span className="font-semibold text-lg text-foreground">OFSP</span>
+            <span className="font-semibold text-base sm:text-lg text-foreground">OFSP</span>
           </div>
         )}
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => collapseSidebar(!collapsed)}
-          className={cn("ml-auto", collapsed && "mx-auto")}
+          onClick={() => {
+            if (isMobile) {
+              setToggled(false);
+            } else {
+              collapseSidebar(!collapsed);
+            }
+          }}
+          className={cn("ml-auto h-9 w-9 sm:h-10 sm:w-10", collapsed && "mx-auto")}
+          aria-label="Toggle sidebar"
         >
-          <IconMenu2 className="h-5 w-5" />
+          <IconMenu2 className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
       </div>
 
@@ -183,7 +229,7 @@ export function RoleBasedSidebar() {
                   ? "hsl(var(--primary-foreground))"
                   : "hsl(var(--muted-foreground))",
                 borderRadius: "0.5rem",
-                padding: "0.75rem 1rem",
+                padding: "0.625rem 0.75rem sm:0.75rem sm:1rem",
                 marginBottom: "0.25rem",
                 fontSize: "0.875rem",
                 fontWeight: 500,
@@ -209,8 +255,8 @@ export function RoleBasedSidebar() {
               <MenuItem
                 key={item.name}
                 active={isActive}
-                icon={<Icon className="h-5 w-5" />}
-                onClick={() => navigate(item.path)}
+                icon={<Icon className="h-4 w-4 sm:h-5 sm:w-5" />}
+                onClick={() => handleMenuItemClick(item.path)}
               >
                 {item.name}
               </MenuItem>
@@ -220,9 +266,9 @@ export function RoleBasedSidebar() {
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border">
+      <div className="p-3 sm:p-4 border-t border-border">
         <div className="text-xs text-muted-foreground text-center">
-          {!collapsed && <p>OFSP Marketplace v1.0</p>}
+          {!collapsed && <p className="text-xs">OFSP Marketplace v1.0</p>}
         </div>
       </div>
     </Sidebar>

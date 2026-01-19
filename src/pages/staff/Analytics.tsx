@@ -13,6 +13,7 @@ import {
   IconDownload,
   IconCalendar,
 } from "@tabler/icons-react";
+import { LineChart } from "@/components/visualizations";
 
 interface AnalyticsData {
   period: string;
@@ -32,6 +33,9 @@ interface AnalyticsData {
     date: string;
     orders: number;
     revenue: number;
+    users?: number;
+    farmers?: number;
+    buyers?: number;
   }[];
 }
 
@@ -58,11 +62,11 @@ export function Analytics() {
           revenue: 30,
         },
         trends: [
-          { date: "2024-01-01", orders: 10, revenue: 50000 },
-          { date: "2024-01-08", orders: 25, revenue: 125000 },
-          { date: "2024-01-15", orders: 40, revenue: 200000 },
-          { date: "2024-01-22", orders: 55, revenue: 275000 },
-          { date: "2024-01-29", orders: 70, revenue: 350000 },
+          { date: "2024-01-01", orders: 10, revenue: 50000, users: 120, farmers: 90, buyers: 30 },
+          { date: "2024-01-08", orders: 25, revenue: 125000, users: 135, farmers: 100, buyers: 35 },
+          { date: "2024-01-15", orders: 40, revenue: 200000, users: 150, farmers: 110, buyers: 40 },
+          { date: "2024-01-22", orders: 55, revenue: 275000, users: 170, farmers: 125, buyers: 45 },
+          { date: "2024-01-29", orders: 70, revenue: 350000, users: 200, farmers: 150, buyers: 50 },
         ],
       });
       setIsLoading(false);
@@ -228,7 +232,7 @@ export function Analytics() {
         </Card>
       </div>
 
-      {/* Trends Chart Placeholder */}
+      {/* Trends Chart */}
       <Card>
         <CardHeader>
           <CardTitle>Trends Over Time</CardTitle>
@@ -237,14 +241,58 @@ export function Analytics() {
         <CardContent>
           {isLoading ? (
             <div className="h-64 bg-muted animate-pulse rounded-lg" />
+          ) : data && data.trends.length > 0 ? (
+            <div className="space-y-6">
+              {/* Orders and Revenue Chart */}
+              <div>
+                <h3 className="text-sm font-medium mb-4">Orders & Revenue</h3>
+                <LineChart
+                  data={data.trends.map((trend) => ({
+                    name: new Date(trend.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                    orders: trend.orders,
+                    revenue: Math.round(trend.revenue / 1000), // Convert to thousands for readability
+                    revenueActual: trend.revenue, // Keep actual value for tooltip
+                  }))}
+                  lines={[
+                    { dataKey: "orders", name: "Orders", color: "#3B82F6", strokeWidth: 2 },
+                    { dataKey: "revenue", name: "Revenue (K KES)", color: "#22C55E", strokeWidth: 2 },
+                  ]}
+                  height={300}
+                  showGrid={true}
+                  showLegend={true}
+                  formatter={(value: number) => value.toLocaleString()}
+                />
+              </div>
+
+              {/* User Growth Chart */}
+              {data.trends[0].users !== undefined && (
+                <div>
+                  <h3 className="text-sm font-medium mb-4">User Growth</h3>
+                  <LineChart
+                    data={data.trends.map((trend) => ({
+                      name: new Date(trend.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                      totalUsers: trend.users || 0,
+                      farmers: trend.farmers || 0,
+                      buyers: trend.buyers || 0,
+                    }))}
+                    lines={[
+                      { dataKey: "totalUsers", name: "Total Users", color: "#8B5CF6", strokeWidth: 2 },
+                      { dataKey: "farmers", name: "Farmers", color: "#F59E0B", strokeWidth: 2 },
+                      { dataKey: "buyers", name: "Buyers", color: "#EF4444", strokeWidth: 2 },
+                    ]}
+                    height={300}
+                    showGrid={true}
+                    showLegend={true}
+                    formatter={(value: number) => value.toLocaleString()}
+                  />
+                </div>
+              )}
+            </div>
           ) : (
             <div className="h-64 flex items-center justify-center border-2 border-dashed rounded-lg">
               <div className="text-center">
                 <IconChartBar className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-                <p className="text-muted-foreground">Chart visualization would go here</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Integration with charting library (e.g., Recharts, Chart.js)
-                </p>
+                <p className="text-muted-foreground">No trend data available</p>
               </div>
             </div>
           )}

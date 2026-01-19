@@ -196,7 +196,9 @@ export function ReceiveFromWard() {
                   <Label>Ward Center *</Label>
                   <Select value={formData.fromCenterId} onValueChange={handleCenterChange}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select ward center" />
+                      <SelectValue>
+                        {formData.fromCenterId ? "" : "Select ward center"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {satelliteCenters.map((center) => (
@@ -270,7 +272,9 @@ export function ReceiveFromWard() {
                   <Label htmlFor="variety">Variety *</Label>
                   <Select value={formData.variety} onValueChange={(value) => setFormData({ ...formData, variety: value })}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select variety" />
+                      <SelectValue>
+                        {formData.variety ? "" : "Select variety"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {ofspVarieties.map((variety) => (

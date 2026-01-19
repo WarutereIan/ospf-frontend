@@ -28,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { IconEdit, IconTrash, IconPlus, IconSeeding } from "@tabler/icons-react";
+import { IconEdit, IconTrash, IconPlus, IconSeeding, IconPhoto, IconX, IconLoader2 } from "@tabler/icons-react";
 
 interface Input {
   id: string;
@@ -91,7 +91,10 @@ export default function InputManagement() {
     unit: "",
     stock: "",
     minStock: "",
+    image: "",
   });
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const categories = [
     "Planting Material",
@@ -114,7 +117,9 @@ export default function InputManagement() {
       unit: "",
       stock: "",
       minStock: "",
+      image: "",
     });
+    setImagePreview(null);
     setDialogOpen(true);
   };
 
@@ -128,8 +133,48 @@ export default function InputManagement() {
       unit: input.unit,
       stock: input.stock.toString(),
       minStock: input.minStock.toString(),
+      image: input.image || "",
     });
+    setImagePreview(input.image || null);
     setDialogOpen(true);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file");
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Image size should be less than 10MB");
+      return;
+    }
+
+    setUploadingPhoto(true);
+
+    // Create preview using FileReader
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setImagePreview(result);
+      setFormData({ ...formData, image: result });
+      setUploadingPhoto(false);
+    };
+    reader.onerror = () => {
+      alert("Error reading image file");
+      setUploadingPhoto(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    setImagePreview(null);
+    setFormData({ ...formData, image: "" });
   };
 
   const handleSaveInput = () => {
@@ -148,6 +193,7 @@ export default function InputManagement() {
           : parseInt(formData.stock) < parseInt(formData.minStock)
           ? "low_stock"
           : "available",
+      image: formData.image || undefined,
     };
 
     if (editingInput) {
@@ -157,6 +203,7 @@ export default function InputManagement() {
     }
 
     setDialogOpen(false);
+    setImagePreview(null);
   };
 
   const handleDeleteInput = (id: string) => {
@@ -314,6 +361,55 @@ export default function InputManagement() {
                 />
               </div>
 
+              {/* Photo Upload */}
+              <div className="space-y-2">
+                <Label>Input Photo</Label>
+                <div className="space-y-4">
+                  {imagePreview ? (
+                    <div className="relative border rounded-lg p-4">
+                      <img
+                        src={imagePreview}
+                        alt="Input preview"
+                        className="w-full h-48 object-contain rounded-lg bg-muted"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemovePhoto}
+                        className="absolute top-2 right-2 bg-background/80 hover:bg-background"
+                      >
+                        <IconX className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                      <input
+                        type="file"
+                        id="photo-upload"
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="photo-upload"
+                        className="cursor-pointer flex flex-col items-center gap-2"
+                      >
+                        <IconPhoto className="h-8 w-8 text-muted-foreground" />
+                        <span className="text-sm font-medium">Click to upload photo</span>
+                        <span className="text-xs text-muted-foreground">PNG, JPG up to 10MB</span>
+                      </label>
+                    </div>
+                  )}
+                  {uploadingPhoto && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
+                      Uploading photo...
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 mt-6">
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
@@ -339,6 +435,7 @@ export default function InputManagement() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Photo</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Price</TableHead>
@@ -351,8 +448,20 @@ export default function InputManagement() {
               {inputs.map((input) => (
                 <TableRow key={input.id}>
                   <TableCell>
+                    {input.image ? (
+                      <img
+                        src={input.image}
+                        alt={input.name}
+                        className="w-12 h-12 object-cover rounded-md"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center">
+                        <IconSeeding className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <IconSeeding className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="font-medium">{input.name}</div>
                         <div className="text-sm text-muted-foreground line-clamp-1">

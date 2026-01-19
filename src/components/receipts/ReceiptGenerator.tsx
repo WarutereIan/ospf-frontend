@@ -60,12 +60,8 @@ export function ReceiptGenerator({
 
   // Print functionality using react-to-print
   const printReceipt = useReactToPrint({
-    content: () => receiptRef.current,
+    contentRef: receiptRef,
     documentTitle: `Receipt_${receiptData.receiptId}`,
-    onBeforeGetContent: () => {
-      // Ensure QR code is rendered before printing
-      return Promise.resolve();
-    },
   });
 
   const handleDownloadPNG = async () => {

@@ -209,51 +209,65 @@ export function PeerLeaderboard() {
         </div>
       </div>
 
-      {/* Your Position - Distribution Bar */}
-      <PositionMarker
-        percentile={positionFromLeft}
-        label={`You are here (Top ${topPercent.toFixed(0)}%)`}
-        title="Your Position"
-        description="Your ranking in the farmer distribution"
-      />
-
-      {/* Top Performers - Horizontal Bar Chart */}
-      <HorizontalBarChart
-        data={topPerformers}
-        title="Top Performers"
-        description="Ranked by total sales volume"
-        color="#22C55E"
-        height={400}
-        sorted={true}
-        formatter={(value) => `${value} kg`}
-      />
-
-      {/* Category Rankings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Category Rankings</CardTitle>
-          <CardDescription>Your performance across different metrics</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {Object.entries(categoryRankings).map(([key, ranking]) => (
-              <div key={key} className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium">{ranking.label}</span>
-                  <span className="text-muted-foreground">Top {ranking.percentile}%</span>
-                </div>
-                <ProgressBar
-                  value={ranking.percentile}
-                  maxValue={100}
-                  color="success"
-                  size="mini"
-                  showValue={false}
-                />
+    
+{/* Performance Insights */}
+<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <IconTrophy className="h-4 w-4 text-primary" />
+              Your Ranking
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">#12</div>
+            <p className="text-xs text-muted-foreground mt-1">Out of 150 farmers</p>
+            <div className="mt-4">
+              <div className="flex justify-between text-xs mb-1">
+                <span>Top 10%</span>
+                <span>You are here</span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="w-full bg-muted rounded-full h-2">
+                <div className="bg-primary h-2 rounded-full" style={{ width: "8%" }}></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <IconTrendingUp className="h-4 w-4 text-primary" />
+              Growth Potential
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">+25%</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              To reach top 10 (KES 600,000)
+            </p>
+            <p className="text-xs text-muted-foreground mt-2">
+              You need KES {375000} more revenue
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <IconUsers className="h-4 w-4 text-primary" />
+              Sub-County Rank
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold">#3</div>
+            <p className="text-xs text-muted-foreground mt-1">In Kangundo</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              Out of 45 farmers in your sub-county
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Filters */}
       <Card>
@@ -342,64 +356,7 @@ export function PeerLeaderboard() {
         </CardContent>
       </Card>
 
-      {/* Performance Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <IconTrophy className="h-4 w-4 text-primary" />
-              Your Ranking
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">#12</div>
-            <p className="text-xs text-muted-foreground mt-1">Out of 150 farmers</p>
-            <div className="mt-4">
-              <div className="flex justify-between text-xs mb-1">
-                <span>Top 10%</span>
-                <span>You are here</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div className="bg-primary h-2 rounded-full" style={{ width: "8%" }}></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <IconTrendingUp className="h-4 w-4 text-primary" />
-              Growth Potential
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">+25%</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              To reach top 10 (KES 600,000)
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              You need KES {375000} more revenue
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <IconUsers className="h-4 w-4 text-primary" />
-              Sub-County Rank
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">#3</div>
-            <p className="text-xs text-muted-foreground mt-1">In Kangundo</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Out of 45 farmers in your sub-county
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      
 
       {/* Achievement Badges */}
       <Card>

@@ -394,7 +394,9 @@ export function BuyerDemandMatching() {
                               onValueChange={(value) => handleMatch(demand.id, value)}
                             >
                               <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select matching stock batch" />
+                                <SelectValue>
+                                  Select matching stock batch
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {matchingStock.map((stock) => (

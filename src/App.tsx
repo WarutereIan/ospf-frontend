@@ -42,11 +42,22 @@ import { CollectionReceiving } from "@/pages/buyer/CollectionReceiving";
 import { LogisticsDeliveries } from "@/pages/buyer/LogisticsDeliveries";
 import { SourcingRequests } from "@/pages/buyer/SourcingRequests";
 import InputManagement from "@/pages/inputs/InputManagement";
+import InputOrders from "@/pages/inputs/InputOrders";
+import InputCustomers from "@/pages/inputs/InputCustomers";
+import InputCustomerDetails from "@/pages/inputs/InputCustomerDetails";
 import InputMarketplace from "@/pages/marketplace/InputMarketplace";
 import TransportRequests from "@/pages/transport/TransportRequests";
 import Collection from "@/pages/transport/Collection";
 import ActiveDeliveries from "@/pages/transport/ActiveDeliveries";
 import CompletedDeliveries from "@/pages/transport/CompletedDeliveries";
+import { Users } from "@/pages/staff/Users";
+import { Analytics } from "@/pages/staff/Analytics";
+import { Partners } from "@/pages/staff/Partners";
+import { ActivityLogs } from "@/pages/staff/ActivityLogs";
+import { DataQuality } from "@/pages/staff/DataQuality";
+import { TransactionEvidence } from "@/pages/staff/TransactionEvidence";
+import { StaffReports } from "@/pages/staff/Reports";
+import { Settings } from "@/pages/staff/Settings";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
@@ -115,6 +126,16 @@ export function App() {
             <Route path="/dashboard/county-officer/centers" element={<Centers />} />
             <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
             
+            {/* Staff Routes */}
+            <Route path="/dashboard/staff/users" element={<Users />} />
+            <Route path="/dashboard/staff/analytics" element={<Analytics />} />
+            <Route path="/dashboard/staff/settings" element={<Settings />} />
+            <Route path="/dashboard/staff/partners" element={<Partners />} />
+            <Route path="/dashboard/staff/activity-logs" element={<ActivityLogs />} />
+            <Route path="/dashboard/staff/data-quality" element={<DataQuality />} />
+            <Route path="/dashboard/staff/transaction-evidence" element={<TransactionEvidence />} />
+            <Route path="/dashboard/staff/reports" element={<StaffReports />} />
+            
             {/* Buyer Additional Routes */}
             <Route path="/dashboard/buyer/recurring-orders" element={<SourcingRequests />} />
             <Route path="/dashboard/buyer/sourcing-requests" element={<SourcingRequests />} />
@@ -125,8 +146,9 @@ export function App() {
             {/* Input Provider Routes */}
             <Route path="/dashboard/inputs" element={<InputManagement />} />
             <Route path="/dashboard/input-inventory" element={<InputManagement />} />
-            <Route path="/dashboard/input-orders" element={<FarmerOrders />} /> {/* Reusing FarmerOrders for now */}
-            <Route path="/dashboard/customers" element={<PeerLeaderboard />} /> {/* Placeholder */}
+            <Route path="/dashboard/input-orders" element={<InputOrders />} />
+            <Route path="/dashboard/customers" element={<InputCustomers />} />
+            <Route path="/dashboard/customers/:id" element={<InputCustomerDetails />} />
             
             {/* Input Marketplace for Farmers */}
             <Route path="/marketplace/inputs" element={<InputMarketplace />} />

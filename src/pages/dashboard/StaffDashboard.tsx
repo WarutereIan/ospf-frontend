@@ -9,6 +9,11 @@ import {
   IconFileText,
   IconDatabase,
   IconShield,
+  IconBuilding,
+  IconTrendingUp,
+  IconCheck,
+  IconAlertTriangle,
+  IconReceipt,
 } from "@tabler/icons-react";
 import {
   StatCard,
@@ -186,17 +191,23 @@ export function StaffDashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Project Staff Dashboard (M&E)</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Monitoring and evaluation of program indicators and outcomes
+            Coordinate partners, monitor performance against targets, ensure data quality and accountability
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link to="/dashboard/reports">
+        <div className="flex flex-wrap gap-2">
+          <Link to="/dashboard/staff/partners">
+            <Button size="sm" variant="outline">
+              <IconUsers className="mr-2 h-4 w-4" />
+              Partners
+            </Button>
+          </Link>
+          <Link to="/dashboard/staff/reports">
             <Button size="sm" variant="outline">
               <IconFileText className="mr-2 h-4 w-4" />
               Reports
             </Button>
           </Link>
-          <Link to="/dashboard/settings">
+          <Link to="/dashboard/staff/settings">
             <Button size="sm">
               <IconSettings className="mr-2 h-4 w-4" />
               Settings
@@ -205,11 +216,81 @@ export function StaffDashboard() {
         </div>
       </div>
 
+      {/* Quick Access Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link to="/dashboard/staff/partners">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Partners</p>
+                  <p className="text-2xl font-bold">4</p>
+                  <p className="text-xs text-muted-foreground mt-1">Active stakeholders</p>
+                </div>
+                <IconBuilding className="h-8 w-8 text-blue-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/dashboard/staff/activity-logs">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Activity Logs</p>
+                  <p className="text-2xl font-bold">234</p>
+                  <p className="text-xs text-muted-foreground mt-1">Today's activities</p>
+                </div>
+                <IconDatabase className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/dashboard/staff/data-quality">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Data Quality</p>
+                  <p className="text-2xl font-bold">94%</p>
+                  <p className="text-xs text-muted-foreground mt-1">Overall score</p>
+                </div>
+                <IconCheck className="h-8 w-8 text-green-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/dashboard/staff/transaction-evidence">
+          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Transactions</p>
+                  <p className="text-2xl font-bold">1,234</p>
+                  <p className="text-xs text-muted-foreground mt-1">With evidence</p>
+                </div>
+                <IconReceipt className="h-8 w-8 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
       {/* Program Indicators */}
       <Card>
         <CardHeader>
-          <CardTitle>Program Indicators</CardTitle>
-          <CardDescription>Progress towards program targets</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Performance Tracking Against Targets</CardTitle>
+              <CardDescription>Monitor progress towards program targets and indicators</CardDescription>
+            </div>
+            <Link to="/dashboard/staff/reports">
+              <Button variant="outline" size="sm">
+                <IconFileText className="mr-2 h-4 w-4" />
+                View Full Report
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -240,8 +321,17 @@ export function StaffDashboard() {
                       size="lg"
                       showValue={false}
                     />
-                    <div className="text-xs text-muted-foreground text-right">
-                      {percentage.toFixed(0)}% of target
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {percentage >= 100 ? (
+                          <span className="text-green-600 font-medium">Target Achieved ✓</span>
+                        ) : percentage >= 75 ? (
+                          <span className="text-yellow-600 font-medium">On Track</span>
+                        ) : (
+                          <span className="text-red-600 font-medium">Below Target</span>
+                        )}
+                      </span>
+                      <span className="text-muted-foreground">{percentage.toFixed(0)}% of target</span>
                     </div>
                   </div>
                 );

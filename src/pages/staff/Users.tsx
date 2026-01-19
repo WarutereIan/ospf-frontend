@@ -22,8 +22,18 @@ import {
   IconShield,
   IconMail,
   IconPhone,
+  IconKey,
+  IconCheck,
+  IconX,
 } from "@tabler/icons-react";
 import type { UserRole } from "@/contexts/AuthContext";
+
+interface Permission {
+  id: string;
+  name: string;
+  description: string;
+  category: "read" | "write" | "delete" | "admin";
+}
 
 interface User {
   id: string;
@@ -34,6 +44,7 @@ interface User {
   status: "active" | "inactive" | "suspended";
   createdAt: string;
   lastLogin?: string;
+  permissions?: string[];
 }
 
 export function Users() {
@@ -41,6 +52,8 @@ export function Users() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
@@ -48,6 +61,19 @@ export function Users() {
     phone: "",
     role: "farmer" as UserRole,
   });
+
+  const availablePermissions: Permission[] = [
+    { id: "users.read", name: "View Users", description: "View user list and details", category: "read" },
+    { id: "users.write", name: "Manage Users", description: "Create, edit, and delete users", category: "write" },
+    { id: "reports.read", name: "View Reports", description: "Access and view reports", category: "read" },
+    { id: "reports.export", name: "Export Reports", description: "Download and export reports", category: "write" },
+    { id: "transactions.view", name: "View Transactions", description: "View transaction details", category: "read" },
+    { id: "transactions.manage", name: "Manage Transactions", description: "Edit and manage transactions", category: "write" },
+    { id: "analytics.view", name: "View Analytics", description: "Access analytics dashboard", category: "read" },
+    { id: "settings.manage", name: "Manage Settings", description: "Modify system settings", category: "admin" },
+    { id: "roles.manage", name: "Manage Roles", description: "Assign and modify user roles", category: "admin" },
+    { id: "data.export", name: "Export Data", description: "Export system data", category: "write" },
+  ];
 
   useEffect(() => {
     // TODO: Replace with actual API calls
@@ -62,6 +88,7 @@ export function Users() {
           status: "active",
           createdAt: "2023-06-01",
           lastLogin: "2024-01-15",
+          permissions: ["transactions.view"],
         },
         {
           id: "U002",
@@ -91,6 +118,16 @@ export function Users() {
           status: "active",
           createdAt: "2023-04-20",
           lastLogin: "2024-01-15",
+          permissions: [
+            "users.read",
+            "users.write",
+            "reports.read",
+            "reports.export",
+            "analytics.view",
+            "settings.manage",
+            "roles.manage",
+            "data.export",
+          ],
         },
       ]);
       setIsLoading(false);
@@ -130,6 +167,17 @@ export function Users() {
   const handleDeactivate = (userId: string) => {
     // TODO: Implement deactivation
     setUsers(users.map((u) => (u.id === userId ? { ...u, status: "inactive" } : u)));
+  };
+
+  const handleManagePermissions = (user: User) => {
+    setSelectedUser(user);
+    setIsPermissionsDialogOpen(true);
+  };
+
+  const handleSavePermissions = (userId: string, permissions: string[]) => {
+    setUsers(users.map((u) => (u.id === userId ? { ...u, permissions } : u)));
+    setIsPermissionsDialogOpen(false);
+    setSelectedUser(null);
   };
 
   const getRoleBadgeColor = (role: UserRole) => {
@@ -264,6 +312,14 @@ export function Users() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleManagePermissions(user)}
+                          title="Manage Permissions"
+                        >
+                          <IconKey className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleResetPassword(user.id)}
                           title="Reset Password"
                         >
@@ -351,6 +407,89 @@ export function Users() {
             </Button>
             <Button onClick={handleCreateUser} disabled={!formData.name || !formData.phone}>
               Create User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Management Dialog */}
+      <Dialog open={isPermissionsDialogOpen} onOpenChange={setIsPermissionsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Permissions - {selectedUser?.name}</DialogTitle>
+            <DialogDescription>
+              Assign and manage permissions for {selectedUser?.role} role
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Current Role: {selectedUser.role}</p>
+                <p className="text-xs text-muted-foreground">
+                  Permissions can be customized beyond the default role permissions
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {["read", "write", "delete", "admin"].map((category) => {
+                  const categoryPermissions = availablePermissions.filter((p) => p.category === category);
+                  if (categoryPermissions.length === 0) return null;
+
+                  return (
+                    <div key={category} className="space-y-2">
+                      <h4 className="font-semibold text-sm capitalize">{category} Permissions</h4>
+                      <div className="space-y-2">
+                        {categoryPermissions.map((permission) => {
+                          const isGranted = selectedUser.permissions?.includes(permission.id) || false;
+                          return (
+                            <div
+                              key={permission.id}
+                              className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  {isGranted ? (
+                                    <IconCheck className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <IconX className="h-4 w-4 text-gray-400" />
+                                  )}
+                                  <div>
+                                    <p className="font-medium text-sm">{permission.name}</p>
+                                    <p className="text-xs text-muted-foreground">{permission.description}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                variant={isGranted ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                  const currentPerms = selectedUser.permissions || [];
+                                  const newPerms = isGranted
+                                    ? currentPerms.filter((p) => p !== permission.id)
+                                    : [...currentPerms, permission.id];
+                                  setSelectedUser({ ...selectedUser, permissions: newPerms });
+                                }}
+                              >
+                                {isGranted ? "Revoke" : "Grant"}
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPermissionsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedUser && handleSavePermissions(selectedUser.id, selectedUser.permissions || [])}
+            >
+              Save Permissions
             </Button>
           </DialogFooter>
         </DialogContent>
