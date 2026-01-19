@@ -63,7 +63,7 @@ interface ProduceListing {
   status: "active" | "sold" | "inactive";
   responseTime?: number; // minutes
   distance?: number; // km
-  batchId?: string; // Batch ID for traceability
+  batchId: string; // Batch ID for traceability (required)
   qrCode?: string; // QR code for traceability
 }
 
@@ -730,19 +730,17 @@ export function MarketplacePage() {
                           RFQ
                         </Button>
                       </div>
-                      {listing.batchId && (
-                        <Button
-                          variant="outline"
-                          className="w-full text-xs font-medium text-stone-600 hover:text-orange-600 hover:border-orange-500 border-stone-200 py-2"
-                          onClick={() => {
-                            setSelectedBatchId(listing.batchId);
-                            setTraceabilityDialogOpen(true);
-                          }}
-                        >
-                          <IconQrcode className="h-3.5 w-3.5 mr-2" />
-                          View Batch History
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        className="w-full text-xs font-medium text-stone-600 hover:text-orange-600 hover:border-orange-500 border-stone-200 py-2"
+                        onClick={() => {
+                          setSelectedBatchId(listing.batchId);
+                          setTraceabilityDialogOpen(true);
+                        }}
+                      >
+                        <IconQrcode className="h-3.5 w-3.5 mr-2" />
+                        View Batch History
+                      </Button>
                     </div>
                   )}
                   {role !== "buyer" && (

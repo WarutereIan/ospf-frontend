@@ -53,6 +53,8 @@ interface FarmerOrder {
   estimatedDeliveryDate?: string;
   actualDeliveryDate?: string;
   daysToDeliver?: number;
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
 }
 
 export function FarmerOrderDetails() {
@@ -85,6 +87,8 @@ export function FarmerOrderDetails() {
         qualityScore: 95,
         qualityFeedback: "Excellent quality - premium grade, uniform size",
         estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+        batchId: `BATCH-${id || "ORD-001"}`,
+        qrCode: `QR-BATCH-${id || "ORD-001"}`,
       };
       setOrder(mockOrder);
       setIsLoading(false);

@@ -119,7 +119,7 @@ export default function TransportRequests() {
       req.id === id ? { ...req, status: "accepted" as const } : req
     ));
     setDetailsDialogOpen(false);
-    alert("Request accepted! You can now proceed with the delivery.");
+    alert("Request accepted! Please mark the collection in the Collection page before starting delivery.");
   };
 
   const handleRejectRequest = (id: string) => {

@@ -13,6 +13,7 @@ import {
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { RateFarmer } from "./RateFarmer";
+import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 
 interface BuyerOrder {
   id: string;
@@ -52,6 +53,11 @@ interface BuyerOrder {
   actualDeliveryDate?: string;
   farmerDeliveryHistory?: number;
   farmerQualityAverage?: number;
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
+  farmerCoordinates?: [number, number]; // [lat, lng]
+  deliveryCoordinates?: [number, number]; // [lat, lng]
+  currentCoordinates?: [number, number]; // [lat, lng] - for in-transit orders
 }
 
 export function BuyerOrderDetails() {
@@ -88,6 +94,13 @@ export function BuyerOrderDetails() {
         estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
         farmerDeliveryHistory: 25,
         farmerQualityAverage: 92,
+        batchId: `BATCH-${id || "ORD-001"}`,
+        qrCode: `QR-BATCH-${id || "ORD-001"}`,
+        farmerCoordinates: [-1.2833, 37.3500], // Farmer location in Kangundo
+        deliveryCoordinates: [-1.2833, 37.3667], // Aggregation center
+        currentCoordinates: ["in_transit", "out_for_delivery"].includes("quality_approved")
+          ? [-1.2900, 37.3600] 
+          : undefined, // Current location if in transit
       };
       setOrder(mockOrder);
       setIsLoading(false);
@@ -270,6 +283,32 @@ export function BuyerOrderDetails() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delivery Tracking Map - Show for in-transit or out-for-delivery orders */}
+      {(order.status === "in_transit" || order.status === "out_for_delivery") && 
+       order.farmerCoordinates && order.deliveryCoordinates && (
+        <DeliveryTrackingMap
+          pickupLocation={{
+            name: `${order.farmerName}'s Farm`,
+            coordinates: order.farmerCoordinates,
+          }}
+          deliveryLocation={{
+            name: order.aggregationCenter,
+            coordinates: order.deliveryCoordinates,
+          }}
+          currentLocation={
+            order.currentCoordinates
+              ? {
+                  name: "In Transit",
+                  coordinates: order.currentCoordinates,
+                }
+              : undefined
+          }
+          status={order.status === "out_for_delivery" ? "in_transit" : "in_transit"}
+          distance={undefined}
+          eta={order.estimatedDeliveryDate ? `Est. ${new Date(order.estimatedDeliveryDate).toLocaleDateString()}` : undefined}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Aggregation Center Info */}

@@ -39,7 +39,9 @@ import { SourcingRequests } from "@/pages/buyer/SourcingRequests";
 import InputManagement from "@/pages/inputs/InputManagement";
 import InputMarketplace from "@/pages/marketplace/InputMarketplace";
 import TransportRequests from "@/pages/transport/TransportRequests";
+import Collection from "@/pages/transport/Collection";
 import ActiveDeliveries from "@/pages/transport/ActiveDeliveries";
+import CompletedDeliveries from "@/pages/transport/CompletedDeliveries";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
@@ -121,8 +123,9 @@ export function App() {
             
             {/* Transport Provider Routes */}
             <Route path="/dashboard/transport-requests" element={<TransportRequests />} />
+            <Route path="/dashboard/collection" element={<Collection />} />
             <Route path="/dashboard/deliveries" element={<ActiveDeliveries />} />
-            <Route path="/dashboard/completed-deliveries" element={<ActiveDeliveries />} /> {/* Can filter by status */}
+            <Route path="/dashboard/completed-deliveries" element={<CompletedDeliveries />} />
             <Route path="/dashboard/earnings" element={<PaymentHistory />} /> {/* Reusing PaymentHistory for now */}
           </Route>
           

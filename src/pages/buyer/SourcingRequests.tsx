@@ -529,6 +529,8 @@ export function SourcingRequests() {
         quantityUnit: "kg",
         pricePerKg: 37.5,
         grade: "A",
+        batchId: "BATCH-2023-007",
+        qrCode: "QR-BATCH-2023-007",
       },
       {
         id: "5",
@@ -538,6 +540,8 @@ export function SourcingRequests() {
         quantityUnit: "kg",
         pricePerKg: 35.5,
         grade: "A",
+        batchId: "BATCH-2023-008",
+        qrCode: "QR-BATCH-2023-008",
       },
     ];
 

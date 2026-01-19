@@ -11,12 +11,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconTruck, IconMapPin, IconPhoto, IconCheck } from "@tabler/icons-react";
+import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 
 interface Delivery {
   id: string;
   type: string;
   from: string;
   to: string;
+  fromCoordinates?: [number, number]; // [lat, lng]
+  toCoordinates?: [number, number]; // [lat, lng]
+  currentCoordinates?: [number, number]; // [lat, lng]
   distance: number;
   status: "pickup" | "in_transit" | "delivered";
   progress: number;
@@ -35,6 +39,9 @@ export default function ActiveDeliveries() {
       type: "Produce Pickup",
       from: "John Kamau Farm",
       to: "Kangundo Centre",
+      fromCoordinates: [-1.2833, 37.3500], // Kangundo area coordinates
+      toCoordinates: [-1.2833, 37.3667], // Kangundo Centre
+      currentCoordinates: [-1.2900, 37.3600], // Current location (in transit)
       distance: 12,
       status: "in_transit",
       progress: 65,
@@ -50,6 +57,8 @@ export default function ActiveDeliveries() {
       type: "Input Delivery",
       from: "AgriInputs Warehouse",
       to: "Mary Wanjiku Farm",
+      fromCoordinates: [-1.3000, 37.3400], // AgriInputs Warehouse
+      toCoordinates: [-1.3100, 37.3300], // Mary Wanjiku Farm
       distance: 8,
       status: "pickup",
       progress: 10,
@@ -207,19 +216,44 @@ export default function ActiveDeliveries() {
 
       {/* Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border flex-shrink-0">
             <DialogTitle>Delivery Details</DialogTitle>
             <DialogDescription>Track your delivery progress</DialogDescription>
           </DialogHeader>
           {selectedDelivery && (
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div className="p-4 border rounded-lg bg-accent/50">
                 <div className="font-medium mb-1">{selectedDelivery.type}</div>
                 <div className="text-sm text-muted-foreground">
                   {selectedDelivery.description}
                 </div>
               </div>
+
+              {/* Map View */}
+              {selectedDelivery.fromCoordinates && selectedDelivery.toCoordinates && (
+                <DeliveryTrackingMap
+                  pickupLocation={{
+                    name: selectedDelivery.from,
+                    coordinates: selectedDelivery.fromCoordinates,
+                  }}
+                  deliveryLocation={{
+                    name: selectedDelivery.to,
+                    coordinates: selectedDelivery.toCoordinates,
+                  }}
+                  currentLocation={
+                    selectedDelivery.currentCoordinates
+                      ? {
+                          name: selectedDelivery.currentLocation,
+                          coordinates: selectedDelivery.currentCoordinates,
+                        }
+                      : undefined
+                  }
+                  status={selectedDelivery.status}
+                  distance={selectedDelivery.distance}
+                  eta={selectedDelivery.eta}
+                />
+              )}
 
               <div className="space-y-3">
                 <div>

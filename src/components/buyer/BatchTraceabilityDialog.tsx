@@ -20,7 +20,6 @@ import {
   IconUser,
   IconBuilding,
   IconTruck,
-  IconWarehouse,
   IconTemperature,
   IconShieldCheck,
   IconX,
@@ -269,7 +268,7 @@ export function BatchTraceabilityDialog({
     if (stageLower.includes("transport")) return <IconTruck className="h-5 w-5" />;
     if (stageLower.includes("stock in") || stageLower.includes("aggregation")) return <IconBuilding className="h-5 w-5" />;
     if (stageLower.includes("quality")) return <IconShieldCheck className="h-5 w-5" />;
-    if (stageLower.includes("storage")) return <IconWarehouse className="h-5 w-5" />;
+    if (stageLower.includes("storage")) return <IconPackage className="h-5 w-5" />;
     if (stageLower.includes("monitoring")) return <IconTemperature className="h-5 w-5" />;
     return <IconPackage className="h-5 w-5" />;
   };

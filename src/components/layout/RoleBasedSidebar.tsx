@@ -95,6 +95,7 @@ const inputProviderMenuItems: MenuItem[] = [
 const transportProviderMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/transport-provider", icon: IconChartBar },
   { name: "Requests", path: "/dashboard/transport-requests", icon: IconTruck },
+  { name: "Collection", path: "/dashboard/collection", icon: IconPackage },
   { name: "Active Deliveries", path: "/dashboard/deliveries", icon: IconTrendingUp },
   { name: "Completed", path: "/dashboard/completed-deliveries", icon: IconClipboardCheck },
   { name: "Earnings", path: "/dashboard/earnings", icon: IconChartBar },

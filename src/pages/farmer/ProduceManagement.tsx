@@ -70,6 +70,8 @@ interface ProduceListing {
   status: "active" | "sold" | "inactive";
   createdAt: string;
   photos?: string[];
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
 }
 
 // Sample data - will be replaced with API calls
@@ -84,6 +86,8 @@ const sampleListings: ProduceListing[] = [
     description: "Fresh harvest, Grade A quality",
     status: "active",
     createdAt: new Date().toISOString(),
+    batchId: "BATCH-LST-001",
+    qrCode: "QR-BATCH-LST-001",
   },
   {
     id: "LST-002",
@@ -95,6 +99,8 @@ const sampleListings: ProduceListing[] = [
     description: "Good quality, ready for market",
     status: "active",
     createdAt: new Date().toISOString(),
+    batchId: "BATCH-LST-002",
+    qrCode: "QR-BATCH-LST-002",
   },
 ];
 
@@ -140,6 +146,8 @@ export function ProduceManagement() {
         description: newListing.description,
         status: "active",
         createdAt: new Date().toISOString(),
+        batchId: `BATCH-LST-${String(listings.length + 1).padStart(3, "0")}`,
+        qrCode: `QR-BATCH-LST-${String(listings.length + 1).padStart(3, "0")}`,
       };
 
       setListings([...listings, listing]);

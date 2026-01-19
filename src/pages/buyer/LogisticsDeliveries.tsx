@@ -12,6 +12,7 @@ import {
   IconUser,
   IconPackage,
 } from "@tabler/icons-react";
+import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { Progress } from "@/components/ui/progress";
 
 interface DeliveryBatch {
@@ -31,6 +32,9 @@ interface DeliveryBatch {
   timeline: DeliveryTimelineStage[];
   supplier?: string;
   origin?: string;
+  originCoordinates?: [number, number]; // [lat, lng]
+  destinationCoordinates?: [number, number]; // [lat, lng]
+  currentCoordinates?: [number, number]; // [lat, lng]
   arrivalDate?: string;
   qualityCheckStatus?: string;
 }
@@ -511,13 +515,42 @@ export function LogisticsDeliveries() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-96 bg-stone-100 rounded-lg flex items-center justify-center border border-stone-200">
-              <div className="text-center space-y-2">
-                <IconMap className="h-12 w-12 text-stone-400 mx-auto" />
-                <p className="text-stone-500">Map view will be integrated here</p>
-                <p className="text-sm text-stone-400">Showing real-time truck locations and routes</p>
+            {batches
+              .filter((batch) => batch.status === "in_transit" && batch.originCoordinates && batch.destinationCoordinates)
+              .map((batch) => (
+                <DeliveryTrackingMap
+                  key={batch.id}
+                  pickupLocation={{
+                    name: batch.origin || "Origin",
+                    coordinates: batch.originCoordinates!,
+                  }}
+                  deliveryLocation={{
+                    name: batch.destination,
+                    coordinates: batch.destinationCoordinates!,
+                  }}
+                  currentLocation={
+                    batch.currentCoordinates
+                      ? {
+                          name: `Batch ${batch.batchId}`,
+                          coordinates: batch.currentCoordinates,
+                        }
+                      : undefined
+                  }
+                  status="in_transit"
+                  distance={undefined}
+                  eta={batch.estimatedArrivalTime ? `${batch.estimatedArrival}, ${batch.estimatedArrivalTime}` : undefined}
+                  className="mb-4"
+                />
+              ))}
+            {batches.filter((batch) => batch.status === "in_transit" && batch.originCoordinates && batch.destinationCoordinates).length === 0 && (
+              <div className="h-96 bg-stone-100 rounded-lg flex items-center justify-center border border-stone-200">
+                <div className="text-center space-y-2">
+                  <IconMap className="h-12 w-12 text-stone-400 mx-auto" />
+                  <p className="text-stone-500">No active deliveries to track on map</p>
+                  <p className="text-sm text-stone-400">Active in-transit deliveries will appear here</p>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}

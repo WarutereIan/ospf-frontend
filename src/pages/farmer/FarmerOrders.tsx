@@ -68,6 +68,8 @@ interface FarmerOrder {
   paymentStatus?: EscrowStatusType;
   paymentAmount?: number;
   photos?: string[];
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
 }
 
 // Sample orders - will be replaced with API calls
@@ -85,6 +87,8 @@ const sampleOrders: FarmerOrder[] = [
     createdAt: new Date().toISOString(),
     deliveryLocation: "Kangundo Main Aggregation Center (Main - Kangundo Subcounty)",
     paymentStatus: "pending",
+    batchId: "BATCH-ORD-001",
+    qrCode: "QR-BATCH-ORD-001",
   },
   {
     id: "ORD-002",
@@ -100,6 +104,8 @@ const sampleOrders: FarmerOrder[] = [
     deliveryLocation: "Tala Satellite Center (Satellite - Tala Ward, Kangundo)",
     paymentStatus: "in_escrow",
     paymentAmount: 36000,
+    batchId: "BATCH-ORD-002",
+    qrCode: "QR-BATCH-ORD-002",
   },
   {
     id: "ORD-003",
@@ -119,6 +125,8 @@ const sampleOrders: FarmerOrder[] = [
       "https://via.placeholder.com/400x300?text=Quality+Check+Photo+1",
       "https://via.placeholder.com/400x300?text=Quality+Check+Photo+2",
     ],
+    batchId: "BATCH-ORD-003",
+    qrCode: "QR-BATCH-ORD-003",
   },
 ];
 
