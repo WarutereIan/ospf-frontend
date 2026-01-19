@@ -24,9 +24,13 @@ export function Reports() {
 
   const reportTypes = [
     { value: "farmer-performance", label: "Farmer Performance Report" },
+    { value: "farmer-participation", label: "Farmer Participation & Volumes" },
     { value: "sales-summary", label: "Sales Summary Report" },
+    { value: "location-sales", label: "Location-Based Sales Summary" },
+    { value: "stock-summary", label: "Stock Summary by Location" },
     { value: "order-analysis", label: "Order Analysis Report" },
     { value: "revenue-breakdown", label: "Revenue Breakdown" },
+    { value: "quality-metrics", label: "Quality Metrics & Compliance" },
     { value: "center-performance", label: "Aggregation Center Performance" },
     { value: "advisory-impact", label: "Advisory Impact Report" },
   ];

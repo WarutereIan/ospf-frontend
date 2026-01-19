@@ -11,6 +11,7 @@ import {
   IconMapPin,
   IconAlertCircle,
   IconDownload,
+  IconClipboardCheck,
 } from "@tabler/icons-react";
 import {
   StatCard,
@@ -153,9 +154,9 @@ export function OfficerDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">County Officer Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Agricultural Officer Dashboard</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Monitor farmer activities and generate reports
+            Technical guidance, quality assurance, compliance monitoring, and data-driven planning
           </p>
         </div>
         <div className="flex gap-2">
@@ -254,6 +255,62 @@ export function OfficerDashboard() {
         sorted={true}
       />
 
+      {/* Farmer Participation & Volumes */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Farmer Participation & Volumes</CardTitle>
+              <CardDescription>Visibility of farmer participation and production volumes by location</CardDescription>
+            </div>
+            <Link to="/dashboard/county-officer/location-summary">
+              <Button size="sm" variant="outline">
+                View Details
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Total Active Farmers</div>
+              <div className="text-2xl font-bold">{stats.activeFarmers}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {stats.totalFarmers > 0 ? ((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1) : 0}% of total
+              </div>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Total Production</div>
+              <div className="text-2xl font-bold">{stats.volume} tons</div>
+              <div className="text-xs text-muted-foreground mt-1">This period</div>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Avg per Farmer</div>
+              <div className="text-2xl font-bold">
+                {stats.activeFarmers > 0 ? ((stats.volume * 1000) / stats.activeFarmers).toFixed(0) : 0} kg
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Average production</div>
+            </div>
+            <div className="p-4 bg-muted rounded-lg">
+              <div className="text-sm text-muted-foreground mb-1">Participation Rate</div>
+              <div className="text-2xl font-bold">
+                {stats.totalFarmers > 0 ? ((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1) : 0}%
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Active participation</div>
+            </div>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            <p>
+              <strong>Farmer Participation:</strong> {stats.activeFarmers} out of {stats.totalFarmers} registered farmers are actively participating in the marketplace.
+            </p>
+            <p className="mt-2">
+              <strong>Production Volumes:</strong> Total production of {stats.volume} tons across all sub-counties, with an average of{" "}
+              {stats.activeFarmers > 0 ? ((stats.volume * 1000) / stats.activeFarmers).toFixed(0) : 0} kg per active farmer.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Farmer Activity */}
@@ -328,6 +385,18 @@ export function OfficerDashboard() {
                 <Button variant="outline" className="w-full justify-start">
                   <IconUsers className="mr-2 h-4 w-4" />
                   View All Farmers
+                </Button>
+              </Link>
+              <Link to="/dashboard/county-officer/quality-standards" className="w-full">
+                <Button variant="outline" className="w-full justify-start">
+                  <IconClipboardCheck className="mr-2 h-4 w-4" />
+                  Quality Standards
+                </Button>
+              </Link>
+              <Link to="/dashboard/county-officer/location-summary" className="w-full">
+                <Button variant="outline" className="w-full justify-start">
+                  <IconMapPin className="mr-2 h-4 w-4" />
+                  Location Summary
                 </Button>
               </Link>
               <Link to="/dashboard/county-officer/reports" className="w-full">

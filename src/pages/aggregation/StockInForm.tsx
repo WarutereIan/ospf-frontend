@@ -12,8 +12,10 @@ import {
   IconX,
   IconPhoto,
   IconLoader2,
+  IconQrcode,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
 
 interface StockInEntry {
   farmerId: string;
@@ -52,6 +54,10 @@ export function StockInForm() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
+  const [generatedBatchId, setGeneratedBatchId] = useState<string>("");
+  const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
 
   // Sample farmers for search - TODO: Replace with API
   const sampleFarmers = [
@@ -90,6 +96,17 @@ export function StockInForm() {
     }));
   };
 
+  const generateBatchId = () => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `BATCH-${timestamp}-${random}`;
+  };
+
+  const generateQRCode = (batchId: string) => {
+    // Generate QR code value - in production, this would be a URL or encoded data
+    return `QR-${batchId}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.farmerId || !formData.variety || !formData.quantity || !formData.qualityGrade) {
@@ -99,8 +116,31 @@ export function StockInForm() {
     setIsSubmitting(true);
     // TODO: Replace with actual API call
     setTimeout(() => {
-      console.log("Stock In Entry:", formData);
-      // Reset form
+      const batchId = generateBatchId();
+      const qrCode = generateQRCode(batchId);
+      
+      setGeneratedBatchId(batchId);
+      setGeneratedQRCode(qrCode);
+
+      // Generate receipt data
+      const receiptData = {
+        receiptId: `REC-${Date.now()}`,
+        type: "stock_in" as const,
+        date: new Date().toISOString(),
+        farmerName: formData.farmerName,
+        variety: formData.variety,
+        quantity: formData.quantity,
+        qualityGrade: formData.qualityGrade,
+        location: "Kangundo Main Aggregation Center", // TODO: Get from context
+        transactionId: batchId,
+        qrCode: qrCode,
+      };
+
+      setGeneratedReceipt(receiptData);
+      setIsSubmitting(false);
+      setReceiptOpen(true);
+
+      // Reset form after showing receipt
       setFormData({
         farmerId: "",
         farmerName: "",
@@ -112,8 +152,6 @@ export function StockInForm() {
         notes: "",
       });
       setSearchTerm("");
-      setIsSubmitting(false);
-      alert("Stock in entry recorded successfully! Receipt generated.");
     }, 2000);
   };
 
@@ -381,6 +419,25 @@ export function StockInForm() {
                     <span className="text-muted-foreground">Photos</span>
                     <span className="font-medium">{formData.photos?.length || 0}</span>
                   </div>
+                  {generatedBatchId && (
+                    <>
+                      <div className="border-t pt-4 mt-4 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Batch ID:</span>
+                          <span className="font-mono font-medium text-xs">{generatedBatchId}</span>
+                        </div>
+                        {generatedQRCode && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">QR Code:</span>
+                            <div className="flex items-center gap-2">
+                              <IconQrcode className="h-4 w-4" />
+                              <span className="font-mono text-xs">{generatedQRCode}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="border-t pt-4">
                   <Button
@@ -402,7 +459,7 @@ export function StockInForm() {
                     ) : (
                       <>
                         <IconCheck className="mr-2 h-4 w-4" />
-                        Record Stock In
+                        Record Stock In & Generate Receipt
                       </>
                     )}
                   </Button>
@@ -428,6 +485,22 @@ export function StockInForm() {
           </div>
         </div>
       </form>
+
+      {/* Receipt Dialog */}
+      {generatedReceipt && (
+        <ReceiptGenerator
+          open={receiptOpen}
+          onOpenChange={setReceiptOpen}
+          receiptData={generatedReceipt}
+          onDownload={(format) => {
+            // TODO: Implement actual download
+            console.log(`Downloading receipt as ${format}...`);
+          }}
+          onPrint={() => {
+            window.print();
+          }}
+        />
+      )}
     </div>
   );
 }

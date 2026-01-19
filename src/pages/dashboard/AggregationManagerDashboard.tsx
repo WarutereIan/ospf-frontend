@@ -14,6 +14,7 @@ import {
   IconBuilding,
   IconBuildingCommunity,
   IconMapPin,
+  IconFileText,
 } from "@tabler/icons-react";
 import {
   StatCard,
@@ -434,16 +435,34 @@ export function AggregationManagerDashboard() {
                   Stock Out
                 </Button>
               </Link>
+              <Link to="/dashboard/aggregation/receive-ward" className="w-full">
+                <Button variant="outline" className="w-full justify-start">
+                  <IconBuildingCommunity className="mr-2 h-4 w-4" />
+                  Receive from Ward
+                </Button>
+              </Link>
               <Link to="/dashboard/aggregation/quality-checks" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconClipboardCheck className="mr-2 h-4 w-4" />
                   Quality Checks
                 </Button>
               </Link>
+              <Link to="/dashboard/aggregation/buyer-matching" className="w-full">
+                <Button variant="outline" className="w-full justify-start">
+                  <IconUsers className="mr-2 h-4 w-4" />
+                  Match Buyer Demand
+                </Button>
+              </Link>
               <Link to="/dashboard/aggregation/inventory" className="w-full">
                 <Button variant="outline" className="w-full justify-start">
                   <IconPackage className="mr-2 h-4 w-4" />
                   Inventory Report
+                </Button>
+              </Link>
+              <Link to="/dashboard/aggregation/reports" className="w-full">
+                <Button variant="outline" className="w-full justify-start">
+                  <IconFileText className="mr-2 h-4 w-4" />
+                  Reports
                 </Button>
               </Link>
               <Link to="/dashboard/aggregation/farmers" className="w-full">

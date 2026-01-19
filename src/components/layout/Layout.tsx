@@ -10,13 +10,13 @@ function MainContent() {
 
   return (
     <div
-      className="flex-1 flex flex-col transition-all duration-300"
+      className="flex-1 flex flex-col transition-all duration-300 w-full min-w-0 overflow-x-hidden"
       style={{
         marginLeft: collapsed ? "80px" : "250px",
       }}
     >
       <Header />
-      <main className="flex-1 p-4 md:p-6 overflow-auto">
+      <main className="flex-1 p-4 md:p-6 overflow-auto overflow-x-hidden w-full max-w-full">
         <Outlet />
       </main>
     </div>

@@ -16,6 +16,75 @@ import {
 } from "@tabler/icons-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import type { LatLngExpression } from "leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix for default marker icons in Leaflet
+import icon from "leaflet/dist/images/marker-icon.png";
+import iconShadow from "leaflet/dist/images/marker-shadow.png";
+import iconRetina from "leaflet/dist/images/marker-icon-2x.png";
+
+const DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconRetinaUrl: iconRetina,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Custom icons for centers
+const createMainCenterIcon = () => {
+  return L.divIcon({
+    className: "custom-main-center-marker",
+    html: `
+      <div style="
+        background-color: #3b82f6;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="color: white; font-size: 18px; font-weight: bold;">M</div>
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+  });
+};
+
+const createSatelliteCenterIcon = () => {
+  return L.divIcon({
+    className: "custom-satellite-center-marker",
+    html: `
+      <div style="
+        background-color: #a855f7;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="color: white; font-size: 14px; font-weight: bold;">S</div>
+      </div>
+    `,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+  });
+};
+
 
 interface AggregationCenter {
   id: string;
@@ -33,6 +102,24 @@ interface AggregationCenter {
   stockInToday: number;
   stockOutToday: number;
   alerts: string[];
+  coordinates?: [number, number]; // [lat, lng]
+}
+
+// Component to set map bounds
+function MapBounds({ centers }: { centers: AggregationCenter[] }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    const centersWithCoords = centers.filter(c => c.coordinates);
+    if (centersWithCoords.length === 0) return;
+    
+    const bounds = L.latLngBounds(
+      centersWithCoords.map(c => c.coordinates! as L.LatLngExpression)
+    );
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }, [map, centers]);
+  
+  return null;
 }
 
 export function Centers() {
@@ -73,6 +160,7 @@ export function Centers() {
           stockInToday: 1200,
           stockOutToday: 800,
           alerts: [],
+          coordinates: [-1.3, 37.35] as [number, number],
         },
         {
           id: "AC002",
@@ -88,6 +176,7 @@ export function Centers() {
           stockInToday: 800,
           stockOutToday: 500,
           alerts: [],
+          coordinates: [-1.5, 37.3] as [number, number],
         },
         {
           id: "AC003",
@@ -103,6 +192,7 @@ export function Centers() {
           stockInToday: 600,
           stockOutToday: 400,
           alerts: [],
+          coordinates: [-1.4, 37.25] as [number, number],
         },
         {
           id: "AC004",
@@ -118,6 +208,7 @@ export function Centers() {
           stockInToday: 500,
           stockOutToday: 300,
           alerts: [],
+          coordinates: [-1.6, 37.2] as [number, number],
         },
         
         // SATELLITE CENTERS (Ward Level)
@@ -137,6 +228,7 @@ export function Centers() {
           stockInToday: 250,
           stockOutToday: 150,
           alerts: [],
+          coordinates: [-1.32, 37.36] as [number, number],
         },
         {
           id: "SAT002",
@@ -154,6 +246,7 @@ export function Centers() {
           stockInToday: 200,
           stockOutToday: 100,
           alerts: [],
+          coordinates: [-1.28, 37.34] as [number, number],
         },
         {
           id: "SAT003",
@@ -171,6 +264,7 @@ export function Centers() {
           stockInToday: 180,
           stockOutToday: 120,
           alerts: [],
+          coordinates: [-1.52, 37.32] as [number, number],
         },
         {
           id: "SAT004",
@@ -188,6 +282,7 @@ export function Centers() {
           stockInToday: 150,
           stockOutToday: 80,
           alerts: [],
+          coordinates: [-1.48, 37.28] as [number, number],
         },
         {
           id: "SAT005",
@@ -205,6 +300,7 @@ export function Centers() {
           stockInToday: 0,
           stockOutToday: 0,
           alerts: ["Center under maintenance"],
+          coordinates: [-1.42, 37.27] as [number, number],
         },
         {
           id: "SAT006",
@@ -222,6 +318,7 @@ export function Centers() {
           stockInToday: 120,
           stockOutToday: 80,
           alerts: [],
+          coordinates: [-1.62, 37.22] as [number, number],
         },
       ];
       
@@ -248,20 +345,20 @@ export function Centers() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Aggregation Centers</h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold break-words">Aggregation Centers</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1 break-words">
             Real-time monitoring of all aggregation centers, stock levels, and alerts
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" size="sm" className="w-full sm:w-auto">
             <IconDownload className="mr-2 h-4 w-4" />
             Export
           </Button>
-          <Button>
+          <Button size="sm" className="w-full sm:w-auto">
             <IconMapPin className="mr-2 h-4 w-4" />
             Add Center
           </Button>
@@ -269,85 +366,75 @@ export function Centers() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 w-full">
+       
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Centers</p>
-                <p className="text-2xl font-bold">{totalStats.totalCenters}</p>
-              </div>
-              <IconMapPin className="h-8 w-8 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Main Centers</p>
-                <p className="text-2xl font-bold">{totalStats.mainCenters}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Main Centers</p>
+                <p className="text-xl sm:text-2xl xl:text-2xl font-bold">{totalStats.mainCenters}</p>
                 <p className="text-xs text-muted-foreground mt-1">Subcounty Level</p>
               </div>
-              <IconBuilding className="h-8 w-8 text-blue-600" />
+              <IconBuilding className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-blue-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Satellite Centers</p>
-                <p className="text-2xl font-bold">{totalStats.satelliteCenters}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Satellite Centers</p>
+                <p className="text-xl sm:text-2xl xl:text-2xl font-bold">{totalStats.satelliteCenters}</p>
                 <p className="text-xs text-muted-foreground mt-1">Ward Level</p>
               </div>
-              <IconBuildingCommunity className="h-8 w-8 text-purple-600" />
+              <IconBuildingCommunity className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-purple-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Stock</p>
-                <p className="text-2xl font-bold">{totalStats.totalStock.toLocaleString()} kg</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Total Stock</p>
+                <p className="text-lg sm:text-xl xl:text-xl 2xl:text-2xl font-bold break-words">{totalStats.totalStock.toLocaleString()} kg</p>
               </div>
-              <IconPackage className="h-8 w-8 text-blue-600" />
+              <IconPackage className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-blue-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Stock In Today</p>
-                <p className="text-2xl font-bold">{totalStats.stockInToday.toLocaleString()} kg</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Stock In Today</p>
+                <p className="text-lg sm:text-xl xl:text-xl 2xl:text-2xl font-bold break-words">{totalStats.stockInToday.toLocaleString()} kg</p>
               </div>
-              <IconTrendingUp className="h-8 w-8 text-green-600" />
+              <IconTrendingUp className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-green-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Stock Out Today</p>
-                <p className="text-2xl font-bold">{totalStats.stockOutToday.toLocaleString()} kg</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Stock Out Today</p>
+                <p className="text-lg sm:text-xl xl:text-xl 2xl:text-2xl font-bold break-words">{totalStats.stockOutToday.toLocaleString()} kg</p>
               </div>
-              <IconTrendingDown className="h-8 w-8 text-orange-600" />
+              <IconTrendingDown className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-orange-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="w-full min-w-0">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Capacity Used</p>
-                <p className="text-2xl font-bold">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">Capacity Used</p>
+                <p className="text-xl sm:text-2xl xl:text-2xl font-bold">
                   {Math.round((totalStats.totalStock / totalStats.totalCapacity) * 100)}%
                 </p>
               </div>
-              <IconPackage className="h-8 w-8 text-purple-600" />
+              <IconPackage className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-purple-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
@@ -356,14 +443,14 @@ export function Centers() {
       {/* Filter Section */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Filter Centers</h3>
-              <p className="text-sm text-muted-foreground mt-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold break-words">Filter Centers</h3>
+              <p className="text-sm text-muted-foreground mt-1 break-words">
                 View all centers or filter by type
               </p>
             </div>
-            <div className="w-64">
+            <div className="w-full sm:w-64 flex-shrink-0">
               <Select value={centerFilter} onValueChange={(value: any) => setCenterFilter(value)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -385,38 +472,38 @@ export function Centers() {
         </CardContent>
       </Card>
 
-      {/* Centers Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">
-            {centerFilter === "all" ? "All Centers" : centerFilter === "main" ? "Main Centers (Subcounty Level)" : "Satellite Centers (Ward Level)"}
-          </h2>
-          <Badge variant="outline" className="text-sm">
-            {filteredCenters.length} {filteredCenters.length === 1 ? "Center" : "Centers"}
-          </Badge>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {isLoading
-            ? [1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardContent className="pt-6">
-                    <div className="h-48 bg-muted animate-pulse rounded-lg" />
-                  </CardContent>
-                </Card>
-              ))
-            : filteredCenters.map((center) => {
-              const utilizationPercent = (center.currentStock / center.capacity) * 100;
-              return (
-                <Card key={center.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {center.centerType === "main" ? (
-                            <IconBuilding className="h-5 w-5 text-blue-600" />
-                          ) : (
-                            <IconBuildingCommunity className="h-5 w-5 text-purple-600" />
-                          )}
+      
+
+      {/* Centers Summary Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Centers Summary</CardTitle>
+          <CardDescription>Quick overview of all aggregation centers</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0 sm:p-6">
+          <div className="overflow-x-auto w-full">
+            <div className="min-w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[200px]">Center</TableHead>
+                    <TableHead className="min-w-[100px]">Type</TableHead>
+                    <TableHead className="min-w-[150px]">Location</TableHead>
+                    <TableHead className="min-w-[120px]">Current Stock</TableHead>
+                    <TableHead className="min-w-[100px]">Capacity</TableHead>
+                    <TableHead className="min-w-[120px]">Utilization</TableHead>
+                    <TableHead className="min-w-[120px]">Stock In Today</TableHead>
+                    <TableHead className="min-w-[120px]">Stock Out Today</TableHead>
+                    <TableHead className="min-w-[100px]">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCenters.map((center) => {
+                    const utilizationPercent = (center.currentStock / center.capacity) * 100;
+                    return (
+                      <TableRow key={center.id}>
+                        <TableCell className="font-medium">{center.name}</TableCell>
+                        <TableCell>
                           <Badge
                             variant="outline"
                             className={
@@ -425,209 +512,227 @@ export function Centers() {
                                 : "bg-purple-100 text-purple-800"
                             }
                           >
-                            {center.centerType === "main" ? "Main Center" : "Satellite"}
+                            {center.centerType === "main" ? "Main" : "Satellite"}
                           </Badge>
-                        </div>
-                        <CardTitle className="text-lg">{center.name}</CardTitle>
-                        <CardDescription className="mt-1 space-y-1">
-                          <div className="flex items-center gap-1">
-                            <IconMapPin className="h-3 w-3" />
-                            {center.location}
-                            {center.ward && `, ${center.ward}`}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>{center.location}</div>
+                            <div className="text-muted-foreground">
+                              {center.subCounty}
+                              {center.ward && ` - ${center.ward} Ward`}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {center.centerType === "main" ? `${center.subCounty} Subcounty` : `${center.subCounty} Subcounty - ${center.ward} Ward`}
+                        </TableCell>
+                        <TableCell>{center.currentStock.toLocaleString()} kg</TableCell>
+                        <TableCell>{center.capacity.toLocaleString()} kg</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 bg-muted rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  utilizationPercent > 80
+                                    ? "bg-red-500"
+                                    : utilizationPercent > 50
+                                    ? "bg-yellow-500"
+                                    : "bg-green-500"
+                                }`}
+                                style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-sm whitespace-nowrap">{utilizationPercent.toFixed(0)}%</span>
                           </div>
-                        </CardDescription>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={
-                          center.status === "operational"
-                            ? "bg-green-100 text-green-800"
-                            : center.status === "maintenance"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }
-                      >
-                        {center.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Manager</span>
-                        <span className="font-medium">{center.manager}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Active Farmers</span>
-                        <span className="font-medium flex items-center gap-1">
-                          <IconUsers className="h-4 w-4" />
-                          {center.activeFarmers}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Stock Level</span>
-                        <span className="font-medium">
-                          {center.currentStock.toLocaleString()} / {center.capacity.toLocaleString()} kg
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${
-                            utilizationPercent > 80
-                              ? "bg-red-500"
-                              : utilizationPercent > 50
-                              ? "bg-yellow-500"
-                              : "bg-green-500"
-                          }`}
-                          style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {utilizationPercent.toFixed(1)}% capacity utilized
-                      </p>
-                    </div>
-
-                    {center.alerts.length > 0 && (
-                      <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <IconAlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                          <div className="flex-1">
-                            {center.alerts.map((alert, idx) => (
-                              <p key={idx} className="text-xs text-yellow-800">
-                                {alert}
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <Button variant="outline" className="w-full" size="sm">
-                      <IconEdit className="mr-2 h-4 w-4" />
-                      Manage Center
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-        </div>
-      </div>
-
-      {/* Centers Summary Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Centers Summary</CardTitle>
-          <CardDescription>Quick overview of all aggregation centers</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Center</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Current Stock</TableHead>
-                <TableHead>Capacity</TableHead>
-                <TableHead>Utilization</TableHead>
-                <TableHead>Stock In Today</TableHead>
-                <TableHead>Stock Out Today</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCenters.map((center) => {
-                const utilizationPercent = (center.currentStock / center.capacity) * 100;
-                return (
-                  <TableRow key={center.id}>
-                    <TableCell className="font-medium">{center.name}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          center.centerType === "main"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-purple-100 text-purple-800"
-                        }
-                      >
-                        {center.centerType === "main" ? "Main" : "Satellite"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{center.location}</div>
-                        <div className="text-muted-foreground">
-                          {center.subCounty}
-                          {center.ward && ` - ${center.ward} Ward`}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{center.currentStock.toLocaleString()} kg</TableCell>
-                    <TableCell>{center.capacity.toLocaleString()} kg</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-muted rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${
-                              utilizationPercent > 80
-                                ? "bg-red-500"
-                                : utilizationPercent > 50
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
-                            }`}
-                            style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-sm">{utilizationPercent.toFixed(0)}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-green-600">
-                      +{center.stockInToday.toLocaleString()} kg
-                    </TableCell>
-                    <TableCell className="text-orange-600">
-                      -{center.stockOutToday.toLocaleString()} kg
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          center.status === "operational"
-                            ? "bg-green-100 text-green-800"
-                            : center.status === "maintenance"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }
-                      >
-                        {center.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                        </TableCell>
+                        <TableCell className="text-green-600 whitespace-nowrap">
+                          +{center.stockInToday.toLocaleString()} kg
+                        </TableCell>
+                        <TableCell className="text-orange-600 whitespace-nowrap">
+                          -{center.stockOutToday.toLocaleString()} kg
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              center.status === "operational"
+                                ? "bg-green-100 text-green-800"
+                                : center.status === "maintenance"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }
+                          >
+                            {center.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Geographic Map Placeholder */}
+      {/* Geographic Overview */}
       <Card>
         <CardHeader>
           <CardTitle>Geographic Overview</CardTitle>
-          <CardDescription>Visual map of aggregation centers in Machakos County</CardDescription>
+          <CardDescription>Visual map of aggregation centers in Machakos County with key metrics</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="h-64 flex items-center justify-center border-2 border-dashed rounded-lg bg-muted/50">
-            <div className="text-center">
-              <IconMapPin className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">Map visualization would go here</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Integration with mapping library (e.g., Leaflet, Google Maps)
-              </p>
+        <CardContent className="p-0">
+          <div className="w-full h-[400px] sm:h-[500px] lg:h-[600px] relative rounded-lg overflow-hidden border border-border">
+            {isLoading ? (
+              <div className="h-full flex items-center justify-center bg-muted/50">
+                <div className="text-center">
+                  <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">Loading map...</p>
+                </div>
+              </div>
+            ) : (
+              <MapContainer
+                {...({
+                  center: [-1.45, 37.28] as [number, number],
+                  zoom: 9,
+                  style: { height: "100%", width: "100%", zIndex: 0 },
+                  scrollWheelZoom: true,
+                  className: "z-0",
+                } as any)}
+              >
+                <TileLayer
+                  {...({
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                  } as any)}
+                />
+                <MapBounds centers={filteredCenters} />
+                
+                {filteredCenters
+                  .filter(center => center.coordinates)
+                  .map((center) => {
+                    const utilizationPercent = (center.currentStock / center.capacity) * 100;
+                    return (
+                      <Marker
+                        key={center.id}
+                        {...({
+                          position: center.coordinates! as LatLngExpression,
+                          icon: center.centerType === "main" 
+                            ? createMainCenterIcon() 
+                            : createSatelliteCenterIcon(),
+                        } as any)}
+                      >
+                        <Popup>
+                          <div className="text-sm min-w-[200px]">
+                            <div className="font-semibold mb-2 text-base">{center.name}</div>
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    center.centerType === "main"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-purple-100 text-purple-800"
+                                  }
+                                >
+                                  {center.centerType === "main" ? "Main" : "Satellite"}
+                                </Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    center.status === "operational"
+                                      ? "bg-green-100 text-green-800"
+                                      : center.status === "maintenance"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-red-100 text-red-800"
+                                  }
+                                >
+                                  {center.status}
+                                </Badge>
+                              </div>
+                              <div className="pt-1 border-t">
+                                <p className="text-muted-foreground text-xs">Location</p>
+                                <p className="font-medium">{center.location}</p>
+                                {center.ward && (
+                                  <p className="text-xs text-muted-foreground">{center.subCounty} - {center.ward}</p>
+                                )}
+                              </div>
+                              <div className="pt-1 border-t">
+                                <p className="text-muted-foreground text-xs mb-1">Stock Metrics</p>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between items-center">
+                                    <span className="text-xs">Current Stock:</span>
+                                    <span className="font-medium text-xs">
+                                      {center.currentStock.toLocaleString()} / {center.capacity.toLocaleString()} kg
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-muted rounded-full h-1.5">
+                                    <div
+                                      className={`h-1.5 rounded-full ${
+                                        utilizationPercent > 80
+                                          ? "bg-red-500"
+                                          : utilizationPercent > 50
+                                          ? "bg-yellow-500"
+                                          : "bg-green-500"
+                                      }`}
+                                      style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between items-center text-xs">
+                                    <span className="text-green-600">
+                                      +{center.stockInToday.toLocaleString()} kg in
+                                    </span>
+                                    <span className="text-orange-600">
+                                      -{center.stockOutToday.toLocaleString()} kg out
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="pt-1 border-t">
+                                <p className="text-muted-foreground text-xs">Manager</p>
+                                <p className="font-medium text-xs">{center.manager}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    );
+                  })}
+              </MapContainer>
+            )}
+          </div>
+          
+          {/* Legend and Summary Metrics */}
+          <div className="p-4 border-t border-border bg-muted/30">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-sm"></div>
+                  <span>Main Centers</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full bg-purple-500 border-2 border-white shadow-sm"></div>
+                  <span>Satellite Centers</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <IconPackage className="h-4 w-4 text-blue-600" />
+                  <span className="font-medium">
+                    Total Stock: {totalStats.totalStock.toLocaleString()} kg
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconTrendingUp className="h-4 w-4 text-green-600" />
+                  <span className="font-medium text-green-600">
+                    In: {totalStats.stockInToday.toLocaleString()} kg
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <IconTrendingDown className="h-4 w-4 text-orange-600" />
+                  <span className="font-medium text-orange-600">
+                    Out: {totalStats.stockOutToday.toLocaleString()} kg
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

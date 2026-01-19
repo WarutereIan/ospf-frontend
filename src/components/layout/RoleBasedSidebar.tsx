@@ -58,6 +58,8 @@ const buyerMenuItems: MenuItem[] = [
 const officerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/county-officer", icon: IconChartBar },
   { name: "Farmers", path: "/dashboard/county-officer/farmers", icon: IconUsers },
+  { name: "Quality Standards", path: "/dashboard/county-officer/quality-standards", icon: IconClipboardCheck },
+  { name: "Location Summary", path: "/dashboard/county-officer/location-summary", icon: IconMapPin },
   { name: "Reports", path: "/dashboard/county-officer/reports", icon: IconFileText },
   { name: "Centers", path: "/dashboard/county-officer/centers", icon: IconMapPin },
   { name: "Advisory", path: "/dashboard/county-officer/advisory", icon: IconInfoCircle },
@@ -76,9 +78,12 @@ const staffMenuItems: MenuItem[] = [
 const aggregationManagerMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/aggregation", icon: IconChartBar },
   { name: "Stock In", path: "/dashboard/aggregation/stock-in", icon: IconTrendingUp },
+  { name: "Receive from Ward", path: "/dashboard/aggregation/receive-ward", icon: IconPackage },
   { name: "Stock Out", path: "/dashboard/aggregation/stock-out", icon: IconTrendingDown },
   { name: "Quality Checks", path: "/dashboard/aggregation/quality-checks", icon: IconClipboardCheck },
+  { name: "Buyer Matching", path: "/dashboard/aggregation/buyer-matching", icon: IconUsers },
   { name: "Inventory", path: "/dashboard/aggregation/inventory", icon: IconPackage },
+  { name: "Reports", path: "/dashboard/aggregation/reports", icon: IconFileText },
   { name: "Farmers", path: "/dashboard/aggregation/farmers", icon: IconUsers },
 ];
 

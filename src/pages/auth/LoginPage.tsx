@@ -25,11 +25,11 @@ export function LoginPage() {
 
     try {
       const result = await login(phone, password);
-      
+
       if (result.success) {
-        // Navigate to dashboard (which will redirect to role-specific dashboard)
-        navigate("/dashboard");
-      } else {
+      // Navigate to dashboard (which will redirect to role-specific dashboard)
+      navigate("/dashboard");
+    } else {
         setError(result.error || "Invalid phone number or password. Please check the mock credentials below.");
       }
     } catch (err) {

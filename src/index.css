@@ -214,3 +214,55 @@
     color: var(--muted-foreground) !important;
   }
 }
+
+/* Print styles for receipts */
+@media print {
+  /* Hide dialog overlay and non-essential elements */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only receipt content */
+  #receipt-content,
+  #receipt-content * {
+    visibility: visible;
+  }
+  
+  #receipt-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 20px;
+    box-shadow: none;
+    border: none;
+    background: white;
+  }
+  
+  /* Hide elements that shouldn't print */
+  .no-print,
+  .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Ensure proper page breaks */
+  #receipt-content {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  /* Optimize colors for printing */
+  #receipt-content {
+    color: #000 !important;
+    background: #fff !important;
+  }
+  
+  /* Ensure QR code is visible */
+  #receipt-content svg {
+    display: block !important;
+    visibility: visible !important;
+  }
+}

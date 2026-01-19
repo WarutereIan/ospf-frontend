@@ -696,38 +696,38 @@ export function MarketplacePage() {
                   {role === "buyer" && (
                     <div className="mt-auto space-y-2">
                       <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-                        <Button
+                      <Button
                           className="flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
-                          onClick={() => {
-                            setSelectedListing(listing);
-                            setOrderDialogOpen(true);
-                          }}
-                        >
-                          <IconShoppingCart className="h-4 w-4" />
-                          Order Now
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
+                        onClick={() => {
+                          setSelectedListing(listing);
+                          setOrderDialogOpen(true);
+                        }}
+                      >
+                        <IconShoppingCart className="h-4 w-4" />
+                        Order Now
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
                           className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
-                          onClick={() => {
-                            setSelectedListing(listing);
-                            setNegotiationDialogOpen(true);
-                          }}
-                          title="Message Farmer"
-                        >
-                          <IconMessageCircle className="h-[18px] w-[18px]" />
-                        </Button>
-                        <Button
-                          variant="outline"
+                        onClick={() => {
+                          setSelectedListing(listing);
+                          setNegotiationDialogOpen(true);
+                        }}
+                        title="Message Farmer"
+                      >
+                        <IconMessageCircle className="h-[18px] w-[18px]" />
+                      </Button>
+                      <Button
+                        variant="outline"
                           className="px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors"
-                          onClick={() => {
-                            setSelectedListing(listing);
-                            setRfqDialogOpen(true);
-                          }}
-                          title="Request Quote"
-                        >
-                          RFQ
+                        onClick={() => {
+                          setSelectedListing(listing);
+                          setRfqDialogOpen(true);
+                        }}
+                        title="Request Quote"
+                      >
+                        RFQ
                         </Button>
                       </div>
                       <Button

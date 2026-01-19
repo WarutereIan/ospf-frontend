@@ -21,6 +21,8 @@ import { Farmers } from "@/pages/officer/Farmers";
 import { Reports } from "@/pages/officer/Reports";
 import { Centers } from "@/pages/officer/Centers";
 import { Advisory } from "@/pages/officer/Advisory";
+import { QualityStandards } from "@/pages/officer/QualityStandards";
+import { LocationSalesSummary } from "@/pages/officer/LocationSalesSummary";
 import { StockInForm } from "@/pages/aggregation/StockInForm";
 import { StockOutForm } from "@/pages/aggregation/StockOutForm";
 import { InventoryManagement } from "@/pages/aggregation/InventoryManagement";
@@ -28,6 +30,9 @@ import { StorageManagement } from "@/pages/aggregation/StorageManagement";
 import { CapacityManagement } from "@/pages/aggregation/CapacityManagement";
 import { QualityCheck } from "@/pages/aggregation/QualityCheck";
 import { QualityChecksList } from "@/pages/aggregation/QualityChecksList";
+import { ReceiveFromWard } from "@/pages/aggregation/ReceiveFromWard";
+import { AggregationReports } from "@/pages/aggregation/Reports";
+import { BuyerDemandMatching } from "@/pages/aggregation/BuyerDemandMatching";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { BuyerOrderDetails } from "@/pages/buyer/BuyerOrderDetails";
@@ -89,6 +94,7 @@ export function App() {
             
             {/* Aggregation Manager Routes */}
             <Route path="/dashboard/aggregation/stock-in" element={<StockInForm />} />
+            <Route path="/dashboard/aggregation/receive-ward" element={<ReceiveFromWard />} />
             <Route path="/dashboard/aggregation/stock-out" element={<StockOutForm />} />
             <Route path="/dashboard/aggregation/inventory" element={<InventoryManagement />} />
             <Route path="/dashboard/aggregation/storage" element={<StorageManagement />} />
@@ -96,11 +102,15 @@ export function App() {
             <Route path="/dashboard/aggregation/quality-checks" element={<QualityChecksList />} />
             <Route path="/dashboard/aggregation/quality-checks/new" element={<QualityCheck />} />
             <Route path="/dashboard/aggregation/quality-checks/:id" element={<QualityCheck />} />
+            <Route path="/dashboard/aggregation/buyer-matching" element={<BuyerDemandMatching />} />
+            <Route path="/dashboard/aggregation/reports" element={<AggregationReports />} />
             <Route path="/dashboard/aggregation/farmers" element={<PeerLeaderboard />} />
             
             {/* County Officer Routes */}
             <Route path="/dashboard/county-officer/farmers" element={<Farmers />} />
             <Route path="/dashboard/county-officer/farmers/:id" element={<Farmers />} />
+            <Route path="/dashboard/county-officer/quality-standards" element={<QualityStandards />} />
+            <Route path="/dashboard/county-officer/location-summary" element={<LocationSalesSummary />} />
             <Route path="/dashboard/county-officer/reports" element={<Reports />} />
             <Route path="/dashboard/county-officer/centers" element={<Centers />} />
             <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
