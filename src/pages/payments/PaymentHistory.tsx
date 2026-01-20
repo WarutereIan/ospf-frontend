@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -21,95 +21,60 @@ import {
   IconFileText,
 } from "@tabler/icons-react";
 import { EscrowStatus as EscrowStatusComponent, type EscrowStatus } from "@/components/payments/EscrowStatus";
-
-interface PaymentTransaction {
-  id: string;
-  orderId: string;
-  amount: number;
-  platformFee: number;
-  totalAmount: number;
-  method: "mpesa" | "airtel" | "bank" | "card";
-  status: EscrowStatus;
-  farmerName: string;
-  createdAt: string;
-  releasedAt?: string;
-  receiptUrl?: string;
-}
+import { usePayment } from "@/contexts/PaymentContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { PaymentHistoryItem } from "@/types/payment";
 
 export function PaymentHistory() {
-  const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<PaymentTransaction[]>([]);
+  const { user } = useAuth();
+  const { 
+    paymentHistory, 
+    fetchPaymentHistory,
+    setFilters,
+    isLoading 
+  } = usePayment();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedTransaction, setSelectedTransaction] = useState<PaymentTransaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<PaymentHistoryItem | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch payment history on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleTransactions: PaymentTransaction[] = [
-        {
-          id: "PAY-001",
-          orderId: "ORD-001",
-          amount: 75000,
-          platformFee: 1500,
-          totalAmount: 76500,
-          method: "mpesa",
-          status: "completed",
-          farmerName: "James Mutua",
-          createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          releasedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "PAY-002",
-          orderId: "ORD-002",
-          amount: 36000,
-          platformFee: 720,
-          totalAmount: 36720,
-          method: "mpesa",
-          status: "in_escrow",
-          farmerName: "Mary Wanjiku",
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "PAY-003",
-          orderId: "ORD-003",
-          amount: 20000,
-          platformFee: 400,
-          totalAmount: 20400,
-          method: "airtel",
-          status: "ready_for_release",
-          farmerName: "Peter Kamau",
-          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-      setTransactions(sampleTransactions);
-      setFilteredTransactions(sampleTransactions);
-      setIsLoading(false);
-    }, 1000);
+    fetchPaymentHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Update filters when search or status changes
   useEffect(() => {
-    let filtered = [...transactions];
+    setFilters({
+      status: statusFilter !== "all" ? statusFilter as any : undefined,
+      searchQuery: searchTerm || undefined,
+    });
+  }, [statusFilter, searchTerm, setFilters]);
+
+  // Filter transactions based on search and status
+  const filteredTransactions = useMemo(() => {
+    let filtered = [...paymentHistory];
 
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (tx) =>
           tx.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.farmerName.toLowerCase().includes(searchTerm.toLowerCase())
+          tx.orderId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.farmerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.buyerName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // Status filter
+    // Status filter (already applied via context filters, but double-check)
     if (statusFilter !== "all") {
       filtered = filtered.filter((tx) => tx.status === statusFilter);
     }
 
-    setFilteredTransactions(filtered);
-  }, [transactions, searchTerm, statusFilter]);
+    return filtered;
+  }, [paymentHistory, searchTerm, statusFilter]);
 
   const getStatusColor = (status: EscrowStatus) => {
     switch (status) {
@@ -139,10 +104,15 @@ export function PaymentHistory() {
         return "M-PESA";
       case "airtel":
         return "Airtel Money";
+      case "bank_transfer":
       case "bank":
         return "Bank Transfer";
       case "card":
         return "Card";
+      case "escrow":
+        return "Escrow";
+      case "cash":
+        return "Cash";
       default:
         return method;
     }
@@ -242,22 +212,22 @@ export function PaymentHistory() {
                 <TableBody>
                   {filteredTransactions.map((tx) => (
                     <TableRow key={tx.id}>
-                      <TableCell className="font-medium">{tx.id}</TableCell>
-                      <TableCell>{tx.orderId}</TableCell>
-                      <TableCell>{tx.farmerName}</TableCell>
+                      <TableCell className="font-medium">{tx.paymentId || tx.id}</TableCell>
+                      <TableCell>{tx.orderId || tx.orderNumber}</TableCell>
+                      <TableCell>{tx.counterparty}</TableCell>
                       <TableCell className="font-semibold">
-                        KES {tx.totalAmount.toLocaleString()}
+                        KES {tx.amount.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{getMethodLabel(tx.method)}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusColor(tx.status)}>
-                          {tx.status.replace(/_/g, " ")}
+                        <Badge variant="outline" className={getStatusColor(tx.status as EscrowStatus)}>
+                          {String(tx.status).replace(/_/g, " ")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(tx.createdAt).toLocaleDateString()}
+                        {new Date(tx.date).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -295,42 +265,44 @@ export function PaymentHistory() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Transaction Details</DialogTitle>
-            <DialogDescription>Payment #{selectedTransaction?.id}</DialogDescription>
+            <DialogDescription>Payment #{selectedTransaction?.paymentId || selectedTransaction?.id}</DialogDescription>
           </DialogHeader>
           {selectedTransaction && (
             <div className="space-y-6">
               <EscrowStatusComponent
-                status={selectedTransaction.status}
+                status={selectedTransaction.status as EscrowStatus}
                 amount={selectedTransaction.amount}
-                orderId={selectedTransaction.orderId}
-                createdAt={selectedTransaction.createdAt}
-                releasedAt={selectedTransaction.releasedAt}
+                orderId={selectedTransaction.orderId || selectedTransaction.orderNumber}
+                createdAt={selectedTransaction.date}
+                releasedAt={selectedTransaction.type === "escrow_release" ? selectedTransaction.date : undefined}
               />
               <div className="border-t pt-4">
                 <h3 className="font-semibold mb-3">Transaction Breakdown</h3>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Order Amount</span>
+                    <span className="text-muted-foreground">Transaction Type</span>
+                    <span className="font-medium">{selectedTransaction.type.replace(/_/g, " ")}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Amount</span>
                     <span className="font-medium">KES {selectedTransaction.amount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Platform Fee (2%)</span>
-                    <span className="font-medium">KES {selectedTransaction.platformFee.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Description</span>
+                    <span className="font-medium">{selectedTransaction.description}</span>
                   </div>
                   <div className="flex justify-between text-sm pt-2 border-t">
-                    <span className="font-semibold">Total Paid</span>
-                    <span className="font-bold">KES {selectedTransaction.totalAmount.toLocaleString()}</span>
+                    <span className="font-semibold">Total</span>
+                    <span className="font-bold">KES {selectedTransaction.amount.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
-              {selectedTransaction.receiptUrl && (
-                <div className="border-t pt-4">
-                  <Button variant="outline" className="w-full">
-                    <IconDownload className="mr-2 h-4 w-4" />
-                    Download Receipt
-                  </Button>
-                </div>
-              )}
+              <div className="border-t pt-4">
+                <Button variant="outline" className="w-full">
+                  <IconDownload className="mr-2 h-4 w-4" />
+                  Download Receipt
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

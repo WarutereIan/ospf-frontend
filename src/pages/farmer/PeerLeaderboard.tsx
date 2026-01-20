@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,65 +12,28 @@ import {
   HorizontalBarChart,
   ProgressBar,
 } from "@/components/visualizations";
-
-interface LeaderboardEntry {
-  rank: number;
-  farmerName: string;
-  subCounty: string;
-  totalSales: number;
-  totalRevenue: number;
-  orderCount: number;
-  avgRating: number;
-  isCurrentUser?: boolean;
-}
-
-// Sample leaderboard data
-const sampleLeaderboard: LeaderboardEntry[] = [
-  {
-    rank: 1,
-    farmerName: "James Mutua",
-    subCounty: "Kangundo",
-    totalSales: 5000,
-    totalRevenue: 750000,
-    orderCount: 45,
-    avgRating: 4.8,
-  },
-  {
-    rank: 2,
-    farmerName: "Mary Wanjiku",
-    subCounty: "Kathiani",
-    totalSales: 4500,
-    totalRevenue: 675000,
-    orderCount: 38,
-    avgRating: 4.7,
-  },
-  {
-    rank: 3,
-    farmerName: "Peter Kamau",
-    subCounty: "Masinga",
-    totalSales: 4000,
-    totalRevenue: 600000,
-    orderCount: 32,
-    avgRating: 4.6,
-  },
-  {
-    rank: 12,
-    farmerName: "You",
-    subCounty: "Kangundo",
-    totalSales: 1500,
-    totalRevenue: 225000,
-    orderCount: 24,
-    avgRating: 4.5,
-    isCurrentUser: true,
-  },
-];
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { LeaderboardEntry } from "@/types/analytics";
 
 export function PeerLeaderboard() {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(sampleLeaderboard);
+  const { leaderboards, fetchLeaderboard, isLoading } = useAnalytics();
+  const { user } = useAuth();
+  
   const [sortBy, setSortBy] = useState<"revenue" | "sales" | "orders" | "rating">("revenue");
   const [filterSubCounty, setFilterSubCounty] = useState("all");
 
-  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+  // Fetch leaderboard on mount
+  useEffect(() => {
+    fetchLeaderboard("revenue", "monthly");
+  }, [fetchLeaderboard]);
+
+  // Get the first leaderboard or use empty array
+  const currentLeaderboard = leaderboards.length > 0 ? leaderboards[0] : null;
+  const leaderboardEntries: LeaderboardEntry[] = currentLeaderboard?.entries || [];
+  
+  const sortedLeaderboard = [...leaderboardEntries].sort((a, b) => {
     switch (sortBy) {
       case "revenue":
         return b.totalRevenue - a.totalRevenue;

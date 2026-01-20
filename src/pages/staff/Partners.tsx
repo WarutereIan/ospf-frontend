@@ -25,29 +25,16 @@ import {
   IconDownload,
 } from "@tabler/icons-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface Partner {
-  id: string;
-  name: string;
-  type: "government" | "ngo" | "private" | "donor" | "other";
-  contactPerson: string;
-  email?: string;
-  phone: string;
-  location: string;
-  status: "active" | "inactive" | "pending";
-  engagementLevel: "high" | "medium" | "low";
-  contributions: string[];
-  createdAt: string;
-  lastContact?: string;
-}
+import { useStaff } from "@/contexts/StaffContext";
+import type { Partner } from "@/types/staff";
 
 export function Partners() {
-  const [partners, setPartners] = useState<Partner[]>([]);
+  const { filteredPartners, fetchPartners, createPartnerAction, updatePartnerAction, deletePartnerAction, isLoading } = useStaff();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     type: "ngo" as Partner["type"],
@@ -59,70 +46,13 @@ export function Partners() {
     contributions: "",
   });
 
+  // Fetch partners on mount
   useEffect(() => {
-    setTimeout(() => {
-      setPartners([
-        {
-          id: "P001",
-          name: "Machakos County Government",
-          type: "government",
-          contactPerson: "John Mwangi",
-          email: "john.mwangi@machakos.go.ke",
-          phone: "+254712345678",
-          location: "Machakos Town",
-          status: "active",
-          engagementLevel: "high",
-          contributions: ["Policy support", "Infrastructure", "Extension services"],
-          createdAt: "2023-01-15",
-          lastContact: "2024-01-10",
-        },
-        {
-          id: "P002",
-          name: "USAID Kenya",
-          type: "donor",
-          contactPerson: "Sarah Johnson",
-          email: "sjohnson@usaid.gov",
-          phone: "+254723456789",
-          location: "Nairobi",
-          status: "active",
-          engagementLevel: "high",
-          contributions: ["Funding", "Technical assistance", "Monitoring"],
-          createdAt: "2023-02-01",
-          lastContact: "2024-01-12",
-        },
-        {
-          id: "P003",
-          name: "Farmers Cooperative Union",
-          type: "private",
-          contactPerson: "David Kimani",
-          phone: "+254734567890",
-          location: "Kangundo",
-          status: "active",
-          engagementLevel: "medium",
-          contributions: ["Farmer mobilization", "Market access"],
-          createdAt: "2023-03-10",
-          lastContact: "2024-01-05",
-        },
-        {
-          id: "P004",
-          name: "World Vision Kenya",
-          type: "ngo",
-          contactPerson: "Grace Wambui",
-          email: "grace.wambui@worldvision.org",
-          phone: "+254745678901",
-          location: "Machakos",
-          status: "active",
-          engagementLevel: "medium",
-          contributions: ["Training", "Community engagement"],
-          createdAt: "2023-04-20",
-          lastContact: "2023-12-15",
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchPartners();
+  }, [fetchPartners]);
 
-  const filteredPartners = partners.filter((partner) => {
+  // Filter partners based on search and filters
+  const partners = filteredPartners.filter((partner) => {
     const matchesSearch =
       partner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       partner.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -132,32 +62,34 @@ export function Partners() {
     return matchesSearch && matchesType && matchesStatus;
   });
 
-  const handleCreatePartner = () => {
-    const newPartner: Partner = {
-      id: `P${String(partners.length + 1).padStart(3, "0")}`,
-      name: formData.name,
-      type: formData.type,
-      contactPerson: formData.contactPerson,
-      email: formData.email || undefined,
-      phone: formData.phone,
-      location: formData.location,
-      status: "pending",
-      engagementLevel: formData.engagementLevel,
-      contributions: formData.contributions.split(",").map((c) => c.trim()).filter(Boolean),
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setPartners([...partners, newPartner]);
-    setIsDialogOpen(false);
-    setFormData({
-      name: "",
-      type: "ngo",
-      contactPerson: "",
-      email: "",
-      phone: "",
-      location: "",
-      engagementLevel: "medium",
-      contributions: "",
-    });
+  const handleCreatePartner = async () => {
+    try {
+      await createPartnerAction({
+        name: formData.name,
+        type: formData.type,
+        contactPerson: formData.contactPerson,
+        email: formData.email || undefined,
+        phone: formData.phone,
+        location: formData.location,
+        status: "pending",
+        engagementLevel: formData.engagementLevel,
+        contributions: formData.contributions.split(",").map((c) => c.trim()).filter(Boolean),
+      });
+      setIsDialogOpen(false);
+      setFormData({
+        name: "",
+        type: "ngo",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        location: "",
+        engagementLevel: "medium",
+        contributions: "",
+      });
+    } catch (error) {
+      console.error("Failed to create partner:", error);
+      alert("Failed to create partner. Please try again.");
+    }
   };
 
   const getTypeBadgeColor = (type: Partner["type"]) => {
@@ -311,7 +243,7 @@ export function Partners() {
       {/* Partners Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Partners ({filteredPartners.length})</CardTitle>
+          <CardTitle>Partners ({partners.length})</CardTitle>
           <CardDescription>Manage partner relationships and engagement</CardDescription>
         </CardHeader>
         <CardContent>
@@ -321,7 +253,7 @@ export function Partners() {
                 <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
               ))}
             </div>
-          ) : filteredPartners.length > 0 ? (
+          ) : partners.length > 0 ? (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -338,7 +270,7 @@ export function Partners() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPartners.map((partner) => (
+                  {partners.map((partner) => (
                     <TableRow key={partner.id}>
                       <TableCell className="font-medium">{partner.name}</TableCell>
                       <TableCell>

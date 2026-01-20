@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { MarketplaceOrder } from "@/types/marketplace";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -31,7 +34,7 @@ import {
   IconClipboardCheck,
 } from "@tabler/icons-react";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
-import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
+import { OrderStatusHistory, type OrderStatus } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { DigitalReceipt } from "@/components/orders/DigitalReceipt";
 import { TraceabilityView } from "@/components/orders/TraceabilityView";
@@ -41,136 +44,66 @@ import {
   OrderPipeline,
 } from "@/components/visualizations";
 
-interface FarmerOrder {
-  id: string;
-  buyerName: string;
-  buyerPhone: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  totalAmount: number;
-  status:
-    | "order_placed"
-    | "order_accepted"
-    | "payment_secured"
-    | "rejected"
-    | "in_transit"
-    | "at_aggregation"
-    | "quality_approved"
-    | "out_for_delivery"
-    | "delivered"
-    | "completed"
-    | "disputed";
-  createdAt: string;
-  deliveryLocation?: string;
-  notes?: string;
-  paymentStatus?: EscrowStatusType;
-  paymentAmount?: number;
-  photos?: string[];
-  batchId: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-}
-
-// Sample orders - will be replaced with API calls
-const sampleOrders: FarmerOrder[] = [
-  {
-    id: "ORD-001",
-    buyerName: "John Mwangi",
-    buyerPhone: "+254712345678",
-    variety: "Kenya",
-    quantity: 500,
-    qualityGrade: "A",
-    pricePerKg: 150,
-    totalAmount: 75000,
-    status: "order_placed",
-    createdAt: new Date().toISOString(),
-    deliveryLocation: "Kangundo Main Aggregation Center (Main - Kangundo Subcounty)",
-    paymentStatus: "pending",
-    batchId: "BATCH-ORD-001",
-    qrCode: "QR-BATCH-ORD-001",
-  },
-  {
-    id: "ORD-002",
-    buyerName: "Mary Wanjiku",
-    buyerPhone: "+254723456789",
-    variety: "SPK004",
-    quantity: 300,
-    qualityGrade: "A",
-    pricePerKg: 120,
-    totalAmount: 36000,
-    status: "order_accepted",
-    createdAt: new Date().toISOString(),
-    deliveryLocation: "Tala Satellite Center (Satellite - Tala Ward, Kangundo)",
-    paymentStatus: "in_escrow",
-    paymentAmount: 36000,
-    batchId: "BATCH-ORD-002",
-    qrCode: "QR-BATCH-ORD-002",
-  },
-  {
-    id: "ORD-003",
-    buyerName: "Peter Kamau",
-    buyerPhone: "+254734567890",
-    variety: "Kabode",
-    quantity: 200,
-    qualityGrade: "B",
-    pricePerKg: 100,
-    totalAmount: 20000,
-    status: "quality_approved",
-    createdAt: new Date().toISOString(),
-    deliveryLocation: "Yatta Main Aggregation Center (Main - Yatta Subcounty)",
-    paymentStatus: "ready_for_release",
-    paymentAmount: 20000,
-    photos: [
-      "https://via.placeholder.com/400x300?text=Quality+Check+Photo+1",
-      "https://via.placeholder.com/400x300?text=Quality+Check+Photo+2",
-    ],
-    batchId: "BATCH-ORD-003",
-    qrCode: "QR-BATCH-ORD-003",
-  },
-];
-
 export function FarmerOrders() {
-  const [orders, setOrders] = useState<FarmerOrder[]>(sampleOrders);
+  const { orders, fetchOrders, updateOrderStatus, isLoading, orderFilters, setOrderFilters } = useMarketplace();
+  const { user } = useAuth();
+  
+  const [filteredOrders, setFilteredOrders] = useState<MarketplaceOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState<FarmerOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrder | null>(null);
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
-  const filteredOrders =
-    statusFilter === "all"
-      ? orders.filter(
-          (order) =>
-            order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.buyerName.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : orders.filter(
-          (order) =>
-            order.status === statusFilter &&
-            (order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              order.buyerName.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
+  // Fetch farmer's orders on mount and when filters change
+  useEffect(() => {
+    if (user?.id) {
+      const filters: any = {
+        farmerId: user.id,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        searchQuery: searchTerm || undefined,
+      };
+      fetchOrders(filters);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, user?.id]);
 
-  const handleViewOrder = (order: FarmerOrder) => {
+  // Apply client-side search filter
+  useEffect(() => {
+    let filtered = [...orders];
+
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (order) =>
+          order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.variety.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredOrders(filtered);
+  }, [orders, searchTerm]);
+
+  const handleViewOrder = (order: MarketplaceOrder) => {
     setSelectedOrder(order);
     setOrderDetailsOpen(true);
   };
 
-  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+  const handleUpdateStatus = async (orderId: string, newStatus: MarketplaceOrder["status"]) => {
     setUpdatingStatus(orderId);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      setOrders(
-        orders.map((order) =>
-          order.id === orderId ? { ...order, status: newStatus as any } : order
-        )
-      );
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus as any });
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      // Refresh orders
+      if (user?.id) {
+        await fetchOrders({ farmerId: user.id });
       }
       setUpdatingStatus(null);
-    }, 1000);
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      alert("Failed to update order status. Please try again.");
+      setUpdatingStatus(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -612,8 +545,8 @@ export function FarmerOrders() {
               {/* Payment Status */}
               {selectedOrder.paymentStatus && selectedOrder.paymentAmount && (
                 <EscrowStatus
-                  status={selectedOrder.paymentStatus}
-                  amount={selectedOrder.paymentAmount}
+                  status={selectedOrder.paymentStatus === "secured" ? "in_escrow" : selectedOrder.paymentStatus === "pending" ? "pending" : selectedOrder.paymentStatus === "released" ? "released" : "pending" as EscrowStatus}
+                  amount={selectedOrder.paymentAmount || 0}
                   orderId={selectedOrder.id}
                   createdAt={selectedOrder.createdAt}
                 />
@@ -622,7 +555,7 @@ export function FarmerOrders() {
               {/* Status History */}
               <OrderStatusHistory
                 orderId={selectedOrder.id}
-                currentStatus={selectedOrder.status}
+                currentStatus={(selectedOrder.status === "cancelled" || selectedOrder.status === "quality_rejected" ? "rejected" : selectedOrder.status) as OrderStatus}
                 history={[
                   {
                     id: "hist-1",
@@ -877,7 +810,7 @@ export function FarmerOrders() {
                     Reject Order
                   </Button>
                   <Button
-                    onClick={() => handleUpdateStatus(selectedOrder.id, "accepted")}
+                    onClick={() => handleUpdateStatus(selectedOrder.id, "order_accepted")}
                     disabled={updatingStatus === selectedOrder.id}
                     className="w-full sm:w-auto"
                   >

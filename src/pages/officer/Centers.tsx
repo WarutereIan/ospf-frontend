@@ -20,6 +20,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import type { LatLngExpression } from "leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { AggregationCenter } from "@/types/aggregation";
 
 // Fix for default marker icons in Leaflet
 import icon from "leaflet/dist/images/marker-icon.png";
@@ -86,25 +88,6 @@ const createSatelliteCenterIcon = () => {
 };
 
 
-interface AggregationCenter {
-  id: string;
-  name: string;
-  location: string;
-  subCounty: string;
-  ward?: string; // For satellite centers
-  centerType: "main" | "satellite";
-  mainCenterId?: string; // For satellite centers to link to their main center
-  manager: string;
-  currentStock: number;
-  capacity: number;
-  activeFarmers: number;
-  status: "operational" | "maintenance" | "closed";
-  stockInToday: number;
-  stockOutToday: number;
-  alerts: string[];
-  coordinates?: [number, number]; // [lat, lng]
-}
-
 // Component to set map bounds
 function MapBounds({ centers }: { centers: AggregationCenter[] }) {
   const map = useMap();
@@ -123,226 +106,30 @@ function MapBounds({ centers }: { centers: AggregationCenter[] }) {
 }
 
 export function Centers() {
-  const [centers, setCenters] = useState<AggregationCenter[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { centers, fetchCenters, stats, isLoading } = useAggregation();
+  
   const [centerFilter, setCenterFilter] = useState<"all" | "main" | "satellite">("all");
-  const [totalStats, setTotalStats] = useState({
-    totalCenters: 0,
-    mainCenters: 0,
-    satelliteCenters: 0,
-    totalStock: 0,
-    totalCapacity: 0,
-    stockInToday: 0,
-    stockOutToday: 0,
-  });
+  
+  // Fetch centers on mount
+  useEffect(() => {
+    fetchCenters();
+  }, [fetchCenters]);
   
   const filteredCenters = centers.filter((center) => {
     if (centerFilter === "all") return true;
     return center.centerType === centerFilter;
   });
 
-  useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      const allCenters = [
-        // MAIN CENTERS (Subcounty Level)
-        {
-          id: "AC001",
-          name: "Kangundo Main Aggregation Center",
-          location: "Kangundo Town",
-          subCounty: "Kangundo",
-          centerType: "main" as const,
-          manager: "Peter Kariuki",
-          currentStock: 5000,
-          capacity: 10000,
-          activeFarmers: 45,
-          status: "operational" as const,
-          stockInToday: 1200,
-          stockOutToday: 800,
-          alerts: [],
-          coordinates: [-1.3, 37.35] as [number, number],
-        },
-        {
-          id: "AC002",
-          name: "Kathiani Main Aggregation Center",
-          location: "Kathiani Market",
-          subCounty: "Kathiani",
-          centerType: "main" as const,
-          manager: "Jane Muthoni",
-          currentStock: 3200,
-          capacity: 8000,
-          activeFarmers: 32,
-          status: "operational" as const,
-          stockInToday: 800,
-          stockOutToday: 500,
-          alerts: [],
-          coordinates: [-1.5, 37.3] as [number, number],
-        },
-        {
-          id: "AC003",
-          name: "Matungulu Main Aggregation Center",
-          location: "Matungulu Town",
-          subCounty: "Matungulu",
-          centerType: "main" as const,
-          manager: "David Kimani",
-          currentStock: 2500,
-          capacity: 7000,
-          activeFarmers: 28,
-          status: "operational" as const,
-          stockInToday: 600,
-          stockOutToday: 400,
-          alerts: [],
-          coordinates: [-1.4, 37.25] as [number, number],
-        },
-        {
-          id: "AC004",
-          name: "Yatta Main Aggregation Center",
-          location: "Yatta Market",
-          subCounty: "Yatta",
-          centerType: "main" as const,
-          manager: "Grace Wambui",
-          currentStock: 1800,
-          capacity: 6000,
-          activeFarmers: 22,
-          status: "operational" as const,
-          stockInToday: 500,
-          stockOutToday: 300,
-          alerts: [],
-          coordinates: [-1.6, 37.2] as [number, number],
-        },
-        
-        // SATELLITE CENTERS (Ward Level)
-        {
-          id: "SAT001",
-          name: "Kangundo East Satellite Center",
-          location: "Kangundo East Ward",
-          subCounty: "Kangundo",
-          ward: "Kangundo East",
-          centerType: "satellite" as const,
-          mainCenterId: "AC001",
-          manager: "John Mwangi",
-          currentStock: 800,
-          capacity: 2000,
-          activeFarmers: 15,
-          status: "operational" as const,
-          stockInToday: 250,
-          stockOutToday: 150,
-          alerts: [],
-          coordinates: [-1.32, 37.36] as [number, number],
-        },
-        {
-          id: "SAT002",
-          name: "Kangundo West Satellite Center",
-          location: "Kangundo West Ward",
-          subCounty: "Kangundo",
-          ward: "Kangundo West",
-          centerType: "satellite" as const,
-          mainCenterId: "AC001",
-          manager: "Mary Njoki",
-          currentStock: 600,
-          capacity: 1500,
-          activeFarmers: 12,
-          status: "operational" as const,
-          stockInToday: 200,
-          stockOutToday: 100,
-          alerts: [],
-          coordinates: [-1.28, 37.34] as [number, number],
-        },
-        {
-          id: "SAT003",
-          name: "Kathiani Central Satellite Center",
-          location: "Kathiani Central Ward",
-          subCounty: "Kathiani",
-          ward: "Kathiani Central",
-          centerType: "satellite" as const,
-          mainCenterId: "AC002",
-          manager: "Paul Mutuku",
-          currentStock: 500,
-          capacity: 1800,
-          activeFarmers: 10,
-          status: "operational" as const,
-          stockInToday: 180,
-          stockOutToday: 120,
-          alerts: [],
-          coordinates: [-1.52, 37.32] as [number, number],
-        },
-        {
-          id: "SAT004",
-          name: "Mitaboni Satellite Center",
-          location: "Mitaboni Ward",
-          subCounty: "Kathiani",
-          ward: "Mitaboni",
-          centerType: "satellite" as const,
-          mainCenterId: "AC002",
-          manager: "Lucy Mwikali",
-          currentStock: 400,
-          capacity: 1500,
-          activeFarmers: 8,
-          status: "operational" as const,
-          stockInToday: 150,
-          stockOutToday: 80,
-          alerts: [],
-          coordinates: [-1.48, 37.28] as [number, number],
-        },
-        {
-          id: "SAT005",
-          name: "Matungulu North Satellite Center",
-          location: "Matungulu North Ward",
-          subCounty: "Matungulu",
-          ward: "Matungulu North",
-          centerType: "satellite" as const,
-          mainCenterId: "AC003",
-          manager: "James Kioko",
-          currentStock: 0,
-          capacity: 1000,
-          activeFarmers: 6,
-          status: "maintenance" as const,
-          stockInToday: 0,
-          stockOutToday: 0,
-          alerts: ["Center under maintenance"],
-          coordinates: [-1.42, 37.27] as [number, number],
-        },
-        {
-          id: "SAT006",
-          name: "Yatta South Satellite Center",
-          location: "Yatta South Ward",
-          subCounty: "Yatta",
-          ward: "Yatta South",
-          centerType: "satellite" as const,
-          mainCenterId: "AC004",
-          manager: "Sarah Ndunge",
-          currentStock: 350,
-          capacity: 1200,
-          activeFarmers: 9,
-          status: "operational" as const,
-          stockInToday: 120,
-          stockOutToday: 80,
-          alerts: [],
-          coordinates: [-1.62, 37.22] as [number, number],
-        },
-      ];
-      
-      setCenters(allCenters);
-      
-      const mainCenters = allCenters.filter(c => c.centerType === "main").length;
-      const satelliteCenters = allCenters.filter(c => c.centerType === "satellite").length;
-      const totalStock = allCenters.reduce((sum, c) => sum + c.currentStock, 0);
-      const totalCapacity = allCenters.reduce((sum, c) => sum + c.capacity, 0);
-      const stockInToday = allCenters.reduce((sum, c) => sum + c.stockInToday, 0);
-      const stockOutToday = allCenters.reduce((sum, c) => sum + c.stockOutToday, 0);
-      
-      setTotalStats({
-        totalCenters: allCenters.length,
-        mainCenters,
-        satelliteCenters,
-        totalStock,
-        totalCapacity,
-        stockInToday,
-        stockOutToday,
-      });
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+  // Calculate stats from centers
+  const totalStats = stats || {
+    totalCenters: centers.length,
+    mainCenters: centers.filter(c => c.centerType === "main").length,
+    satelliteCenters: centers.filter(c => c.centerType === "satellite").length,
+    totalStock: centers.reduce((sum, c) => sum + (c.currentStock || 0), 0),
+    totalCapacity: centers.reduce((sum, c) => sum + (c.capacity || 0), 0),
+    stockInToday: 0, // TODO: Calculate from transactions
+    stockOutToday: 0, // TODO: Calculate from transactions
+  };
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
@@ -688,7 +475,7 @@ export function Centers() {
                               </div>
                               <div className="pt-1 border-t">
                                 <p className="text-muted-foreground text-xs">Manager</p>
-                                <p className="font-medium text-xs">{center.manager}</p>
+                                <p className="font-medium text-xs">{center.managerName || center.managerId}</p>
                               </div>
                             </div>
                           </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,8 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface WardTransferEntry {
   fromCenterId: string;
@@ -34,14 +36,6 @@ interface WardTransferEntry {
   vehicleNumber?: string;
 }
 
-const satelliteCenters = [
-  { id: "SAT-001", name: "Tala Satellite Center", ward: "Tala Ward", subCounty: "Kangundo" },
-  { id: "SAT-002", name: "Kilala Satellite Center", ward: "Kilala Ward", subCounty: "Kangundo" },
-  { id: "SAT-003", name: "Mitaboni Satellite Center", ward: "Mitaboni Ward", subCounty: "Kathiani" },
-  { id: "SAT-004", name: "Masinga Satellite Center", ward: "Masinga Ward", subCounty: "Masinga" },
-  { id: "SAT-005", name: "Yatta Satellite Center", ward: "Yatta Ward", subCounty: "Yatta" },
-];
-
 const ofspVarieties = [
   { value: "kenya", label: "Kenya" },
   { value: "spk004", label: "SPK004" },
@@ -55,6 +49,9 @@ const qualityGrades = [
 ];
 
 export function ReceiveFromWard() {
+  const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState<Partial<WardTransferEntry>>({
     fromCenterId: "",
     fromCenterName: "",
@@ -75,15 +72,22 @@ export function ReceiveFromWard() {
   const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
   const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
 
-  const selectedCenter = satelliteCenters.find((c) => c.id === formData.fromCenterId);
+  // Fetch centers on mount - filter for satellite centers
+  useEffect(() => {
+    fetchCenters({ centerType: "satellite" });
+  }, [fetchCenters]);
+
+  // Filter for satellite centers
+  const satelliteCenters = centers.filter((c) => c.centerType === "satellite");
+  const sourceCenter = satelliteCenters.find((c) => c.id === formData.fromCenterId);
 
   const handleCenterChange = (centerId: string) => {
     const center = satelliteCenters.find((c) => c.id === centerId);
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       fromCenterId: centerId,
       fromCenterName: center?.name || "",
-    });
+    }));
   };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,11 +129,34 @@ export function ReceiveFromWard() {
       return;
     }
 
+    if (!selectedCenter && centers.length > 0) {
+      // Auto-select first center if none selected
+    }
+
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
+    
+    try {
       const qrCode = generateQRCode(formData.batchId!);
       setGeneratedQRCode(qrCode);
+
+      // Prepare stock transaction data (transfer from satellite to main)
+      const stockTransaction = {
+        centerId: selectedCenter?.id || centers[0]?.id || "",
+        centerName: selectedCenter?.name || centers[0]?.name || "",
+        type: "stock_in" as const,
+        variety: formData.variety || "",
+        quantity: formData.quantity || 0,
+        qualityGrade: formData.qualityGrade as "A" | "B" | "C",
+        photos: formData.photos || [],
+        notes: `${formData.notes || ""} Transfer from ${formData.fromCenterName}. ${formData.transporterName ? `Transporter: ${formData.transporterName}. ` : ""}${formData.vehicleNumber ? `Vehicle: ${formData.vehicleNumber}.` : ""}`,
+        batchId: formData.batchId,
+        qrCode,
+        createdBy: user?.id || "",
+        orderId: undefined, // Transfer doesn't have an order
+      };
+
+      // Record stock in via context
+      await recordStockIn(stockTransaction);
 
       // Generate receipt data
       const receiptData = {
@@ -139,13 +166,12 @@ export function ReceiveFromWard() {
         variety: formData.variety,
         quantity: formData.quantity,
         qualityGrade: formData.qualityGrade,
-        location: `From ${formData.fromCenterName} to Main Center`,
+        location: `From ${formData.fromCenterName} to ${selectedCenter?.name || "Main Center"}`,
         transactionId: formData.batchId,
         qrCode: qrCode,
       };
 
       setGeneratedReceipt(receiptData);
-      setIsSubmitting(false);
       setReceiptOpen(true);
 
       // Reset form after showing receipt
@@ -163,7 +189,12 @@ export function ReceiveFromWard() {
         transporterName: "",
         vehicleNumber: "",
       });
-    }, 2000);
+    } catch (error) {
+      console.error("Failed to record transfer:", error);
+      alert("Failed to record transfer. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedGrade = qualityGrades.find((g) => g.value === formData.qualityGrade);
@@ -206,7 +237,7 @@ export function ReceiveFromWard() {
                           <div className="flex flex-col">
                             <span>{center.name}</span>
                             <span className="text-xs text-muted-foreground">
-                              {center.ward} • {center.subCounty}
+                              {center.ward || ""} • {center.subCounty}
                             </span>
                           </div>
                         </SelectItem>

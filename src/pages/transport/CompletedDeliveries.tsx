@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,132 +40,18 @@ import {
   IconStar,
   IconUser,
 } from "@tabler/icons-react";
-
-interface CompletedDelivery {
-  id: string;
-  requestId: string;
-  type: "produce_pickup" | "produce_delivery" | "input_delivery";
-  requester: string;
-  from: string;
-  to: string;
-  distance: number;
-  weight: number;
-  description: string;
-  amount: number;
-  completedDate: string;
-  completedTime: string;
-  collectionDate?: string;
-  collectionTime?: string;
-  deliveryDuration?: string;
-  rating?: number;
-  paymentStatus: "pending" | "paid" | "processing";
-  photos?: string[];
-  notes?: string;
-}
+import { useTransport } from "@/contexts/TransportContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { TransportRequest } from "@/types/transport";
 
 export default function CompletedDeliveries() {
-  const [deliveries, setDeliveries] = useState<CompletedDelivery[]>([
-    {
-      id: "1",
-      requestId: "REQ-001",
-      type: "produce_pickup",
-      requester: "John Kamau (Farmer)",
-      from: "Kangundo Farm",
-      to: "Tala Satellite Aggregation Center",
-      distance: 5,
-      weight: 250,
-      description: "250kg of OFSP (Grade A)",
-      amount: 500,
-      completedDate: "2024-01-14",
-      completedTime: "14:30",
-      collectionDate: "2024-01-14",
-      collectionTime: "14:00",
-      deliveryDuration: "30 min",
-      rating: 5,
-      paymentStatus: "paid",
-      notes: "Delivery completed successfully. All items verified.",
-    },
-    {
-      id: "2",
-      requestId: "REQ-002",
-      type: "input_delivery",
-      requester: "AgriInputs Co.",
-      from: "AgriInputs Warehouse",
-      to: "Mary Wanjiku Farm",
-      distance: 8,
-      weight: 50,
-      description: "50kg NPK Fertilizer",
-      amount: 500,
-      completedDate: "2024-01-13",
-      completedTime: "16:00",
-      collectionDate: "2024-01-13",
-      collectionTime: "15:30",
-      deliveryDuration: "30 min",
-      rating: 4,
-      paymentStatus: "paid",
-      notes: "On-time delivery. Customer satisfied.",
-    },
-    {
-      id: "3",
-      requestId: "REQ-003",
-      type: "produce_delivery",
-      requester: "Kathiani Main Centre",
-      from: "Kathiani Main Aggregation Center",
-      to: "Nairobi Wholesale Market",
-      distance: 50,
-      weight: 1000,
-      description: "1 ton of Grade A OFSP",
-      amount: 4000,
-      completedDate: "2024-01-12",
-      completedTime: "10:00",
-      collectionDate: "2024-01-12",
-      collectionTime: "06:00",
-      deliveryDuration: "4 hours",
-      rating: 5,
-      paymentStatus: "processing",
-      notes: "Long distance delivery completed successfully.",
-    },
-    {
-      id: "4",
-      requestId: "REQ-004",
-      type: "produce_delivery",
-      requester: "Kilala Buyer (Restaurant)",
-      from: "Kilala Satellite Aggregation Center",
-      to: "Tala Town Restaurant",
-      distance: 3,
-      weight: 50,
-      description: "50kg of Grade B OFSP for restaurant",
-      amount: 300,
-      completedDate: "2024-01-11",
-      completedTime: "12:00",
-      collectionDate: "2024-01-11",
-      collectionTime: "11:00",
-      deliveryDuration: "1 hour",
-      rating: 4,
-      paymentStatus: "paid",
-    },
-    {
-      id: "5",
-      requestId: "REQ-005",
-      type: "produce_pickup",
-      requester: "Peter Kariuki (Farmer)",
-      from: "Masinga Farm",
-      to: "Masinga Main Aggregation Center",
-      distance: 4,
-      weight: 300,
-      description: "300kg of SPK004 (Grade A)",
-      amount: 600,
-      completedDate: "2024-01-10",
-      completedTime: "15:00",
-      collectionDate: "2024-01-10",
-      collectionTime: "14:30",
-      deliveryDuration: "30 min",
-      rating: 5,
-      paymentStatus: "paid",
-    },
-  ]);
+  const { requests, fetchRequests, isLoading } = useTransport();
+  const { user } = useAuth();
+  
+  // Get completed deliveries (filtered by status)
+  const deliveries = requests.filter(req => req.status === "delivered" || req.status === "completed");
 
-  const [selectedDelivery, setSelectedDelivery] = useState<CompletedDelivery | null>(null);
+  const [selectedDelivery, setSelectedDelivery] = useState<TransportRequest | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
@@ -174,31 +60,32 @@ export default function CompletedDeliveries() {
 
   const filteredDeliveries = deliveries.filter((delivery) => {
     const matchesSearch =
-      delivery.requestId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      delivery.requester.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      delivery.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      delivery.requesterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       delivery.from.toLowerCase().includes(searchTerm.toLowerCase()) ||
       delivery.to.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === "all" || delivery.type === filterType;
-    const matchesPayment = filterPayment === "all" || delivery.paymentStatus === filterPayment;
+    // Note: TransportRequest doesn't have paymentStatus field - filter removed
+    const matchesPayment = filterPayment === "all"; // Always true since we don't have payment status
     
     let matchesDate = true;
-    if (filterDateRange === "today") {
+    if (filterDateRange === "today" && delivery.deliveredAt) {
       const today = new Date().toISOString().split("T")[0];
-      matchesDate = delivery.completedDate === today;
-    } else if (filterDateRange === "week") {
+      matchesDate = delivery.deliveredAt.split("T")[0] === today;
+    } else if (filterDateRange === "week" && delivery.deliveredAt) {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      matchesDate = new Date(delivery.completedDate) >= weekAgo;
-    } else if (filterDateRange === "month") {
+      matchesDate = new Date(delivery.deliveredAt) >= weekAgo;
+    } else if (filterDateRange === "month" && delivery.deliveredAt) {
       const monthAgo = new Date();
       monthAgo.setMonth(monthAgo.getMonth() - 1);
-      matchesDate = new Date(delivery.completedDate) >= monthAgo;
+      matchesDate = new Date(delivery.deliveredAt) >= monthAgo;
     }
 
     return matchesSearch && matchesType && matchesPayment && matchesDate;
   });
 
-  const handleViewDetails = (delivery: CompletedDelivery) => {
+  const handleViewDetails = (delivery: TransportRequest) => {
     setSelectedDelivery(delivery);
     setDetailsDialogOpen(true);
   };
@@ -229,21 +116,10 @@ export default function CompletedDeliveries() {
     }
   };
 
-  const totalEarnings = deliveries
-    .filter((d) => d.paymentStatus === "paid")
-    .reduce((sum, d) => sum + d.amount, 0);
-
-  const pendingEarnings = deliveries
-    .filter((d) => d.paymentStatus === "pending" || d.paymentStatus === "processing")
-    .reduce((sum, d) => sum + d.amount, 0);
-
-  const averageRating =
-    deliveries.filter((d) => d.rating).length > 0
-      ? deliveries
-          .filter((d) => d.rating)
-          .reduce((sum, d) => sum + (d.rating || 0), 0) /
-        deliveries.filter((d) => d.rating).length
-      : 0;
+  // Note: TransportRequest doesn't have paymentStatus or rating fields
+  const totalEarnings = deliveries.reduce((sum, d) => sum + d.amount, 0);
+  const pendingEarnings = 0; // Not available in TransportRequest type
+  const averageRating = 0; // Not available in TransportRequest type
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-KE", {
@@ -390,11 +266,11 @@ export default function CompletedDeliveries() {
               {filteredDeliveries.length > 0 ? (
                 filteredDeliveries.map((delivery) => (
                   <TableRow key={delivery.id}>
-                    <TableCell className="font-medium font-mono">{delivery.requestId}</TableCell>
+                    <TableCell className="font-medium font-mono">{delivery.id}</TableCell>
                     <TableCell>{getTypeBadge(delivery.type)}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">{delivery.requester}</div>
+                        <div className="font-medium">{delivery.requesterName}</div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -409,14 +285,11 @@ export default function CompletedDeliveries() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">{formatDate(delivery.completedDate)}</div>
-                        <div className="text-muted-foreground flex items-center gap-1">
-                          <IconClock className="h-3 w-3" />
-                          {delivery.completedTime}
-                        </div>
-                        {delivery.deliveryDuration && (
-                          <div className="text-xs text-muted-foreground">
-                            Duration: {delivery.deliveryDuration}
+                        <div className="font-medium">{delivery.deliveredAt ? formatDate(delivery.deliveredAt) : "N/A"}</div>
+                        {delivery.deliveredAt && (
+                          <div className="text-muted-foreground flex items-center gap-1">
+                            <IconClock className="h-3 w-3" />
+                            {new Date(delivery.deliveredAt).toLocaleTimeString()}
                           </div>
                         )}
                       </div>
@@ -428,16 +301,11 @@ export default function CompletedDeliveries() {
                         {delivery.weight} kg
                       </div>
                     </TableCell>
-                    <TableCell>{getPaymentStatusBadge(delivery.paymentStatus)}</TableCell>
                     <TableCell>
-                      {delivery.rating ? (
-                        <div className="flex items-center gap-1">
-                          <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                          <span className="font-medium">{delivery.rating}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">No rating</span>
-                      )}
+                      <Badge variant="outline">N/A</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">N/A</span>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -491,7 +359,7 @@ export default function CompletedDeliveries() {
                       <div className="text-2xl font-bold">
                         KES {selectedDelivery.amount.toLocaleString()}
                       </div>
-                      {getPaymentStatusBadge(selectedDelivery.paymentStatus)}
+                      <Badge variant="outline">N/A</Badge>
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
@@ -511,10 +379,9 @@ export default function CompletedDeliveries() {
                       <IconMapPin className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{selectedDelivery.from}</span>
                     </div>
-                    {selectedDelivery.collectionDate && (
+                    {selectedDelivery.pickupAt && (
                       <div className="mt-2 text-xs text-muted-foreground">
-                        Collected: {formatDate(selectedDelivery.collectionDate)} at{" "}
-                        {selectedDelivery.collectionTime}
+                        Collected: {formatDate(selectedDelivery.pickupAt)}
                       </div>
                     )}
                   </CardContent>
@@ -528,10 +395,11 @@ export default function CompletedDeliveries() {
                       <IconMapPin className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{selectedDelivery.to}</span>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Delivered: {formatDate(selectedDelivery.completedDate)} at{" "}
-                      {selectedDelivery.completedTime}
-                    </div>
+                    {selectedDelivery.deliveredAt && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        Delivered: {formatDate(selectedDelivery.deliveredAt)}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -560,7 +428,9 @@ export default function CompletedDeliveries() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {selectedDelivery.deliveryDuration || "N/A"}
+                      {selectedDelivery.pickupAt && selectedDelivery.deliveredAt
+                        ? `${Math.round((new Date(selectedDelivery.deliveredAt).getTime() - new Date(selectedDelivery.pickupAt).getTime()) / (1000 * 60))} min`
+                        : "N/A"}
                     </div>
                   </CardContent>
                 </Card>
@@ -575,38 +445,11 @@ export default function CompletedDeliveries() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="font-medium">{selectedDelivery.requester}</div>
+                  <div className="font-medium">{selectedDelivery.requesterName}</div>
                 </CardContent>
               </Card>
 
-              {/* Rating */}
-              {selectedDelivery.rating && (
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <IconStar className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                      Customer Rating
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-2">
-                      <div className="text-3xl font-bold">{selectedDelivery.rating}</div>
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <IconStar
-                            key={i}
-                            className={`h-5 w-5 ${
-                              i < selectedDelivery.rating!
-                                ? "text-yellow-500 fill-yellow-500"
-                                : "text-gray-300"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              {/* Rating - Not available in TransportRequest type */}
 
               {/* Notes */}
               {selectedDelivery.notes && (

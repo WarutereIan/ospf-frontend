@@ -16,6 +16,8 @@ import {
   IconEye,
 } from "@tabler/icons-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { StockTransaction } from "@/types/aggregation";
 
 interface Transaction {
   id: string;
@@ -36,113 +38,58 @@ interface Transaction {
 }
 
 export function StockTransactionHistory() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const { transactions, fetchTransactions, isLoading, stockFilters, setStockFilters, selectedCenter } = useAggregation();
+  
+  const [filteredTransactions, setFilteredTransactions] = useState<StockTransaction[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [farmerFilter, setFarmerFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<StockTransaction | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
 
+  // Fetch transactions on mount and when filters change
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleTransactions: Transaction[] = [
-        {
-          id: "TXN-001",
-          type: "stock_in",
-          date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          variety: "Kenya",
-          qualityGrade: "A",
-          quantity: 500,
-          pricePerKg: 150,
-          totalAmount: 75000,
-          status: "completed",
-          recordedBy: "Peter Kariuki",
-          notes: "Fresh delivery, good quality",
-        },
-        {
-          id: "TXN-002",
-          type: "quality_check",
-          date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          variety: "Kenya",
-          qualityGrade: "A",
-          quantity: 500,
-          status: "completed",
-          recordedBy: "Jane Muthoni",
-          notes: "Passed quality inspection",
-        },
-        {
-          id: "TXN-003",
-          type: "stock_out",
-          date: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          buyerId: "B001",
-          buyerName: "John Mwangi",
-          variety: "Kenya",
-          qualityGrade: "A",
-          quantity: 300,
-          pricePerKg: 150,
-          totalAmount: 45000,
-          status: "completed",
-          recordedBy: "David Kimani",
-          notes: "Dispatched to Nairobi",
-        },
-        {
-          id: "TXN-004",
-          type: "stock_in",
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
-          variety: "SPK004",
-          qualityGrade: "A",
-          quantity: 300,
-          pricePerKg: 150,
-          totalAmount: 45000,
-          status: "completed",
-          recordedBy: "Peter Kariuki",
-        },
-        {
-          id: "TXN-005",
-          type: "wastage",
-          date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
-          variety: "SPK004",
-          qualityGrade: "B",
-          quantity: 25,
-          status: "completed",
-          recordedBy: "Jane Muthoni",
-          notes: "Spoilage due to humidity",
-        },
-        {
-          id: "TXN-006",
-          type: "stock_in",
-          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F003",
-          farmerName: "Peter Kamau",
-          variety: "Kabode",
-          qualityGrade: "B",
-          quantity: 200,
-          pricePerKg: 120,
-          totalAmount: 24000,
-          status: "completed",
-          recordedBy: "David Kimani",
-        },
-      ];
-      setTransactions(sampleTransactions);
-      setFilteredTransactions(sampleTransactions);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    const filters: any = {
+      centerId: selectedCenter?.id,
+      type: typeFilter !== "all" ? typeFilter : undefined,
+      farmerId: farmerFilter !== "all" ? farmerFilter : undefined,
+    };
 
+    // Add date range filter
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const filterDate = new Date();
+      switch (dateFilter) {
+        case "today":
+          filterDate.setHours(0, 0, 0, 0);
+          filters.dateRange = {
+            start: filterDate.toISOString(),
+            end: now.toISOString(),
+          };
+          break;
+        case "week":
+          filterDate.setDate(now.getDate() - 7);
+          filters.dateRange = {
+            start: filterDate.toISOString(),
+            end: now.toISOString(),
+          };
+          break;
+        case "month":
+          filterDate.setMonth(now.getMonth() - 1);
+          filters.dateRange = {
+            start: filterDate.toISOString(),
+            end: now.toISOString(),
+          };
+          break;
+      }
+    }
+
+    setStockFilters(filters);
+    fetchTransactions(filters);
+  }, [typeFilter, farmerFilter, dateFilter, selectedCenter?.id, fetchTransactions, setStockFilters]);
+
+  // Apply client-side search filter
   useEffect(() => {
     let filtered = [...transactions];
 
@@ -150,45 +97,18 @@ export function StockTransactionHistory() {
       filtered = filtered.filter(
         (txn) =>
           txn.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          txn.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          txn.farmerId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (txn.farmerName && txn.farmerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (txn.farmerId && txn.farmerId.toLowerCase().includes(searchTerm.toLowerCase())) ||
           (txn.buyerName && txn.buyerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
           txn.variety.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((txn) => txn.type === typeFilter);
-    }
-
-    if (farmerFilter !== "all") {
-      filtered = filtered.filter((txn) => txn.farmerId === farmerFilter);
-    }
-
-    if (dateFilter !== "all") {
-      const now = new Date();
-      const filterDate = new Date();
-      switch (dateFilter) {
-        case "today":
-          filterDate.setHours(0, 0, 0, 0);
-          filtered = filtered.filter((txn) => new Date(txn.date) >= filterDate);
-          break;
-        case "week":
-          filterDate.setDate(now.getDate() - 7);
-          filtered = filtered.filter((txn) => new Date(txn.date) >= filterDate);
-          break;
-        case "month":
-          filterDate.setMonth(now.getMonth() - 1);
-          filtered = filtered.filter((txn) => new Date(txn.date) >= filterDate);
-          break;
-      }
-    }
-
     // Sort by date descending (most recent first)
-    filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     setFilteredTransactions(filtered);
-  }, [transactions, searchTerm, typeFilter, farmerFilter, dateFilter]);
+  }, [transactions, searchTerm]);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -235,9 +155,9 @@ export function StockTransactionHistory() {
     }
   };
 
-  const uniqueFarmers = Array.from(new Set(transactions.map((t) => t.farmerId))).map((id) => {
+  const uniqueFarmers = Array.from(new Set(transactions.map((t) => t.farmerId).filter(Boolean))).map((id) => {
     const txn = transactions.find((t) => t.farmerId === id);
-    return { id, name: txn?.farmerName || id };
+    return { id: id as string, name: txn?.farmerName || id };
   });
 
   const totalStockIn = transactions
@@ -250,7 +170,7 @@ export function StockTransactionHistory() {
     .filter((t) => t.type === "wastage")
     .reduce((sum, t) => sum + t.quantity, 0);
 
-  const handleViewDetails = (transaction: Transaction) => {
+  const handleViewDetails = (transaction: StockTransaction) => {
     setSelectedTransaction(transaction);
     setIsDetailDialogOpen(true);
   };
@@ -400,10 +320,10 @@ export function StockTransactionHistory() {
                     <TableRow key={txn.id}>
                       <TableCell className="font-medium">{txn.id}</TableCell>
                       <TableCell className="text-sm">
-                        {new Date(txn.date).toLocaleDateString()}
+                        {new Date(txn.createdAt).toLocaleDateString()}
                         <br />
                         <span className="text-xs text-muted-foreground">
-                          {new Date(txn.date).toLocaleTimeString()}
+                          {new Date(txn.createdAt).toLocaleTimeString()}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -445,17 +365,8 @@ export function StockTransactionHistory() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={
-                            txn.status === "completed"
-                              ? "bg-green-100 text-green-800"
-                              : txn.status === "pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
-                          }
-                        >
-                          {txn.status}
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          Completed
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -495,7 +406,7 @@ export function StockTransactionHistory() {
                 <div>
                   <p className="text-sm font-medium">Date & Time</p>
                   <p className="text-sm text-muted-foreground">
-                    {new Date(selectedTransaction.date).toLocaleString()}
+                    {new Date(selectedTransaction.createdAt).toLocaleString()}
                   </p>
                 </div>
                 <div>
@@ -563,7 +474,7 @@ export function StockTransactionHistory() {
               )}
               <div className="border-t pt-4">
                 <p className="text-xs text-muted-foreground">
-                  Recorded by: {selectedTransaction.recordedBy}
+                  Recorded by: {selectedTransaction.createdBy}
                 </p>
               </div>
             </div>

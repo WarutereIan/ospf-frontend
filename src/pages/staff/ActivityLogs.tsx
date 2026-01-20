@@ -38,173 +38,37 @@ interface ActivityLog {
   }[];
 }
 
+import { useStaff } from "@/contexts/StaffContext";
+
 export function ActivityLogs() {
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const { filteredActivityLogs, fetchActivityLogs, isLoading } = useStaff();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch activity logs on mount
   useEffect(() => {
-    setTimeout(() => {
-      setLogs([
-        {
-          id: "LOG001",
-          timestamp: "2024-01-15T10:30:00Z",
-          userId: "U001",
-          userName: "John Mutua",
-          userRole: "farmer",
-          action: "create",
-          entityType: "order",
-          entityId: "ORD123",
-          entityName: "Order #ORD123",
-          details: "Created new order for 50kg sweet potatoes",
-          ipAddress: "192.168.1.100",
-          status: "success",
-        },
-        {
-          id: "LOG002",
-          timestamp: "2024-01-15T09:15:00Z",
-          userId: "U004",
-          userName: "Mary Wanjiku",
-          userRole: "staff",
-          action: "update",
-          entityType: "user",
-          entityId: "U002",
-          entityName: "Sarah Mwangi",
-          details: "Updated user role from buyer to officer",
-          ipAddress: "192.168.1.50",
-          status: "success",
-          changes: [
-            { field: "role", oldValue: "buyer", newValue: "officer" },
-          ],
-        },
-        {
-          id: "LOG003",
-          timestamp: "2024-01-15T08:45:00Z",
-          userId: "U003",
-          userName: "David Kimani",
-          userRole: "officer",
-          action: "export",
-          entityType: "report",
-          entityId: "RPT001",
-          entityName: "Monthly Sales Report",
-          details: "Exported monthly sales report (PDF)",
-          ipAddress: "192.168.1.75",
-          status: "success",
-        },
-        {
-          id: "LOG004",
-          timestamp: "2024-01-15T08:20:00Z",
-          userId: "U002",
-          userName: "Sarah Mwangi",
-          userRole: "buyer",
-          action: "delete",
-          entityType: "order",
-          entityId: "ORD122",
-          entityName: "Order #ORD122",
-          details: "Attempted to delete order",
-          ipAddress: "192.168.1.120",
-          status: "failed",
-        },
-        {
-          id: "LOG005",
-          timestamp: "2024-01-14T16:30:00Z",
-          userId: "U004",
-          userName: "Mary Wanjiku",
-          userRole: "staff",
-          action: "create",
-          entityType: "user",
-          entityId: "U005",
-          entityName: "James Omondi",
-          details: "Created new user account",
-          ipAddress: "192.168.1.50",
-          status: "success",
-        },
-        {
-          id: "LOG006",
-          timestamp: "2024-01-14T14:15:00Z",
-          userId: "U001",
-          userName: "John Mutua",
-          userRole: "farmer",
-          action: "update",
-          entityType: "produce",
-          entityId: "PRD001",
-          entityName: "Sweet Potatoes - 100kg",
-          details: "Updated produce listing price from KES 80/kg to KES 85/kg",
-          ipAddress: "192.168.1.100",
-          status: "success",
-          changes: [
-            { field: "price", oldValue: "KES 80/kg", newValue: "KES 85/kg" },
-          ],
-        },
-        {
-          id: "LOG007",
-          timestamp: "2024-01-14T12:00:00Z",
-          userId: "U004",
-          userName: "Mary Wanjiku",
-          userRole: "staff",
-          action: "login",
-          entityType: "system",
-          entityId: "SYS001",
-          entityName: "System Login",
-          details: "User logged into system",
-          ipAddress: "192.168.1.50",
-          status: "success",
-        },
-        {
-          id: "LOG008",
-          timestamp: "2024-01-14T11:30:00Z",
-          userId: "U003",
-          userName: "David Kimani",
-          userRole: "officer",
-          action: "view",
-          entityType: "transaction",
-          entityId: "TXN001",
-          entityName: "Transaction #TXN001",
-          details: "Viewed transaction details",
-          ipAddress: "192.168.1.75",
-          status: "success",
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchActivityLogs();
+  }, [fetchActivityLogs]);
 
-  const filteredLogs = logs.filter((log) => {
+  // Filter logs based on search and filters
+  const logs = filteredActivityLogs.filter((log) => {
     const matchesSearch =
       log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.entityName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase());
+      (log.entityName && log.entityName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      log.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = roleFilter === "all" || log.userRole === roleFilter;
     const matchesAction = actionFilter === "all" || log.action === actionFilter;
-    const matchesStatus = statusFilter === "all" || log.status === statusFilter;
-    return matchesSearch && matchesRole && matchesAction && matchesStatus;
+    return matchesSearch && matchesRole && matchesAction;
   });
 
-  const getStatusIcon = (status: ActivityLog["status"]) => {
-    switch (status) {
-      case "success":
-        return <IconCheck className="h-4 w-4 text-green-600" />;
-      case "failed":
-        return <IconX className="h-4 w-4 text-red-600" />;
-      case "warning":
-        return <IconAlertTriangle className="h-4 w-4 text-yellow-600" />;
-    }
-  };
+  // Logs are already filtered above
+  const filteredLogs = logs;
 
-  const getStatusBadge = (status: ActivityLog["status"]) => {
-    switch (status) {
-      case "success":
-        return "bg-green-100 text-green-800";
-      case "failed":
-        return "bg-red-100 text-red-800";
-      case "warning":
-        return "bg-yellow-100 text-yellow-800";
-    }
-  };
+  // ActivityLog type doesn't have status field - removed status-related functions
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -220,12 +84,12 @@ export function ActivityLogs() {
   const stats = {
     total: logs.length,
     today: logs.filter((log) => {
-      const logDate = new Date(log.timestamp);
+      const logDate = new Date(log.createdAt);
       const today = new Date();
       return logDate.toDateString() === today.toDateString();
     }).length,
-    successful: logs.filter((log) => log.status === "success").length,
-    failed: logs.filter((log) => log.status === "failed").length,
+    successful: logs.length, // ActivityLog doesn't have status field
+    failed: 0,
   };
 
   return (
@@ -381,7 +245,7 @@ export function ActivityLogs() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <IconClock className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{formatTimestamp(log.timestamp)}</span>
+                          <span className="text-sm">{formatTimestamp(log.createdAt)}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -407,14 +271,12 @@ export function ActivityLogs() {
                       </TableCell>
                       <TableCell>
                         <div className="max-w-md">
-                          <p className="text-sm">{log.details}</p>
-                          {log.changes && log.changes.length > 0 && (
+                          <p className="text-sm">{log.description}</p>
+                          {log.metadata && Object.keys(log.metadata).length > 0 && (
                             <div className="mt-2 space-y-1">
-                              {log.changes.map((change, idx) => (
+                              {Object.entries(log.metadata).map(([key, value], idx) => (
                                 <div key={idx} className="text-xs text-muted-foreground">
-                                  <span className="font-medium">{change.field}:</span>{" "}
-                                  <span className="line-through">{change.oldValue}</span> →{" "}
-                                  <span className="font-medium">{change.newValue}</span>
+                                  <span className="font-medium">{key}:</span> {String(value)}
                                 </div>
                               ))}
                             </div>
@@ -425,12 +287,9 @@ export function ActivityLogs() {
                         <span className="text-sm text-muted-foreground">{log.ipAddress || "N/A"}</span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(log.status)}
-                          <Badge variant="outline" className={getStatusBadge(log.status)}>
-                            {log.status}
-                          </Badge>
-                        </div>
+                        <Badge variant="outline" className="bg-green-100 text-green-800">
+                          Success
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}

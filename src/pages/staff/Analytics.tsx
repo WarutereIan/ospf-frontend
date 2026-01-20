@@ -14,6 +14,8 @@ import {
   IconCalendar,
 } from "@tabler/icons-react";
 import { LineChart } from "@/components/visualizations";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import type { TimeRange } from "@/types/analytics";
 
 interface AnalyticsData {
   period: string;
@@ -40,38 +42,40 @@ interface AnalyticsData {
 }
 
 export function Analytics() {
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [timeRange, setTimeRange] = useState<string>("month");
-  const [isLoading, setIsLoading] = useState(true);
+  const { dashboardStats, trends, fetchDashboardStats, fetchTrends, isLoading } = useAnalytics();
+  
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
 
+  // Fetch analytics data on mount and when timeRange changes
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setData({
-        period: "January 2024",
-        totalUsers: 200,
-        totalFarmers: 150,
-        totalBuyers: 50,
-        totalOrders: 500,
-        totalRevenue: 2500000,
-        averageOrderValue: 5000,
-        platformFee: 50000,
-        growthRate: {
-          users: 15,
-          orders: 25,
-          revenue: 30,
-        },
-        trends: [
-          { date: "2024-01-01", orders: 10, revenue: 50000, users: 120, farmers: 90, buyers: 30 },
-          { date: "2024-01-08", orders: 25, revenue: 125000, users: 135, farmers: 100, buyers: 35 },
-          { date: "2024-01-15", orders: 40, revenue: 200000, users: 150, farmers: 110, buyers: 40 },
-          { date: "2024-01-22", orders: 55, revenue: 275000, users: 170, farmers: 125, buyers: 45 },
-          { date: "2024-01-29", orders: 70, revenue: 350000, users: 200, farmers: 150, buyers: 50 },
-        ],
-      });
-      setIsLoading(false);
-    }, 1000);
-  }, [timeRange]);
+    fetchDashboardStats({ timeRange });
+    fetchTrends({ timeRange });
+  }, [timeRange, fetchDashboardStats, fetchTrends]);
+
+  // Transform context data to match component expectations
+  const data = dashboardStats && trends.length > 0 ? {
+    period: timeRange,
+    totalUsers: dashboardStats.totalUsers || 0,
+    totalFarmers: dashboardStats.totalFarmers || 0,
+    totalBuyers: dashboardStats.totalBuyers || 0,
+    totalOrders: dashboardStats.totalOrders || 0,
+    totalRevenue: dashboardStats.totalRevenue || 0,
+    averageOrderValue: dashboardStats.totalOrders > 0 ? (dashboardStats.totalRevenue / dashboardStats.totalOrders) : 0,
+    platformFee: dashboardStats.totalRevenue * 0.02, // 2% platform fee
+    growthRate: {
+      users: dashboardStats.userGrowthRate || 0,
+      orders: dashboardStats.orderGrowthRate || 0,
+      revenue: dashboardStats.revenueGrowthRate || 0,
+    },
+    trends: trends.map(t => ({
+      date: t.date,
+      orders: t.orders || 0,
+      revenue: t.revenue || 0,
+      users: t.users,
+      farmers: t.farmers,
+      buyers: t.buyers,
+    })),
+  } : null;
 
   return (
     <div className="space-y-6">

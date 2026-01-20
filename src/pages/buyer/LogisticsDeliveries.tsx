@@ -14,6 +14,10 @@ import {
 } from "@tabler/icons-react";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { Progress } from "@/components/ui/progress";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useTransport } from "@/contexts/TransportContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { MarketplaceOrder } from "@/types/marketplace";
 
 interface DeliveryBatch {
   id: string;
@@ -58,142 +62,87 @@ interface LogisticsCoordinator {
 }
 
 export function LogisticsDeliveries() {
-  const [batches, setBatches] = useState<DeliveryBatch[]>([]);
-  const [metrics, setMetrics] = useState<LogisticsMetrics>({
-    incomingToday: 0,
-    activeTrucks: 0,
-    avgDelay: 0,
-  });
-  const [coordinator, setCoordinator] = useState<LogisticsCoordinator | null>(null);
+  const { orders, fetchOrders, isLoading: ordersLoading } = useMarketplace();
+  const { deliveries, fetchDeliveries, isLoading: deliveriesLoading } = useTransport();
+  const { user } = useAuth();
+  
   const [showMapView, setShowMapView] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch buyer's orders and deliveries
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setBatches([
-        {
-          id: "1",
-          batchId: "DLV-8902",
-          status: "in_transit",
-          destination: "Kangundo Main Aggregation Center",
-          destinationRegion: "Kangundo",
-          estimatedArrival: "Today",
-          estimatedArrivalTime: "4:00 PM",
-          weight: 1200,
-          productType: "Fresh Root",
-          driver: {
-            name: "John K.",
-            vehicleNumber: "KCA 450B",
-          },
-          timeline: [
-            {
-              stage: "Dispatched",
-              location: "Kathiani",
-              timestamp: "08:00 AM",
-              status: "completed",
-            },
-            {
-              stage: "Masinga",
-              location: "Masinga",
-              timestamp: "11:30 AM",
-              status: "completed",
-            },
-            {
-              stage: "Yatta",
-              location: "Yatta",
-              timestamp: "Current",
-              status: "current",
-            },
-            {
-              stage: "Kangundo",
-              location: "Kangundo",
-              timestamp: "Est. 16:00",
-              status: "upcoming",
-            },
-          ],
-        },
-        {
-          id: "2",
-          batchId: "DLV-8901",
-          status: "received",
-          destination: "James Mutua",
-          destinationRegion: "Kangundo",
-          weight: 500,
-          productType: "Fresh Root",
-          arrivalDate: "Yesterday",
-          timeline: [
-            { stage: "Dispatched", location: "Kathiani", timestamp: "08:00 AM", status: "completed" },
-            { stage: "In Transit", location: "Masinga", timestamp: "11:30 AM", status: "completed" },
-            { stage: "Delivered", location: "Kangundo", timestamp: "Yesterday", status: "completed" },
-          ],
-        },
-        {
-          id: "3",
-          batchId: "DLV-8890",
-          status: "inspecting",
-          destination: "Mary Wanjiku",
-          destinationRegion: "Kathiani",
-          weight: 2100,
-          productType: "Fresh Root",
-          qualityCheckStatus: "In Progress",
-          timeline: [
-            { stage: "Dispatched", location: "Yatta", timestamp: "09:00 AM", status: "completed" },
-            { stage: "In Transit", location: "Masinga", timestamp: "12:00 PM", status: "completed" },
-            { stage: "Quality Check", location: "Kathiani", timestamp: "Current", status: "current" },
-          ],
-        },
-        {
-          id: "4",
-          batchId: "DLV-8889",
-          status: "in_transit",
-          destination: "Yatta Main Aggregation Center",
-          destinationRegion: "Yatta",
-          estimatedArrival: "Tomorrow",
-          estimatedArrivalTime: "10:00 AM",
-          weight: 800,
-          productType: "Fresh Root",
-          driver: {
-            name: "Peter M.",
-            vehicleNumber: "KCA 320C",
-          },
-          timeline: [
-            {
-              stage: "Dispatched",
-              location: "Masinga",
-              timestamp: "09:00 AM",
-              status: "completed",
-            },
-            {
-              stage: "Kathiani",
-              location: "Kathiani",
-              timestamp: "Current",
-              status: "current",
-            },
-            {
-              stage: "Yatta",
-              location: "Yatta",
-              timestamp: "Est. 10:00",
-              status: "upcoming",
-            },
-          ],
-        },
-      ]);
+    if (user?.id) {
+      fetchOrders({ buyerId: user.id });
+      fetchDeliveries();
+    }
+  }, [user?.id, fetchOrders, fetchDeliveries]);
 
-      setMetrics({
-        incomingToday: 1200,
-        activeTrucks: 3,
-        avgDelay: -15, // 15 minutes early
-      });
+  // Convert orders to delivery batches format
+  const batches: DeliveryBatch[] = orders
+    .filter((order) => 
+      order.status === "in_transit" || 
+      order.status === "out_for_delivery" ||
+      order.status === "delivered" ||
+      order.status === "at_aggregation"
+    )
+    .map((order) => ({
+      id: order.id,
+      batchId: order.batchId || order.id,
+      status: order.status === "delivered" ? "received" :
+              order.status === "at_aggregation" ? "inspecting" :
+              order.status === "quality_approved" ? "approved" :
+              "in_transit" as "in_transit" | "received" | "inspecting" | "approved",
+      destination: order.deliveryLocation || order.aggregationCenter || "N/A",
+      destinationRegion: order.deliveryLocation || "N/A",
+      estimatedArrival: order.estimatedDeliveryDate 
+        ? new Date(order.estimatedDeliveryDate).toLocaleDateString()
+        : undefined,
+      estimatedArrivalTime: order.estimatedDeliveryDate
+        ? new Date(order.estimatedDeliveryDate).toLocaleTimeString()
+        : undefined,
+      weight: order.quantity,
+      productType: "Fresh Root",
+      timeline: [
+        {
+          stage: "Order Placed",
+          location: order.farmerName || "Farmer",
+          timestamp: new Date(order.createdAt).toLocaleTimeString(),
+          status: "completed",
+        },
+        ...(order.status !== "order_placed" ? [{
+          stage: "In Transit",
+          location: order.aggregationCenter || "Aggregation Center",
+          timestamp: order.status === "in_transit" ? "Current" : new Date(order.updatedAt).toLocaleTimeString(),
+          status: order.status === "in_transit" ? "current" as const : "completed" as const,
+        }] : []),
+        ...(order.status === "delivered" ? [{
+          stage: "Delivered",
+          location: order.deliveryLocation || "Destination",
+          timestamp: order.actualDeliveryDate 
+            ? new Date(order.actualDeliveryDate).toLocaleDateString()
+            : "Completed",
+          status: "completed" as const,
+        }] : []),
+      ],
+      originCoordinates: order.farmerCoordinates,
+      destinationCoordinates: order.deliveryCoordinates,
+      currentCoordinates: order.currentCoordinates,
+      arrivalDate: order.actualDeliveryDate,
+      qualityCheckStatus: order.qualityScore ? `Score: ${order.qualityScore}%` : undefined,
+    }));
 
-      setCoordinator({
-        name: "Sarah Ochieng",
-        phone: "+254 712 345 678",
-      });
+  // Calculate metrics
+  const metrics: LogisticsMetrics = {
+    incomingToday: batches
+      .filter((b) => b.status === "in_transit" || b.status === "inspecting")
+      .reduce((sum, b) => sum + b.weight, 0),
+    activeTrucks: batches.filter((b) => b.status === "in_transit").length,
+    avgDelay: 0, // TODO: Calculate from delivery times
+  };
 
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+  const isLoading = ordersLoading || deliveriesLoading;
+
+  // Mock coordinator - TODO: Get from transport context
+  const coordinator: LogisticsCoordinator | null = null;
 
   const getStatusColor = (status: DeliveryBatch["status"]) => {
     switch (status) {

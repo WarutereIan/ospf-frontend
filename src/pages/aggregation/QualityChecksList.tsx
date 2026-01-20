@@ -15,92 +15,30 @@ import {
   IconX,
   IconClock,
 } from "@tabler/icons-react";
-
-interface QualityCheckItem {
-  id: string;
-  stockId: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: "A" | "B" | "C" | null;
-  status: "pending" | "approved" | "rejected";
-  checkedBy?: string;
-  checkedAt?: string;
-  farmerName: string;
-  stockInDate: string;
-}
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { QualityCheck } from "@/types/aggregation";
 
 export function QualityChecksList() {
   const navigate = useNavigate();
-  const [qualityChecks, setQualityChecks] = useState<QualityCheckItem[]>([]);
-  const [filteredChecks, setFilteredChecks] = useState<QualityCheckItem[]>([]);
+  const { qualityChecks, fetchQualityChecks, isLoading } = useAggregation();
+  
+  const [filteredChecks, setFilteredChecks] = useState<QualityCheck[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch quality checks on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleChecks: QualityCheckItem[] = [
-        {
-          id: "QC-001",
-          stockId: "INV-001",
-          variety: "Kenya",
-          quantity: 500,
-          qualityGrade: "A",
-          status: "approved",
-          checkedBy: "Manager A",
-          checkedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          farmerName: "James Mutua",
-          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "QC-002",
-          stockId: "INV-002",
-          variety: "SPK004",
-          quantity: 300,
-          qualityGrade: null,
-          status: "pending",
-          farmerName: "Mary Wanjiku",
-          stockInDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "QC-003",
-          stockId: "INV-003",
-          variety: "Kabode",
-          quantity: 200,
-          qualityGrade: "B",
-          status: "approved",
-          checkedBy: "Manager B",
-          checkedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-          farmerName: "Peter Kamau",
-          stockInDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: "QC-004",
-          stockId: "INV-004",
-          variety: "Kenya",
-          quantity: 150,
-          qualityGrade: "C",
-          status: "rejected",
-          checkedBy: "Manager A",
-          checkedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerName: "John Doe",
-          stockInDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ];
-      setQualityChecks(sampleChecks);
-      setFilteredChecks(sampleChecks);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchQualityChecks();
+  }, [fetchQualityChecks]);
 
+  // Filter quality checks
   useEffect(() => {
     let filtered = [...qualityChecks];
 
     if (searchTerm) {
       filtered = filtered.filter(
         (check) =>
-          check.stockId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          check.transactionId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           check.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
           check.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           check.variety.toLowerCase().includes(searchTerm.toLowerCase())
@@ -108,37 +46,44 @@ export function QualityChecksList() {
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter((check) => check.status === statusFilter);
+      // Map status filter to quality score ranges
+      filtered = filtered.filter((check) => {
+        if (statusFilter === "pending") {
+          return !check.qualityScore || check.qualityScore === 0;
+        } else if (statusFilter === "approved") {
+          return check.qualityScore && check.qualityScore >= 70;
+        } else if (statusFilter === "rejected") {
+          return check.qualityScore && check.qualityScore < 70;
+        }
+        return true;
+      });
     }
 
     setFilteredChecks(filtered);
   }, [qualityChecks, searchTerm, statusFilter]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "approved":
-        return (
-          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
-            <IconCheck className="mr-1 h-3 w-3" />
-            Approved
-          </Badge>
-        );
-      case "rejected":
-        return (
-          <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
-            <IconX className="mr-1 h-3 w-3" />
-            Rejected
-          </Badge>
-        );
-      case "pending":
-        return (
-          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-            <IconClock className="mr-1 h-3 w-3" />
-            Pending
-          </Badge>
-        );
-      default:
-        return null;
+  const getStatusBadge = (check: QualityCheck) => {
+    if (!check.qualityScore || check.qualityScore === 0) {
+      return (
+        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+          <IconClock className="mr-1 h-3 w-3" />
+          Pending
+        </Badge>
+      );
+    } else if (check.qualityScore >= 70) {
+      return (
+        <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+          <IconCheck className="mr-1 h-3 w-3" />
+          Approved
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="outline" className="bg-red-100 text-red-800 border-red-300">
+          <IconX className="mr-1 h-3 w-3" />
+          Rejected
+        </Badge>
+      );
     }
   };
 
@@ -156,7 +101,9 @@ export function QualityChecksList() {
     }
   };
 
-  const pendingCount = qualityChecks.filter((c) => c.status === "pending").length;
+  const pendingCount = qualityChecks.filter((c) => !c.qualityScore || c.qualityScore === 0).length;
+  const approvedCount = qualityChecks.filter((c) => c.qualityScore && c.qualityScore >= 70).length;
+  const rejectedCount = qualityChecks.filter((c) => c.qualityScore && c.qualityScore < 70 && c.qualityScore > 0).length;
 
   return (
     <div className="space-y-6">
@@ -204,7 +151,7 @@ export function QualityChecksList() {
               <div>
                 <p className="text-sm text-muted-foreground">Approved</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {qualityChecks.filter((c) => c.status === "approved").length}
+                  {qualityChecks.filter((c) => c.status === "approved" || (c.passed && !c.failed)).length}
                 </p>
               </div>
               <IconCheck className="h-8 w-8 text-green-600" />
@@ -217,7 +164,7 @@ export function QualityChecksList() {
               <div>
                 <p className="text-sm text-muted-foreground">Rejected</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {qualityChecks.filter((c) => c.status === "rejected").length}
+                  {qualityChecks.filter((c) => c.status === "rejected" || (c.failed && !c.passed)).length}
                 </p>
               </div>
               <IconX className="h-8 w-8 text-red-600" />
@@ -287,7 +234,7 @@ export function QualityChecksList() {
                   {filteredChecks.map((check) => (
                     <TableRow key={check.id}>
                       <TableCell className="font-medium">{check.id}</TableCell>
-                      <TableCell>{check.stockId}</TableCell>
+                      <TableCell>{check.transactionId || "-"}</TableCell>
                       <TableCell>{check.variety}</TableCell>
                       <TableCell>{check.quantity} kg</TableCell>
                       <TableCell>
@@ -299,7 +246,7 @@ export function QualityChecksList() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{getStatusBadge(check.status)}</TableCell>
+                      <TableCell>{getStatusBadge(check)}</TableCell>
                       <TableCell>{check.farmerName}</TableCell>
                       <TableCell>
                         {check.checkedBy ? (

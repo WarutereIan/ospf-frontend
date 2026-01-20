@@ -7,6 +7,9 @@ import {
   IconStarFilled,
 } from "@tabler/icons-react";
 import { StarRating } from "@/components/visualizations";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface PendingRating {
   orderId: string;
@@ -31,77 +34,53 @@ interface SupplierRating {
 }
 
 export function Ratings() {
-  const [pendingRatings, setPendingRatings] = useState<PendingRating[]>([]);
-  const [supplierRatings, setSupplierRatings] = useState<SupplierRating[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { ratings, ratingSummary, fetchRatings, fetchRatingSummary, isLoading } = useProfile();
+  const { orders, fetchOrders } = useMarketplace();
+  const { user } = useAuth();
 
+  // Fetch orders that can be rated and existing ratings
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setPendingRatings([
-        {
-          orderId: "ORD-045",
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          variety: "Kenya",
-          quantity: 500,
-          qualityGrade: "A",
-          deliveryDate: "2024-01-10",
-        },
-      ]);
-      setSupplierRatings([
-        {
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          averageRating: 4.9,
-          totalOrders: 12,
-        },
-        {
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
-          averageRating: 4.5,
-          totalOrders: 8,
-        },
-        {
-          farmerId: "F003",
-          farmerName: "Peter Kamau",
-          averageRating: 4.2,
-          totalOrders: 5,
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    if (user?.id) {
+      fetchOrders({ buyerId: user.id, status: "completed" });
+      fetchRatings({ buyerId: user.id });
+      fetchRatingSummary(user.id);
+    }
+  }, [user?.id, fetchOrders, fetchRatings, fetchRatingSummary]);
 
-  const handleRatingSubmit = (pending: PendingRating) => {
-    // TODO: Submit rating to API
-    console.log("Submitting rating:", pending);
-    setPendingRatings((prev) => prev.filter((p) => p.orderId !== pending.orderId));
-    // Update supplier rating
-    setSupplierRatings((prev) => {
-      const existing = prev.find((s) => s.farmerId === pending.farmerId);
-      if (existing) {
-        return prev.map((s) =>
-          s.farmerId === pending.farmerId
-            ? {
-                ...s,
-                averageRating: (s.averageRating + (pending.overallRating || 0)) / 2,
-                totalOrders: s.totalOrders + 1,
-              }
-            : s
-        );
-      } else {
-        return [
-          ...prev,
-          {
-            farmerId: pending.farmerId,
-            farmerName: pending.farmerName,
-            averageRating: pending.overallRating || 0,
-            totalOrders: 1,
-          },
-        ];
-      }
-    });
+  // Get pending ratings from orders that can be rated
+  const [pendingRatings, setPendingRatings] = useState<PendingRating[]>([]);
+  
+  useEffect(() => {
+    const pending: PendingRating[] = orders
+      .filter((order) => order.canRate && order.status === "completed")
+      .map((order) => ({
+        orderId: order.id,
+        farmerId: order.farmerId,
+        farmerName: order.farmerName,
+        variety: order.variety,
+        quantity: order.quantity,
+        qualityGrade: order.qualityGrade,
+        deliveryDate: order.actualDeliveryDate || order.updatedAt,
+      }));
+    setPendingRatings(pending);
+  }, [orders]);
+
+  // Get supplier ratings from rating summary
+  const supplierRatings: SupplierRating[] = (ratingSummary?.topRated || []).map(item => ({
+    farmerId: item.farmerId || item.userId || "",
+    farmerName: item.farmerName || item.name || "",
+    averageRating: item.averageRating || item.rating || 0,
+    totalOrders: item.totalOrders || 0,
+  }));
+
+  const handleRatingSubmit = async (pending: PendingRating) => {
+    // Rating submission is handled by RateFarmer component
+    // Refresh data after rating
+    if (user?.id) {
+      await fetchOrders({ buyerId: user.id });
+      await fetchRatings({ buyerId: user.id });
+      await fetchRatingSummary(user.id);
+    }
   };
 
   const formatDate = (dateString: string) => {

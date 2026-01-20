@@ -19,28 +19,18 @@ import {
   TreemapChart,
   AgingHeatmap,
 } from "@/components/visualizations";
-
-interface InventoryItem {
-  id: string;
-  variety: string;
-  qualityGrade: "A" | "B" | "C";
-  quantity: number; // kg
-  storageDuration: number; // days
-  farmerId: string;
-  farmerName: string;
-  stockInDate: string;
-  status: "fresh" | "aging" | "critical";
-}
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { InventoryItem } from "@/types/aggregation";
 
 export function InventoryManagement() {
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const { inventory, fetchInventory, isLoading, selectedCenter, centers, fetchCenters } = useAggregation();
+  
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [varietyFilter, setVarietyFilter] = useState("all");
   const [gradeFilter, setGradeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cardFilter, setCardFilter] = useState<"all" | "fresh" | "aging" | "critical">("all");
-  const [isLoading, setIsLoading] = useState(true);
 
   const [treemapData, setTreemapData] = useState<Array<{ name: string; value: number; color: string }>>([]);
   const [agingHeatmapData, setAgingHeatmapData] = useState<Array<{
@@ -48,129 +38,63 @@ export function InventoryManagement() {
     days: Array<{ day: number; status: "fresh" | "aging" | "critical" }>;
   }>>([]);
 
+  // Fetch inventory on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleInventory: InventoryItem[] = [
-        {
-          id: "INV-001",
-          variety: "Kenya",
-          qualityGrade: "A",
-          quantity: 1200,
-          storageDuration: 3,
-          farmerId: "F001",
-          farmerName: "James M.",
-          stockInDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "fresh",
-        },
-        {
-          id: "INV-002",
-          variety: "Kenya",
-          qualityGrade: "B",
-          quantity: 400,
-          storageDuration: 5,
-          farmerId: "F004",
-          farmerName: "John D.",
-          stockInDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "aging",
-        },
-        {
-          id: "INV-003",
-          variety: "SPK004",
-          qualityGrade: "A",
-          quantity: 800,
-          storageDuration: 2,
-          farmerId: "F002",
-          farmerName: "Mary W.",
-          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "fresh",
-        },
-        {
-          id: "INV-004",
-          variety: "SPK004",
-          qualityGrade: "B",
-          quantity: 350,
-          storageDuration: 6,
-          farmerId: "F005",
-          farmerName: "Sarah K.",
-          stockInDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "aging",
-        },
-        {
-          id: "INV-005",
-          variety: "Kabode",
-          qualityGrade: "A",
-          quantity: 200,
-          storageDuration: 4,
-          farmerId: "F003",
-          farmerName: "Peter K.",
-          stockInDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "fresh",
-        },
-        {
-          id: "INV-006",
-          variety: "Kabode",
-          qualityGrade: "B",
-          quantity: 150,
-          storageDuration: 8,
-          farmerId: "F006",
-          farmerName: "David M.",
-          stockInDate: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "critical",
-        },
-      ];
-      setInventory(sampleInventory);
-      setFilteredInventory(sampleInventory);
+    fetchCenters();
+    fetchInventory(selectedCenter?.id);
+  }, [fetchCenters, fetchInventory, selectedCenter?.id]);
 
-      // Prepare treemap data
-      const treemap: Array<{ name: string; value: number; color: string }> = [];
-      sampleInventory.forEach((item) => {
-        const name = `${item.variety} Grade ${item.qualityGrade}`;
-        const existing = treemap.find((t) => t.name === name);
-        if (existing) {
-          existing.value += item.quantity;
-        } else {
-          const colors: Record<string, string> = {
-            "Kenya": "#3B82F6",
-            "SPK004": "#22C55E",
-            "Kabode": "#F59E0B",
-          };
-          treemap.push({
-            name,
-            value: item.quantity,
-            color: colors[item.variety] || "#8B5CF6",
-          });
-        }
-      });
-      setTreemapData(treemap);
+  // Prepare visualization data when inventory changes
+  useEffect(() => {
+    if (inventory.length === 0) return;
 
-      // Prepare aging heatmap data
-      const heatmap = sampleInventory.map((item) => {
-        const days: Array<{ day: number; status: "fresh" | "aging" | "critical" }> = [];
-        for (let day = 1; day <= 7; day++) {
-          if (item.storageDuration >= day) {
-            let status: "fresh" | "aging" | "critical";
-            if (day <= 3) {
-              status = "fresh";
-            } else if (day <= 6) {
-              status = "aging";
-            } else {
-              status = "critical";
-            }
-            days.push({ day, status });
-          }
-        }
-        return {
-          batchId: item.id,
-          days,
+    // Prepare treemap data
+    const treemap: Array<{ name: string; value: number; color: string }> = [];
+    inventory.forEach((item) => {
+      const name = `${item.variety} Grade ${item.qualityGrade}`;
+      const existing = treemap.find((t) => t.name === name);
+      if (existing) {
+        existing.value += item.quantity;
+      } else {
+        const colors: Record<string, string> = {
+          "Kenya": "#3B82F6",
+          "SPK004": "#22C55E",
+          "Kabode": "#F59E0B",
         };
-      });
-      setAgingHeatmapData(heatmap);
+        treemap.push({
+          name,
+          value: item.quantity,
+          color: colors[item.variety] || "#8B5CF6",
+        });
+      }
+    });
+    setTreemapData(treemap);
 
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    // Prepare aging heatmap data
+    const heatmap = inventory.map((item) => {
+      const days: Array<{ day: number; status: "fresh" | "aging" | "critical" }> = [];
+      for (let day = 1; day <= 7; day++) {
+        if (item.storageDuration >= day) {
+          let status: "fresh" | "aging" | "critical";
+          if (day <= 3) {
+            status = "fresh";
+          } else if (day <= 6) {
+            status = "aging";
+          } else {
+            status = "critical";
+          }
+          days.push({ day, status });
+        }
+      }
+      return {
+        batchId: item.id,
+        days,
+      };
+    });
+    setAgingHeatmapData(heatmap);
+  }, [inventory]);
 
+  // Filter inventory based on filters
   useEffect(() => {
     let filtered = [...inventory];
 

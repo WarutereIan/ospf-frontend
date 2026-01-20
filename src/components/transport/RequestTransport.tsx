@@ -25,7 +25,7 @@ interface RequestTransportProps {
   defaultType?: "produce_pickup" | "produce_delivery" | "input_delivery";
   defaultFrom?: string;
   defaultTo?: string;
-  trigger?: React.ReactNode;
+  trigger?: React.ReactElement;
 }
 
 export default function RequestTransport({
@@ -95,16 +95,18 @@ export default function RequestTransport({
     });
   };
 
+  const defaultTrigger = (
+    <Button>
+      <IconTruck className="mr-2 h-4 w-4" />
+      Request Transport
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        {trigger || (
-          <Button>
-            <IconTruck className="mr-2 h-4 w-4" />
-            Request Transport
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger
+        render={trigger || defaultTrigger}
+      />
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request Transport Service</DialogTitle>

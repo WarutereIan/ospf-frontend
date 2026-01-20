@@ -2,63 +2,171 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { IconSeeding, IconShoppingCart, IconPackage, IconTrendingUp, IconUsers, IconCurrency } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   StatCard,
   HorizontalBarChart,
   SimpleBarChart,
   AlertCard,
 } from "@/components/visualizations";
+import { useInput } from "@/contexts/InputContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function InputProviderDashboard() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalInputs: 24,
-    activeOrders: 8,
-    totalRevenue: 245000,
-    revenueLastMonth: 207000,
-    customers: 156,
-    newCustomers: 8,
-    pendingOrders: 3,
-    lowStock: 5,
-  });
-  const [salesByCategory, setSalesByCategory] = useState([
-    { name: "Planting", value: 45 },
-    { name: "Fertilizer", value: 30 },
-    { name: "Tools", value: 15 },
-    { name: "Other", value: 10 },
-  ]);
-  const [monthlySales, setMonthlySales] = useState([
-    { month: "Jul", amount: 180000 },
-    { month: "Aug", amount: 195000 },
-    { month: "Sep", amount: 210000 },
-    { month: "Oct", amount: 220000 },
-    { month: "Nov", amount: 230000 },
-    { month: "Dec", amount: 245000 },
-  ]);
-  const [inventoryStatus, setInventoryStatus] = useState({
-    inStock: 19,
-    lowStock: 4,
-    outOfStock: 1,
-  });
+  const { user } = useAuth();
+  const { 
+    inputs, 
+    inputOrders,
+    customers,
+    fetchInputs, 
+    fetchInputOrders,
+    fetchCustomers,
+    isLoading: inputLoading 
+  } = useInput();
+  
+  const { 
+    trends,
+    fetchTrends,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
 
+  // Fetch data on mount
   useEffect(() => {
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    if (user?.id) {
+      fetchInputs();
+      fetchInputOrders();
+      fetchCustomers();
+      fetchTrends({ timeRange: "month" });
+    }
+  }, [user?.id, fetchInputs, fetchInputOrders, fetchCustomers, fetchTrends]);
 
-  const recentOrders = [
-    { id: "1", farmer: "John Kamau", input: "OFSP Vines (Kenya)", quantity: "500 cuttings", amount: "KES 15,000", status: "pending" },
-    { id: "2", farmer: "Mary Wanjiku", input: "Fertilizer (NPK)", quantity: "50 kg", amount: "KES 8,500", status: "processing" },
-    { id: "3", farmer: "Peter Mwangi", input: "OFSP Vines (SPK004)", quantity: "300 cuttings", amount: "KES 9,500", status: "completed" },
-  ];
+  const isLoading = inputLoading || analyticsLoading;
 
-  const lowStockInputs = [
-    { name: "OFSP Vines (Kenya)", current: 150, minimum: 500, unit: "cuttings" },
-    { name: "Organic Fertilizer", current: 25, minimum: 100, unit: "kg" },
-    { name: "Training Manuals", current: 5, minimum: 20, unit: "books" },
-  ];
+  // Calculate stats from context data
+  const stats = useMemo(() => {
+    const activeOrders = inputOrders.filter(o => 
+      o.status === "pending" || o.status === "processing" || o.status === "accepted"
+    );
+    const completedOrders = inputOrders.filter(o => o.status === "completed" || o.status === "delivered");
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    
+    // Current month revenue
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    const revenueThisMonth = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === thisMonth && orderDate.getFullYear() === thisYear;
+      })
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Last month revenue
+    const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+    const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+    const revenueLastMonth = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === lastMonth && orderDate.getFullYear() === lastMonthYear;
+      })
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // New customers this month
+    const newCustomers = customers.filter(c => {
+      if (!c.createdAt) return false;
+      const customerDate = new Date(c.createdAt);
+      return customerDate.getMonth() === thisMonth && customerDate.getFullYear() === thisYear;
+    }).length;
+
+    // Low stock products
+    const lowStock = inputs.filter(p => (p.stock || 0) < (p.minimumStock || 0)).length;
+
+    return {
+      totalInputs: inputs.length,
+      activeOrders: activeOrders.length,
+      totalRevenue: revenueThisMonth,
+      revenueLastMonth,
+      customers: customers.length,
+      newCustomers,
+      pendingOrders: inputOrders.filter(o => o.status === "pending").length,
+      lowStock,
+    };
+  }, [inputs, inputOrders, customers]);
+
+  // Sales by category from products
+  const salesByCategory = useMemo(() => {
+    const categoryMap = new Map<string, number>();
+    inputs.forEach(product => {
+      const category = product.category || "Other";
+      const current = categoryMap.get(category) || 0;
+      categoryMap.set(category, current + 1);
+    });
+    
+    const total = inputs.length;
+    if (total === 0) return [];
+    
+    return Array.from(categoryMap.entries())
+      .map(([name, count]) => ({
+        name,
+        value: Math.round((count / total) * 100),
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [inputs]);
+
+  // Monthly sales from trends
+  const monthlySales = useMemo(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-6).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      amount: t.revenue || 0,
+    }));
+  }, [trends]);
+
+  // Inventory status
+  const inventoryStatus = useMemo(() => {
+    const inStock = inputs.filter(p => (p.stock || 0) >= (p.minimumStock || 0)).length;
+    const lowStock = inputs.filter(p => {
+      const stock = p.stock || 0;
+      const min = p.minimumStock || 0;
+      return stock > 0 && stock < min;
+    }).length;
+    const outOfStock = inputs.filter(p => (p.stock || 0) === 0).length;
+
+    return { inStock, lowStock, outOfStock };
+  }, [inputs]);
+
+  // Recent orders from context
+  const recentOrders = useMemo(() => {
+    return inputOrders
+      .slice(-3)
+      .reverse()
+      .map(order => ({
+        id: order.id,
+        farmer: order.customerName || "Unknown",
+        input: order.items?.[0]?.productName || "Unknown",
+        quantity: `${order.items?.[0]?.quantity || 0} ${order.items?.[0]?.unit || ""}`,
+        amount: `KES ${(order.totalAmount || 0).toLocaleString()}`,
+        status: order.status,
+      }));
+  }, [inputOrders]);
+
+  // Low stock inputs from products
+  const lowStockInputs = useMemo(() => {
+    return inputs
+      .filter(p => {
+        const stock = p.stock || 0;
+        const min = p.minimumStock || 0;
+        return stock < min;
+      })
+      .slice(0, 3)
+      .map(p => ({
+        name: p.name,
+        current: p.stock || 0,
+        minimum: p.minimumStock || 0,
+        unit: p.unit || "units",
+      }));
+  }, [inputs]);
 
   return (
     <div className="p-6 space-y-6">

@@ -23,6 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LineChart, HorizontalBarChart, PieChart } from "@/components/visualizations";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
 
 interface LocationSales {
   location: string;
@@ -56,116 +58,23 @@ interface MonthlyLocationData {
 }
 
 export function LocationSalesSummary() {
+  const { centers, transactions, inventory, isLoading: aggregationLoading } = useAggregation();
+  const { dashboardStats, trends, fetchDashboardStats, fetchTrends, isLoading: analyticsLoading } = useAnalytics();
+  
   const [reportType, setReportType] = useState<"sales" | "stock">("sales");
   const [dateRange, setDateRange] = useState<string>("month");
-  const [locationSales, setLocationSales] = useState<LocationSales[]>([]);
-  const [locationStock, setLocationStock] = useState<LocationStock[]>([]);
-  const [monthlyData, setMonthlyData] = useState<MonthlyLocationData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
+  const isLoading = aggregationLoading || analyticsLoading;
+
+  // Fetch data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setIsLoading(true);
-    setTimeout(() => {
-      setLocationSales([
-        {
-          location: "Kangundo",
-          subCounty: "Kangundo",
-          totalSales: 15000,
-          totalValue: 525000,
-          orderCount: 450,
-          activeFarmers: 320,
-          avgPricePerKg: 35,
-          growthRate: 12.5,
-        },
-        {
-          location: "Kathiani",
-          subCounty: "Kathiani",
-          totalSales: 12000,
-          totalValue: 420000,
-          orderCount: 380,
-          activeFarmers: 280,
-          avgPricePerKg: 35,
-          growthRate: 8.3,
-        },
-        {
-          location: "Masinga",
-          subCounty: "Masinga",
-          totalSales: 10000,
-          totalValue: 350000,
-          orderCount: 320,
-          activeFarmers: 240,
-          avgPricePerKg: 35,
-          growthRate: 15.2,
-        },
-        {
-          location: "Yatta",
-          subCounty: "Yatta",
-          totalSales: 8000,
-          totalValue: 280000,
-          orderCount: 250,
-          activeFarmers: 180,
-          avgPricePerKg: 35,
-          growthRate: 5.8,
-        },
-      ]);
+    // Data is already fetched by contexts
+  }, []);
 
-      setLocationStock([
-        {
-          location: "Kangundo",
-          subCounty: "Kangundo",
-          currentStock: 5000,
-          stockIn: 1200,
-          stockOut: 800,
-          capacity: 10000,
-          utilization: 50,
-          centers: 3,
-        },
-        {
-          location: "Kathiani",
-          subCounty: "Kathiani",
-          currentStock: 3200,
-          stockIn: 800,
-          stockOut: 500,
-          capacity: 8000,
-          utilization: 40,
-          centers: 2,
-        },
-        {
-          location: "Masinga",
-          subCounty: "Masinga",
-          currentStock: 2500,
-          stockIn: 600,
-          stockOut: 400,
-          capacity: 7000,
-          utilization: 36,
-          centers: 2,
-        },
-        {
-          location: "Yatta",
-          subCounty: "Yatta",
-          currentStock: 2000,
-          stockIn: 500,
-          stockOut: 300,
-          capacity: 6000,
-          utilization: 33,
-          centers: 2,
-        },
-      ]);
-
-      // Monthly data for trends
-      setMonthlyData([
-        { month: "Jan", kangundo: 12000, kathiani: 10000, masinga: 8000, yatta: 6000 },
-        { month: "Feb", kangundo: 12500, kathiani: 10500, masinga: 8500, yatta: 6500 },
-        { month: "Mar", kangundo: 13000, kathiani: 11000, masinga: 9000, yatta: 7000 },
-        { month: "Apr", kangundo: 13500, kathiani: 11200, masinga: 9200, yatta: 7200 },
-        { month: "May", kangundo: 14000, kathiani: 11500, masinga: 9500, yatta: 7500 },
-        { month: "Jun", kangundo: 15000, kathiani: 12000, masinga: 10000, yatta: 8000 },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
-  }, [dateRange, reportType]);
+  // Calculate location sales from transactions and analytics
+  const locationSales: LocationSales[] = []; // TODO: Calculate from transactions grouped by location
+  const locationStock: LocationStock[] = []; // TODO: Calculate from inventory grouped by location
+  const monthlyData: MonthlyLocationData[] = []; // TODO: Calculate from transactions by month
 
   const handleExport = () => {
     // TODO: Implement export

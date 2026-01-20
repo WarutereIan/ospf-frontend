@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,8 @@ import {
   ProgressBar,
   AlertCard,
 } from "@/components/visualizations";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
 
 interface ManagerStats {
   currentStock: number;
@@ -71,89 +73,171 @@ interface StockActivity {
 
 export function AggregationManagerDashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<ManagerStats>({
-    currentStock: 0,
-    stockInToday: 0,
-    stockOutToday: 0,
-    qualityChecksToday: 0,
-    pendingChecks: 0,
-    capacityUtilization: 0,
-    maxCapacity: 0,
-  });
-  const [recentActivity, setRecentActivity] = useState<StockActivity[]>([]);
-  const [stockByVariety, setStockByVariety] = useState<StockByVariety[]>([]);
-  const [stockMovement, setStockMovement] = useState<StockMovement[]>([]);
-  const [stockAging, setStockAging] = useState<StockAging[]>([]);
-  const [qualityDistribution, setQualityDistribution] = useState<QualityDistribution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const centerName = "Kangundo Main Aggregation Center"; // TODO: Get from context
-  const centerType = "main" as "main" | "satellite"; // TODO: Get from context - "main" or "satellite"
-  const centerSubCounty = "Kangundo"; // TODO: Get from context
-  const centerWard = centerType === "satellite" ? "Kangundo East" : undefined; // TODO: Get from context
+  const { 
+    centers,
+    selectedCenter, 
+    inventory, 
+    transactions, 
+    qualityChecks,
+    stats: aggregationStats,
+    fetchCenters, 
+    fetchInventory, 
+    fetchTransactions, 
+    fetchQualityChecks,
+    fetchStats,
+    isLoading: aggregationLoading 
+  } = useAggregation();
+  
+  const { 
+    trends,
+    fetchTrends,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
 
+  // Fetch data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setStats({
-        currentStock: 3500,
-        stockInToday: 450,
-        stockOutToday: 280,
-        qualityChecksToday: 15,
-        pendingChecks: 3,
-        capacityUtilization: 70,
-        maxCapacity: 5000,
-      });
-      setRecentActivity([
-        {
-          id: "STK-001",
-          type: "in",
-          farmerName: "James Mutua",
-          quantity: 150,
-          qualityGrade: "A",
-          timestamp: new Date().toISOString(),
-          status: "completed",
-        },
-        {
-          id: "STK-002",
-          type: "out",
-          buyerName: "John Mwangi",
-          quantity: 280,
-          qualityGrade: "A",
-          timestamp: new Date().toISOString(),
-          status: "completed",
-        },
-      ]);
-      // Stock by variety
-      setStockByVariety([
-        { name: "Kenya", value: 2000 },
-        { name: "SPK004", value: 1000 },
-        { name: "Kabode", value: 500 },
-      ]);
-      // Stock movement (7 days)
-      setStockMovement([
-        { day: "Mon", stockIn: 400, stockOut: 250 },
-        { day: "Tue", stockIn: 350, stockOut: 300 },
-        { day: "Wed", stockIn: 500, stockOut: 280 },
-        { day: "Thu", stockIn: 450, stockOut: 320 },
-        { day: "Fri", stockIn: 480, stockOut: 290 },
-        { day: "Sat", stockIn: 300, stockOut: 200 },
-        { day: "Sun", stockIn: 450, stockOut: 280 },
-      ]);
-      // Stock aging (in percentages)
-      setStockAging([
-        { category: "Fresh (0-3d)", value: 60, color: "#22C55E" },
-        { category: "Aging (4-6d)", value: 25, color: "#F59E0B" },
-        { category: "Critical (7+)", value: 15, color: "#EF4444" },
-      ]);
-      // Quality distribution
-      setQualityDistribution([
-        { name: "Grade A", value: 75 },
-        { name: "Grade B", value: 20 },
-        { name: "Grade C", value: 5 },
-      ]);
-      setIsLoading(false);
-    }, 1000);
+    fetchCenters();
+    fetchInventory();
+    fetchTransactions();
+    fetchQualityChecks();
+    fetchStats();
+    fetchTrends({ timeRange: "week" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const isLoading = aggregationLoading || analyticsLoading;
+
+  // Get center info from selectedCenter or first center
+  const center = selectedCenter || (centers.length > 0 ? centers[0] : null);
+  const centerName = center?.name || "Aggregation Center";
+  const centerType = center?.centerType || "main";
+  const centerSubCounty = center?.subCounty || "";
+  const centerWard = center?.ward;
+
+  // Calculate stats from context data
+  const stats = useMemo<ManagerStats>(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const todayTransactions = transactions.filter(t => t.createdAt.startsWith(today));
+    const stockInToday = todayTransactions
+      .filter(t => t.type === "stock_in")
+      .reduce((sum, t) => sum + t.quantity, 0);
+    const stockOutToday = todayTransactions
+      .filter(t => t.type === "stock_out")
+      .reduce((sum, t) => sum + t.quantity, 0);
+    
+    const todayQualityChecks = qualityChecks.filter(q => (q.createdAt || q.checkedAt)?.startsWith(today));
+    const pendingChecks = qualityChecks.filter(q => !q.passed && !q.failed).length;
+    
+    const currentStock = inventory.reduce((sum, item) => sum + item.quantity, 0);
+    const maxCapacity = center?.capacity || 5000;
+    const capacityUtilization = maxCapacity > 0 ? Math.round((currentStock / maxCapacity) * 100) : 0;
+
+    return {
+      currentStock,
+      stockInToday,
+      stockOutToday,
+      qualityChecksToday: todayQualityChecks.length,
+      pendingChecks,
+      capacityUtilization,
+      maxCapacity,
+    };
+  }, [transactions, qualityChecks, inventory, center]);
+
+  // Calculate stock by variety
+  const stockByVariety = useMemo<StockByVariety[]>(() => {
+    const varietyMap = new Map<string, number>();
+    inventory.forEach(item => {
+      const current = varietyMap.get(item.variety) || 0;
+      varietyMap.set(item.variety, current + item.quantity);
+    });
+    return Array.from(varietyMap.entries()).map(([name, value]) => ({ name, value }));
+  }, [inventory]);
+
+  // Calculate stock movement from trends or transactions
+  const stockMovement = useMemo<StockMovement[]>(() => {
+    if (trends.length > 0) {
+      return trends.slice(-7).map(t => ({
+        day: new Date(t.date).toLocaleDateString("en-US", { weekday: "short" }),
+        stockIn: t.stockIn || 0,
+        stockOut: t.stockOut || 0,
+      }));
+    }
+    // Fallback: calculate from transactions
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date.toISOString().split("T")[0];
+    }).reverse();
+    
+    return last7Days.map(date => {
+      const dayTransactions = transactions.filter(t => t.createdAt.startsWith(date));
+      return {
+        day: new Date(date).toLocaleDateString("en-US", { weekday: "short" }),
+        stockIn: dayTransactions.filter(t => t.type === "stock_in").reduce((sum, t) => sum + t.quantity, 0),
+        stockOut: dayTransactions.filter(t => t.type === "stock_out").reduce((sum, t) => sum + t.quantity, 0),
+      };
+    });
+  }, [trends, transactions]);
+
+  // Calculate stock aging
+  const stockAging = useMemo<StockAging[]>(() => {
+    const now = new Date();
+    const fresh = inventory.filter(item => {
+      const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      return age <= 3;
+    }).length;
+    const aging = inventory.filter(item => {
+      const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      return age > 3 && age <= 6;
+    }).length;
+    const critical = inventory.filter(item => {
+      const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      return age > 6;
+    }).length;
+    
+    const total = inventory.length;
+    if (total === 0) return [];
+    
+    return [
+      { category: "Fresh (0-3d)", value: Math.round((fresh / total) * 100), color: "#22C55E" },
+      { category: "Aging (4-6d)", value: Math.round((aging / total) * 100), color: "#F59E0B" },
+      { category: "Critical (7+)", value: Math.round((critical / total) * 100), color: "#EF4444" },
+    ];
+  }, [inventory]);
+
+  // Calculate quality distribution
+  const qualityDistribution = useMemo<QualityDistribution[]>(() => {
+    const gradeMap = new Map<string, number>();
+    inventory.forEach(item => {
+      const grade = item.grade || item.qualityGrade;
+      const current = gradeMap.get(grade) || 0;
+      gradeMap.set(grade, current + 1);
+    });
+    const total = inventory.length;
+    if (total === 0) return [];
+    
+    return Array.from(gradeMap.entries()).map(([name, count]) => ({
+      name: `Grade ${name}`,
+      value: Math.round((count / total) * 100),
+    }));
+  }, [inventory]);
+
+  // Recent activity from transactions
+  const recentActivity = useMemo<StockActivity[]>(() => {
+    return transactions
+      .slice(-10)
+      .reverse()
+      .map(t => ({
+        id: t.id,
+        type: (t.type === "stock_in" ? "in" : "out") as "in" | "out",
+        farmerName: t.type === "stock_in" ? t.farmerName : undefined,
+        buyerName: t.type === "stock_out" ? t.buyerName : undefined,
+        quantity: t.quantity,
+        qualityGrade: t.grade || t.qualityGrade || "N/A",
+        timestamp: t.createdAt,
+        status: "completed" as const,
+      }));
+  }, [transactions]);
 
   return (
     <div className="space-y-6">

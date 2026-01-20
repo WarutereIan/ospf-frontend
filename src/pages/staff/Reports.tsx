@@ -19,102 +19,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LineChart } from "@/components/visualizations";
-
-interface ReportTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: "performance" | "financial" | "operational" | "compliance";
-  availableFormats: ("pdf" | "excel" | "csv")[];
-  lastGenerated?: string;
-  frequency: "daily" | "weekly" | "monthly" | "quarterly" | "on-demand";
-}
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import type { ReportTemplate } from "@/types/analytics";
 
 export function StaffReports() {
+  const { reportTemplates, fetchReportTemplates, generateReportAction, isLoading } = useAnalytics();
+  
   const [reportType, setReportType] = useState<string>("");
   const [dateRange, setDateRange] = useState<string>("month");
   const [exportFormat, setExportFormat] = useState<string>("pdf");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [reportTemplates, setReportTemplates] = useState<ReportTemplate[]>([]);
 
+  // Fetch report templates on mount
   useEffect(() => {
-    setTimeout(() => {
-      setReportTemplates([
-        {
-          id: "RPT001",
-          name: "Project Performance Dashboard",
-          description: "Comprehensive overview of project KPIs and targets",
-          category: "performance",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-15",
-          frequency: "monthly",
-        },
-        {
-          id: "RPT002",
-          name: "Financial Summary Report",
-          description: "Revenue, transactions, and financial metrics",
-          category: "financial",
-          availableFormats: ["pdf", "excel", "csv"],
-          lastGenerated: "2024-01-15",
-          frequency: "monthly",
-        },
-        {
-          id: "RPT003",
-          name: "User Activity Report",
-          description: "Detailed user activity and engagement metrics",
-          category: "operational",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-14",
-          frequency: "weekly",
-        },
-        {
-          id: "RPT004",
-          name: "Transaction Evidence Report",
-          description: "Complete transaction documentation and evidence",
-          category: "compliance",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-15",
-          frequency: "monthly",
-        },
-        {
-          id: "RPT005",
-          name: "Data Quality Assessment",
-          description: "Data quality metrics and issues identified",
-          category: "compliance",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-15",
-          frequency: "weekly",
-        },
-        {
-          id: "RPT006",
-          name: "Partner Engagement Report",
-          description: "Stakeholder engagement and partnership activities",
-          category: "operational",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-10",
-          frequency: "monthly",
-        },
-        {
-          id: "RPT007",
-          name: "Sales Transaction Report",
-          description: "Detailed sales transactions with evidence",
-          category: "financial",
-          availableFormats: ["pdf", "excel", "csv"],
-          lastGenerated: "2024-01-15",
-          frequency: "daily",
-        },
-        {
-          id: "RPT008",
-          name: "Performance Against Targets",
-          description: "Progress tracking against project targets and indicators",
-          category: "performance",
-          availableFormats: ["pdf", "excel"],
-          lastGenerated: "2024-01-15",
-          frequency: "monthly",
-        },
-      ]);
-    }, 500);
-  }, []);
+    fetchReportTemplates();
+  }, [fetchReportTemplates]);
+
+  // Mock data removed - using context data
 
   const handleGenerateReport = () => {
     if (!reportType) return;
@@ -369,12 +290,12 @@ export function StaffReports() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Available Formats:</span>
                       <div className="flex gap-2">
-                        {template.availableFormats.map((format) => (
+                        {template.availableFormats.filter(f => f !== "json").map((format) => (
                           <Button
                             key={format}
                             variant="outline"
                             size="sm"
-                            onClick={() => handleQuickDownload(template.id, format)}
+                            onClick={() => handleQuickDownload(template.id, format as "pdf" | "excel" | "csv")}
                             title={`Download as ${format.toUpperCase()}`}
                           >
                             {getFormatIcon(format)}

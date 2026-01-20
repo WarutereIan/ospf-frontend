@@ -1,5 +1,14 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ProfileProvider } from "@/contexts/ProfileContext";
+import { InputProvider } from "@/contexts/InputContext";
+import { MarketplaceProvider } from "@/contexts/MarketplaceContext";
+import { TransportProvider } from "@/contexts/TransportContext";
+import { AggregationProvider } from "@/contexts/AggregationContext";
+import { PaymentProvider } from "@/contexts/PaymentContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
+import { StaffProvider } from "@/contexts/StaffContext";
 import { Layout } from "@/components/layout/Layout";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -63,8 +72,17 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+      <ProfileProvider>
+        <InputProvider>
+          <MarketplaceProvider>
+            <TransportProvider>
+              <AggregationProvider>
+                <PaymentProvider>
+                  <NotificationProvider>
+                    <AnalyticsProvider>
+                      <StaffProvider>
+                        <BrowserRouter>
+          <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -164,7 +182,16 @@ export function App() {
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
+                      </StaffProvider>
+                    </AnalyticsProvider>
+                  </NotificationProvider>
+                </PaymentProvider>
+              </AggregationProvider>
+            </TransportProvider>
+          </MarketplaceProvider>
+        </InputProvider>
+      </ProfileProvider>
     </AuthProvider>
   );
 }

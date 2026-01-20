@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -20,88 +20,58 @@ import { PaymentDialog } from "@/components/payments/PaymentDialog";
 import { RateFarmer } from "./RateFarmer";
 import { useNavigate } from "react-router-dom";
 import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
-
-interface BuyerOrder {
-  id: string;
-  farmerId: string;
-  farmerName: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  totalAmount: number;
-  status:
-    | "order_placed"
-    | "order_accepted"
-    | "payment_secured"
-    | "in_transit"
-    | "at_aggregation"
-    | "quality_approved"
-    | "out_for_delivery"
-    | "delivered"
-    | "completed"
-    | "rejected"
-    | "disputed";
-  createdAt: string;
-  deliveryLocation?: string;
-  paymentStatus?: EscrowStatusType;
-  paymentAmount?: number;
-  photos?: string[];
-  canRate: boolean;
-  batchId?: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-}
-
-const sampleOrders: BuyerOrder[] = [
-  {
-    id: "ORD-001",
-    farmerId: "F001",
-    farmerName: "James Mutua",
-    variety: "Kenya",
-    quantity: 500,
-    qualityGrade: "A",
-    pricePerKg: 150,
-    totalAmount: 75000,
-    status: "quality_approved",
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Kangundo Main Aggregation Center (Main - Kangundo Subcounty)",
-    paymentStatus: "ready_for_release",
-    paymentAmount: 75000,
-    canRate: false,
-    batchId: "BATCH-2023-001",
-    qrCode: "QR-BATCH-2023-001",
-  },
-  {
-    id: "ORD-002",
-    farmerId: "F002",
-    farmerName: "Mary Wanjiku",
-    variety: "SPK004",
-    quantity: 300,
-    qualityGrade: "A",
-    pricePerKg: 120,
-    totalAmount: 36000,
-    status: "completed",
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    deliveryLocation: "Mitaboni Satellite Center (Satellite - Mitaboni Ward, Kathiani)",
-    paymentStatus: "completed",
-    paymentAmount: 36000,
-    canRate: true,
-    batchId: "BATCH-2023-002",
-    qrCode: "QR-BATCH-2023-002",
-  },
-];
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function BuyerOrders() {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<BuyerOrder[]>(sampleOrders);
-  const [filteredOrders, setFilteredOrders] = useState<BuyerOrder[]>(sampleOrders);
+  const { orders, fetchOrders, isLoading, marketplaceFilters, setMarketplaceFilters } = useMarketplace();
+  const { user } = useAuth();
+  
+  const [filteredOrders, setFilteredOrders] = useState<MarketplaceOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState<BuyerOrder | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrder | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
+
+  // Fetch buyer's orders on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchOrders({ buyerId: user.id });
+    }
+  }, [fetchOrders, user?.id]);
+
+  // Update filters when status filter changes
+  useEffect(() => {
+    const filters: any = {
+      buyerId: user?.id,
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      searchQuery: searchTerm || undefined,
+    };
+    setMarketplaceFilters(filters);
+    fetchOrders(filters);
+  }, [statusFilter, user?.id, setMarketplaceFilters, fetchOrders]);
+
+  // Apply client-side search filter
+  useEffect(() => {
+    let filtered = [...orders];
+
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (order) =>
+          order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.variety.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredOrders(filtered);
+  }, [orders, searchTerm]);
 
   // Calculate order funnel data
   const orderFunnel = [
@@ -311,12 +281,10 @@ export function BuyerOrders() {
               quantity={selectedOrder.quantity}
               onRatingSubmitted={() => {
                 setRatingDialogOpen(false);
-                // Update order to mark as rated
-                setOrders((prev) =>
-                  prev.map((o) =>
-                    o.id === selectedOrder.id ? { ...o, canRate: false } : o
-                  )
-                );
+                // Refresh orders to get updated canRate status
+                if (user?.id) {
+                  fetchOrders({ buyerId: user.id });
+                }
               }}
             />
           </DialogContent>

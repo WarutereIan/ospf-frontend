@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,9 @@ import {
   IconTruck,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StockOutEntry {
   buyerId: string;
@@ -43,6 +46,10 @@ const qualityGrades = [
 ];
 
 export function StockOutForm() {
+  const { recordStockOut, centers, fetchCenters, selectedCenter, inventory, fetchInventory, isLoading: aggregationLoading } = useAggregation();
+  const { profiles, fetchProfiles, filteredProfiles } = useProfile();
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState<Partial<StockOutEntry>>({
     buyerId: "",
     buyerName: "",
@@ -60,14 +67,15 @@ export function StockOutForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
-  // Sample buyers for search - TODO: Replace with API
-  const sampleBuyers = [
-    { id: "B001", name: "John Mwangi", phone: "+254712345678" },
-    { id: "B002", name: "Jane Wanjiru", phone: "+254723456789" },
-    { id: "B003", name: "Mike Ochieng", phone: "+254734567890" },
-  ];
+  // Fetch centers, buyers, and inventory on mount
+  useEffect(() => {
+    fetchCenters();
+    fetchProfiles({ role: "buyer" });
+    fetchInventory();
+  }, [fetchCenters, fetchProfiles, fetchInventory]);
 
-  const filteredBuyers = sampleBuyers.filter(
+  // Filter buyers based on search term
+  const filteredBuyers = filteredProfiles.filter(
     (buyer) =>
       buyer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       buyer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,11 +111,33 @@ export function StockOutForm() {
       return;
     }
 
+    if (!selectedCenter && centers.length > 0) {
+      // Auto-select first center if none selected
+    }
+
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      console.log("Stock Out Entry:", formData);
-      // Reset form
+    
+    try {
+      // Prepare stock transaction data
+      const stockTransaction = {
+        centerId: selectedCenter?.id || centers[0]?.id || "",
+        centerName: selectedCenter?.name || centers[0]?.name || "",
+        type: "stock_out" as const,
+        buyerId: formData.buyerId,
+        buyerName: formData.buyerName || "",
+        orderId: formData.orderId,
+        variety: formData.variety,
+        quantity: formData.quantity || 0,
+        qualityGrade: formData.qualityGrade as "A" | "B" | "C",
+        photos: formData.photos || [],
+        notes: formData.notes || `${formData.vehicleDetails ? `Vehicle: ${formData.vehicleDetails}. ` : ""}${formData.driverName ? `Driver: ${formData.driverName} (${formData.driverPhone}). ` : ""}`,
+        createdBy: user?.id || "",
+      };
+
+      // Record stock out via context
+      await recordStockOut(stockTransaction);
+      
+      // Reset form after successful submission
       setFormData({
         buyerId: "",
         buyerName: "",
@@ -122,9 +152,15 @@ export function StockOutForm() {
         notes: "",
       });
       setSearchTerm("");
-      setIsSubmitting(false);
+      
+      // Show success message (could use toast notification)
       alert("Stock out entry recorded successfully!");
-    }, 2000);
+    } catch (error) {
+      console.error("Failed to record stock out:", error);
+      // Error handling is done by context
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedGrade = qualityGrades.find((g) => g.value === formData.qualityGrade);
@@ -176,6 +212,7 @@ export function StockOutForm() {
                           <div className="font-medium">{buyer.name}</div>
                           <div className="text-sm text-muted-foreground">
                             {buyer.id} • {buyer.phone}
+                            {buyer.location && ` • ${buyer.location}`}
                           </div>
                         </button>
                       ))}
@@ -449,7 +486,9 @@ export function StockOutForm() {
                       !formData.variety ||
                       !formData.quantity ||
                       !formData.qualityGrade ||
-                      isSubmitting
+                      isSubmitting ||
+                      aggregationLoading ||
+                      centers.length === 0
                     }
                   >
                     {isSubmitting ? (

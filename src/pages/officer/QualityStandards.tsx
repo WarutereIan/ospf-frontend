@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LineChart, PieChart, HorizontalBarChart } from "@/components/visualizations";
+import { useAggregation } from "@/contexts/AggregationContext";
 
 interface QualityMetric {
   period: string;
@@ -58,127 +59,22 @@ interface StandardCompliance {
 }
 
 export function QualityStandards() {
+  const { qualityChecks, fetchQualityChecks, centers, isLoading } = useAggregation();
+  
   const [dateRange, setDateRange] = useState<string>("month");
   const [subCountyFilter, setSubCountyFilter] = useState<string>("all");
   const [centerFilter, setCenterFilter] = useState<string>("all");
-  const [qualityMetrics, setQualityMetrics] = useState<QualityMetric[]>([]);
-  const [centerQuality, setCenterQuality] = useState<CenterQuality[]>([]);
-  const [standardsCompliance, setStandardsCompliance] = useState<StandardCompliance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch quality checks on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setIsLoading(true);
-    setTimeout(() => {
-      // Quality metrics over time
-      setQualityMetrics([
-        { period: "Jan", gradeA: 75, gradeB: 20, gradeC: 5, rejectionRate: 2.5, complianceScore: 92 },
-        { period: "Feb", gradeA: 78, gradeB: 18, gradeC: 4, rejectionRate: 2.1, complianceScore: 94 },
-        { period: "Mar", gradeA: 80, gradeB: 17, gradeC: 3, rejectionRate: 1.8, complianceScore: 95 },
-        { period: "Apr", gradeA: 82, gradeB: 15, gradeC: 3, rejectionRate: 1.5, complianceScore: 96 },
-        { period: "May", gradeA: 85, gradeB: 12, gradeC: 3, rejectionRate: 1.2, complianceScore: 97 },
-        { period: "Jun", gradeA: 83, gradeB: 14, gradeC: 3, rejectionRate: 1.4, complianceScore: 96 },
-      ]);
+    fetchQualityChecks();
+    // Centers are already fetched by AggregationContext
+  }, [fetchQualityChecks]);
 
-      // Center quality performance
-      setCenterQuality([
-        {
-          centerId: "AC001",
-          centerName: "Kangundo Main",
-          location: "Kangundo",
-          gradeADistribution: 85,
-          gradeBDistribution: 12,
-          gradeCDistribution: 3,
-          rejectionRate: 1.2,
-          complianceScore: 97,
-          totalChecks: 450,
-          lastCheckDate: new Date().toISOString(),
-        },
-        {
-          centerId: "AC002",
-          centerName: "Kathiani Main",
-          location: "Kathiani",
-          gradeADistribution: 80,
-          gradeBDistribution: 16,
-          gradeCDistribution: 4,
-          rejectionRate: 1.8,
-          complianceScore: 95,
-          totalChecks: 320,
-          lastCheckDate: new Date().toISOString(),
-        },
-        {
-          centerId: "AC003",
-          centerName: "Masinga Main",
-          location: "Masinga",
-          gradeADistribution: 78,
-          gradeBDistribution: 18,
-          gradeCDistribution: 4,
-          rejectionRate: 2.1,
-          complianceScore: 94,
-          totalChecks: 280,
-          lastCheckDate: new Date().toISOString(),
-        },
-        {
-          centerId: "AC004",
-          centerName: "Yatta Main",
-          location: "Yatta",
-          gradeADistribution: 82,
-          gradeBDistribution: 15,
-          gradeCDistribution: 3,
-          rejectionRate: 1.5,
-          complianceScore: 96,
-          totalChecks: 240,
-          lastCheckDate: new Date().toISOString(),
-        },
-      ]);
-
-      // Standards compliance
-      setStandardsCompliance([
-        {
-          standard: "Size Standard",
-          category: "size",
-          requirement: "Tubers: 100-300g per piece",
-          complianceRate: 95,
-          violations: 25,
-          status: "compliant",
-        },
-        {
-          standard: "Color Standard",
-          category: "color",
-          requirement: "Deep orange flesh, no discoloration",
-          complianceRate: 92,
-          violations: 40,
-          status: "compliant",
-        },
-        {
-          standard: "Damage Standard",
-          category: "damage",
-          requirement: "Max 5% surface damage",
-          complianceRate: 88,
-          violations: 60,
-          status: "warning",
-        },
-        {
-          standard: "Storage Standard",
-          category: "storage",
-          requirement: "Temperature: 15-20°C, Humidity: 60-70%",
-          complianceRate: 85,
-          violations: 75,
-          status: "warning",
-        },
-        {
-          standard: "Packaging Standard",
-          category: "packaging",
-          requirement: "Clean, food-grade packaging",
-          complianceRate: 98,
-          violations: 10,
-          status: "compliant",
-        },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
-  }, [dateRange, subCountyFilter, centerFilter]);
+  // Calculate quality metrics from quality checks
+  const qualityMetrics: QualityMetric[] = []; // TODO: Calculate from qualityChecks data
+  const centerQuality: CenterQuality[] = []; // TODO: Calculate from qualityChecks grouped by center
+  const standardsCompliance: StandardCompliance[] = []; // TODO: Calculate from qualityChecks
 
   const getComplianceStatusBadge = (status: string) => {
     switch (status) {

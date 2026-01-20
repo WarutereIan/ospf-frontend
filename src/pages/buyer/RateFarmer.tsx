@@ -14,6 +14,8 @@ import {
   IconMessageCircle,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { useProfile } from "@/contexts/ProfileContext";
+import type { Rating } from "@/types/profile";
 
 interface RatingForm {
   overallRating: number;
@@ -55,6 +57,8 @@ export function RateFarmer({
     setRating((prev) => ({ ...prev, [category]: value }));
   };
 
+  const { submitRating } = useProfile();
+
   const handleSubmit = async () => {
     if (rating.overallRating === 0) {
       alert("Please provide an overall rating");
@@ -62,14 +66,29 @@ export function RateFarmer({
     }
 
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
+    try {
+      const ratingData: Partial<Rating> = {
+        farmerId,
+        orderId,
+        overallRating: rating.overallRating,
+        qualityRating: rating.qualityRating,
+        deliveryRating: rating.deliveryRating,
+        communicationRating: rating.communicationRating,
+        review: rating.review,
+      };
+      
+      await submitRating(ratingData);
+      
       if (onRatingSubmitted) {
         onRatingSubmitted(rating);
       }
       setIsSubmitting(false);
       setSubmitted(true);
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to submit rating:", error);
+      alert("Failed to submit rating. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
   const StarRating = ({

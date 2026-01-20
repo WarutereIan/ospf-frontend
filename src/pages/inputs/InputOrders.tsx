@@ -39,173 +39,32 @@ import {
   IconFileText,
 } from "@tabler/icons-react";
 import { StatCard } from "@/components/visualizations";
-
-interface InputOrder {
-  id: string;
-  orderNumber: string;
-  farmerName: string;
-  farmerPhone: string;
-  farmerLocation: string;
-  inputName: string;
-  inputCategory: string;
-  quantity: number;
-  unit: string;
-  pricePerUnit: number;
-  subtotal: number;
-  transportFee: number;
-  totalAmount: number;
-  status: "pending" | "accepted" | "processing" | "ready_for_pickup" | "in_transit" | "delivered" | "completed" | "cancelled" | "rejected";
-  createdAt: string;
-  deliveryDate?: string;
-  notes?: string;
-  requiresTransport: boolean;
-  transportProvider?: string;
-  paymentStatus: "pending" | "paid" | "refunded";
-}
+import { useInput } from "@/contexts/InputContext";
+import type { InputOrder } from "@/types/input";
 
 export default function InputOrders() {
-  const [orders, setOrders] = useState<InputOrder[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<InputOrder[]>([]);
+  const { inputOrders, fetchInputOrders, updateOrderStatus, isLoading } = useInput();
+  
+  const [filteredOrders, setFilteredOrders] = useState<InputOrder[]>(inputOrders);
   const [selectedOrder, setSelectedOrder] = useState<InputOrder | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // Fetch orders on mount
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      const sampleOrders: InputOrder[] = [
-        {
-          id: "1",
-          orderNumber: "INP-ORD-001",
-          farmerName: "John Kamau",
-          farmerPhone: "+254712345678",
-          farmerLocation: "Kangundo, Machakos",
-          inputName: "OFSP Vines (Kenya)",
-          inputCategory: "Planting Material",
-          quantity: 500,
-          unit: "cutting",
-          pricePerUnit: 30,
-          subtotal: 15000,
-          transportFee: 500,
-          totalAmount: 15500,
-          status: "pending",
-          createdAt: "2024-01-15T10:30:00Z",
-          requiresTransport: true,
-          paymentStatus: "pending",
-        },
-        {
-          id: "2",
-          orderNumber: "INP-ORD-002",
-          farmerName: "Mary Wanjiku",
-          farmerPhone: "+254723456789",
-          farmerLocation: "Matungulu, Machakos",
-          inputName: "NPK Fertilizer",
-          inputCategory: "Fertilizer",
-          quantity: 50,
-          unit: "kg",
-          pricePerUnit: 150,
-          subtotal: 7500,
-          transportFee: 500,
-          totalAmount: 8000,
-          status: "accepted",
-          createdAt: "2024-01-14T14:20:00Z",
-          deliveryDate: "2024-01-20",
-          requiresTransport: true,
-          paymentStatus: "paid",
-        },
-        {
-          id: "3",
-          orderNumber: "INP-ORD-003",
-          farmerName: "Peter Mwangi",
-          farmerPhone: "+254734567890",
-          farmerLocation: "Mwala, Machakos",
-          inputName: "OFSP Vines (SPK004)",
-          inputCategory: "Planting Material",
-          quantity: 300,
-          unit: "cutting",
-          pricePerUnit: 35,
-          subtotal: 10500,
-          transportFee: 0,
-          totalAmount: 10500,
-          status: "processing",
-          createdAt: "2024-01-13T09:15:00Z",
-          requiresTransport: false,
-          paymentStatus: "paid",
-        },
-        {
-          id: "4",
-          orderNumber: "INP-ORD-004",
-          farmerName: "Jane Wambui",
-          farmerPhone: "+254745678901",
-          farmerLocation: "Kangundo, Machakos",
-          inputName: "Organic Compost",
-          inputCategory: "Soil Amendment",
-          quantity: 100,
-          unit: "kg",
-          pricePerUnit: 80,
-          subtotal: 8000,
-          transportFee: 500,
-          totalAmount: 8500,
-          status: "ready_for_pickup",
-          createdAt: "2024-01-12T11:45:00Z",
-          deliveryDate: "2024-01-18",
-          requiresTransport: true,
-          transportProvider: "Transport Co. Ltd",
-          paymentStatus: "paid",
-        },
-        {
-          id: "5",
-          orderNumber: "INP-ORD-005",
-          farmerName: "David Kipchoge",
-          farmerPhone: "+254756789012",
-          farmerLocation: "Matungulu, Machakos",
-          inputName: "Training Manuals",
-          inputCategory: "Training Materials",
-          quantity: 10,
-          unit: "book",
-          pricePerUnit: 500,
-          subtotal: 5000,
-          transportFee: 0,
-          totalAmount: 5000,
-          status: "delivered",
-          createdAt: "2024-01-10T08:30:00Z",
-          deliveryDate: "2024-01-15",
-          requiresTransport: false,
-          paymentStatus: "paid",
-        },
-        {
-          id: "6",
-          orderNumber: "INP-ORD-006",
-          farmerName: "Sarah Njeri",
-          farmerPhone: "+254767890123",
-          farmerLocation: "Mwala, Machakos",
-          inputName: "OFSP Vines (Kenya)",
-          inputCategory: "Planting Material",
-          quantity: 200,
-          unit: "cutting",
-          pricePerUnit: 30,
-          subtotal: 6000,
-          transportFee: 500,
-          totalAmount: 6500,
-          status: "completed",
-          createdAt: "2024-01-08T16:20:00Z",
-          deliveryDate: "2024-01-12",
-          requiresTransport: true,
-          paymentStatus: "paid",
-        },
-      ];
-      setOrders(sampleOrders);
-      setFilteredOrders(sampleOrders);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchInputOrders();
+  }, [fetchInputOrders]);
 
+  // Apply filters
   useEffect(() => {
-    let filtered = orders;
+    let filtered = [...inputOrders];
+    setFilteredOrders(filtered);
 
-    // Filter by search query
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((order) => order.status === statusFilter);
+    }
+
     if (searchQuery) {
       filtered = filtered.filter(
         (order) =>
@@ -215,46 +74,50 @@ export default function InputOrders() {
       );
     }
 
-    // Filter by status
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((order) => order.status === statusFilter);
-    }
-
     setFilteredOrders(filtered);
-  }, [searchQuery, statusFilter, orders]);
+  }, [inputOrders, statusFilter, searchQuery]);
 
   const handleViewOrder = (order: InputOrder) => {
     setSelectedOrder(order);
     setIsDetailDialogOpen(true);
   };
 
-  const handleAcceptOrder = (orderId: string) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId ? { ...order, status: "accepted" as const } : order
-      )
-    );
-    setIsDetailDialogOpen(false);
-  };
-
-  const handleRejectOrder = (orderId: string) => {
-    if (confirm("Are you sure you want to reject this order?")) {
-      setOrders(
-        orders.map((order) =>
-          order.id === orderId ? { ...order, status: "rejected" as const } : order
-        )
-      );
+  const handleAcceptOrder = async (orderId: string) => {
+    try {
+      await updateOrderStatus(orderId, "accepted");
       setIsDetailDialogOpen(false);
+      // Refresh orders
+      await fetchInputOrders();
+    } catch (error) {
+      console.error("Failed to accept order:", error);
+      alert("Failed to accept order. Please try again.");
     }
   };
 
-  const handleUpdateStatus = (orderId: string, newStatus: InputOrder["status"]) => {
-    setOrders(
-      orders.map((order) =>
-        order.id === orderId ? { ...order, status: newStatus } : order
-      )
-    );
-    setIsDetailDialogOpen(false);
+  const handleRejectOrder = async (orderId: string) => {
+    if (confirm("Are you sure you want to reject this order?")) {
+      try {
+        await updateOrderStatus(orderId, "rejected");
+        setIsDetailDialogOpen(false);
+        // Refresh orders
+        await fetchInputOrders();
+      } catch (error) {
+        console.error("Failed to reject order:", error);
+        alert("Failed to reject order. Please try again.");
+      }
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: string, newStatus: InputOrder["status"]) => {
+    try {
+      await updateOrderStatus(orderId, newStatus);
+      setIsDetailDialogOpen(false);
+      // Refresh orders
+      await fetchInputOrders();
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      alert("Failed to update order status. Please try again.");
+    }
   };
 
   const getStatusBadge = (status: InputOrder["status"]) => {
@@ -285,11 +148,11 @@ export default function InputOrders() {
   };
 
   const stats = {
-    total: orders.length,
-    pending: orders.filter((o) => o.status === "pending").length,
-    processing: orders.filter((o) => ["accepted", "processing", "ready_for_pickup"].includes(o.status)).length,
-    completed: orders.filter((o) => ["delivered", "completed"].includes(o.status)).length,
-    totalRevenue: orders.filter((o) => o.paymentStatus === "paid").reduce((sum, o) => sum + o.totalAmount, 0),
+    total: inputOrders.length,
+    pending: inputOrders.filter((o) => o.status === "pending").length,
+    processing: inputOrders.filter((o) => ["accepted", "processing", "ready_for_pickup"].includes(o.status)).length,
+    completed: inputOrders.filter((o) => ["delivered", "completed"].includes(o.status)).length,
+    totalRevenue: inputOrders.filter((o) => o.paymentStatus === "paid").reduce((sum, o) => sum + o.totalAmount, 0),
   };
 
   return (
@@ -377,7 +240,7 @@ export default function InputOrders() {
         <CardHeader>
           <CardTitle>Orders</CardTitle>
           <CardDescription>
-            Showing {filteredOrders.length} of {orders.length} orders
+            Showing {filteredOrders.length} of {inputOrders.length} orders
           </CardDescription>
         </CardHeader>
         <CardContent>

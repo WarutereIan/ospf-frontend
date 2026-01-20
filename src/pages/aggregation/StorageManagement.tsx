@@ -12,72 +12,25 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-
-interface StorageItem {
-  id: string;
-  variety: string;
-  qualityGrade: "A" | "B" | "C";
-  quantity: number;
-  storageDuration: number; // days
-  stockInDate: string;
-  status: "fresh" | "aging" | "critical";
-  temperature?: number; // Celsius
-  humidity?: number; // Percentage
-}
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { InventoryItem } from "@/types/aggregation";
 
 export function StorageManagement() {
-  const [storageItems, setStorageItems] = useState<StorageItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<StorageItem[]>([]);
+  const { inventory, fetchInventory, selectedCenter, centers, fetchCenters, isLoading } = useAggregation();
+  
+  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [varietyFilter, setVarietyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch inventory on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleItems: StorageItem[] = [
-        {
-          id: "STO-001",
-          variety: "Kenya",
-          qualityGrade: "A",
-          quantity: 500,
-          storageDuration: 2,
-          stockInDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "fresh",
-          temperature: 12,
-          humidity: 85,
-        },
-        {
-          id: "STO-002",
-          variety: "SPK004",
-          qualityGrade: "A",
-          quantity: 300,
-          storageDuration: 6,
-          stockInDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "aging",
-          temperature: 14,
-          humidity: 82,
-        },
-        {
-          id: "STO-003",
-          variety: "Kabode",
-          qualityGrade: "B",
-          quantity: 200,
-          storageDuration: 9,
-          stockInDate: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
-          status: "critical",
-          temperature: 15,
-          humidity: 80,
-        },
-      ];
-      setStorageItems(sampleItems);
-      setFilteredItems(sampleItems);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchCenters();
+    fetchInventory(selectedCenter?.id);
+  }, [fetchCenters, fetchInventory, selectedCenter?.id]);
 
+  // Filter inventory items
   useEffect(() => {
-    let filtered = [...storageItems];
+    let filtered = [...inventory];
 
     if (varietyFilter !== "all") {
       filtered = filtered.filter((item) => item.variety.toLowerCase() === varietyFilter);
@@ -88,7 +41,7 @@ export function StorageManagement() {
     }
 
     setFilteredItems(filtered);
-  }, [storageItems, varietyFilter, statusFilter]);
+  }, [inventory, varietyFilter, statusFilter]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -103,8 +56,8 @@ export function StorageManagement() {
     }
   };
 
-  const agingItems = storageItems.filter((item) => item.status === "aging" || item.status === "critical");
-  const criticalItems = storageItems.filter((item) => item.status === "critical");
+  const agingItems = inventory.filter((item) => item.status === "aging" || item.status === "critical");
+  const criticalItems = inventory.filter((item) => item.status === "critical");
 
   return (
     <div className="space-y-6">
@@ -116,7 +69,7 @@ export function StorageManagement() {
             Monitor storage conditions and aging stock
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => fetchInventory(selectedCenter?.id)}>
           <IconRefresh className="mr-2 h-4 w-4" />
           Refresh
         </Button>
@@ -165,9 +118,9 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {storageItems.reduce((sum, item) => sum + item.quantity, 0)} kg
+              {inventory.reduce((sum, item) => sum + item.quantity, 0)} kg
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{storageItems.length} batches</p>
+            <p className="text-xs text-muted-foreground mt-1">{inventory.length} batches</p>
           </CardContent>
         </Card>
         <Card>
@@ -176,7 +129,7 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {storageItems
+              {inventory
                 .filter((i) => i.status === "fresh")
                 .reduce((sum, i) => sum + i.quantity, 0)}{" "}
               kg
@@ -190,7 +143,7 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {storageItems
+              {inventory
                 .filter((i) => i.status === "aging")
                 .reduce((sum, i) => sum + i.quantity, 0)}{" "}
               kg
@@ -204,7 +157,7 @@ export function StorageManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {storageItems
+              {filteredItems
                 .filter((i) => i.status === "critical")
                 .reduce((sum, i) => sum + i.quantity, 0)}{" "}
               kg

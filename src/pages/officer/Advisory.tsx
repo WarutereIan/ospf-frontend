@@ -21,28 +21,13 @@ import {
   IconClock,
   IconAlertCircle,
 } from "@tabler/icons-react";
-
-interface Advisory {
-  id: string;
-  title: string;
-  message: string;
-  targetAudience: "all" | "sub_county" | "farmer_group" | "individual";
-  targetValue?: string;
-  sentDate: string;
-  status: "draft" | "sent" | "delivered";
-  deliveryCount: number;
-  readCount: number;
-  impact?: {
-    ordersIncrease?: number;
-    qualityImprovement?: number;
-    farmerEngagement?: number;
-  };
-}
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import type { Advisory } from "@/types/analytics";
 
 export function Advisory() {
-  const [advisories, setAdvisories] = useState<Advisory[]>([]);
+  const { advisories, fetchAdvisories, createAdvisory, updateAdvisory, deleteAdvisory, isLoading } = useAnalytics();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     title: "",
     message: "",
@@ -50,67 +35,34 @@ export function Advisory() {
     targetValue: "",
   });
 
+  // Fetch advisories on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setAdvisories([
-        {
-          id: "ADV001",
-          title: "Best Practices for OFSP Storage",
-          message: "Store OFSP in a cool, dry place to maintain quality...",
-          targetAudience: "all",
-          sentDate: "2024-01-10",
-          status: "delivered",
-          deliveryCount: 150,
-          readCount: 120,
-          impact: {
-            ordersIncrease: 15,
-            qualityImprovement: 8,
-            farmerEngagement: 25,
-          },
-        },
-        {
-          id: "ADV002",
-          title: "Market Price Update - January 2024",
-          message: "Current market prices for Grade A OFSP...",
-          targetAudience: "sub_county",
-          targetValue: "Kangundo",
-          sentDate: "2024-01-05",
-          status: "delivered",
-          deliveryCount: 45,
-          readCount: 38,
-        },
-        {
-          id: "ADV003",
-          title: "Quality Standards Reminder",
-          message: "Reminder about quality grading standards...",
-          targetAudience: "all",
-          sentDate: "2024-01-15",
-          status: "sent",
-          deliveryCount: 150,
-          readCount: 0,
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchAdvisories();
+  }, [fetchAdvisories]);
 
-  const handleSendAdvisory = () => {
-    // TODO: Implement advisory sending
-    const newAdvisory: Advisory = {
-      id: `ADV${String(advisories.length + 1).padStart(3, "0")}`,
-      title: formData.title,
-      message: formData.message,
-      targetAudience: formData.targetAudience,
-      targetValue: formData.targetValue || undefined,
-      sentDate: new Date().toISOString().split("T")[0],
-      status: "sent",
-      deliveryCount: 0,
-      readCount: 0,
-    };
-    setAdvisories([newAdvisory, ...advisories]);
-    setIsDialogOpen(false);
-    setFormData({ title: "", message: "", targetAudience: "all", targetValue: "" });
+  const handleSendAdvisory = async () => {
+    try {
+      await createAdvisory({
+        type: "information",
+        title: formData.title,
+        content: formData.message,
+        targetAudience: formData.targetAudience === "all" 
+          ? ["farmer", "buyer", "officer"] 
+          : formData.targetAudience === "sub_county"
+          ? ["officer"]
+          : ["farmer"],
+        category: formData.targetValue || undefined,
+        isActive: true,
+        createdBy: "", // Will be set by context
+        createdAt: new Date().toISOString(),
+      });
+      setIsDialogOpen(false);
+      setFormData({ title: "", message: "", targetAudience: "all", targetValue: "" });
+      await fetchAdvisories();
+    } catch (error) {
+      console.error("Failed to create advisory:", error);
+      alert("Failed to send advisory. Please try again.");
+    }
   };
 
   return (
@@ -227,13 +179,19 @@ export function Advisory() {
                       <div className="flex items-center gap-4 text-xs text-muted-foreground">
                         <span>
                           Target:{" "}
-                          {advisory.targetAudience === "all"
-                            ? "All Farmers"
-                            : advisory.targetAudience === "sub_county"
-                            ? `Sub-County: ${advisory.targetValue}`
-                            : advisory.targetAudience === "farmer_group"
-                            ? `Group: ${advisory.targetValue}`
-                            : `Individual: ${advisory.targetValue}`}
+                          {typeof advisory.targetAudience === "string"
+                            ? advisory.targetAudience === "all"
+                              ? "All Farmers"
+                              : advisory.targetAudience === "sub_county"
+                              ? `Sub-County: ${advisory.targetValue || ""}`
+                              : advisory.targetAudience === "farmer_group"
+                              ? `Group: ${advisory.targetValue || ""}`
+                              : `Individual: ${advisory.targetValue || ""}`
+                            : Array.isArray(advisory.targetAudience)
+                            ? advisory.targetAudience.includes("farmer") && advisory.targetAudience.length === 1
+                              ? "All Farmers"
+                              : advisory.targetAudience.join(", ")
+                            : "All Users"}
                         </span>
                         <span>Sent: {advisory.sentDate}</span>
                       </div>

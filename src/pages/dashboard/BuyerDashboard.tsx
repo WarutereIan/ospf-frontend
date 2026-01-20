@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,10 @@ import {
 } from "@tabler/icons-react";
 import { LineChart, PieChart } from "@/components/visualizations";
 import { Progress } from "@/components/ui/progress";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { usePayment } from "@/contexts/PaymentContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProcurementStats {
   volumeSourced: number; // in tons
@@ -60,90 +64,178 @@ interface RecentDelivery {
 
 export function BuyerDashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<ProcurementStats>({
-    volumeSourced: 0,
-    volumeTarget: 0,
-    volumeTrend: 0,
-    avgPricePerKg: 0,
-    priceTrend: 0,
-    marketAvgPrice: 0,
-    qualityAcceptance: 0,
-    activeSuppliers: 0,
-    deliveriesThisWeek: 0,
-  });
-  const [priceTrendData, setPriceTrendData] = useState<PriceTrendData[]>([]);
-  const [sourcingMix, setSourcingMix] = useState<SourcingMixData[]>([]);
-  const [topRegions, setTopRegions] = useState<SourcingRegion[]>([]);
-  const [recentDeliveries, setRecentDeliveries] = useState<RecentDelivery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { 
+    orders, 
+    fetchOrders,
+    isLoading: marketplaceLoading 
+  } = useMarketplace();
+  
+  const { 
+    paymentHistory,
+    fetchPaymentHistory,
+    isLoading: paymentLoading 
+  } = usePayment();
+  
+  const { 
+    trends,
+    dashboardStats,
+    fetchTrends,
+    fetchDashboardStats,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
+
   const [selectedPeriod, setSelectedPeriod] = useState("q3");
 
+  // Fetch data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setStats({
-        volumeSourced: 24.5,
-        volumeTarget: 37.5,
-        volumeTrend: 12,
-        avgPricePerKg: 38,
-        priceTrend: -4,
-        marketAvgPrice: 40,
-        qualityAcceptance: 96.8,
-        activeSuppliers: 6,
-        deliveriesThisWeek: 2,
+    if (user?.id) {
+      fetchOrders({ buyerId: user.id });
+      fetchPaymentHistory({ userId: user.id });
+      fetchTrends({ timeRange: "quarter" });
+      fetchDashboardStats({ timeRange: "quarter" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const isLoading = marketplaceLoading || paymentLoading || analyticsLoading;
+
+  // Filter buyer's orders
+  const buyerOrders = useMemo(() => {
+    return orders.filter(order => order.buyerId === user?.id);
+  }, [orders, user?.id]);
+
+  // Calculate stats from context data
+  const stats = useMemo<ProcurementStats>(() => {
+    const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+    const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || 0), 0) / 1000; // Convert to tons
+    const totalValue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const avgPricePerKg = totalVolume > 0 ? totalValue / (totalVolume * 1000) : 0;
+    
+    // Get market average from trends or dashboard stats
+    const marketAvgPrice = dashboardStats?.averagePrice || 40;
+    
+    // Calculate quality acceptance (orders with grade A)
+    const gradeAOrders = completedOrders.filter(o => o.items?.some(item => item.grade === "A")).length;
+    const qualityAcceptance = completedOrders.length > 0 ? (gradeAOrders / completedOrders.length) * 100 : 0;
+    
+    // Get unique suppliers
+    const uniqueSuppliers = new Set(completedOrders.map(o => o.sellerId || o.farmerId).filter(Boolean));
+    
+    // Deliveries this week
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const deliveriesThisWeek = buyerOrders.filter(o => 
+      new Date(o.createdAt) >= weekAgo && 
+      (o.status === "in_transit" || o.status === "delivered" || o.status === "completed")
+    ).length;
+
+    // Calculate trends (simplified - would need historical data)
+    const volumeTrend = trends.length > 1 ? 
+      ((trends[trends.length - 1].volume || 0) - (trends[0].volume || 0)) / (trends[0].volume || 1) * 100 : 0;
+    const priceTrend = trends.length > 1 ?
+      ((trends[trends.length - 1].averagePrice || 0) - (trends[0].averagePrice || 0)) / (trends[0].averagePrice || 1) * 100 : 0;
+
+    return {
+      volumeSourced: Math.round(totalVolume * 10) / 10,
+      volumeTarget: 37.5, // TODO: Get from settings or config
+      volumeTrend: Math.round(volumeTrend * 10) / 10,
+      avgPricePerKg: Math.round(avgPricePerKg),
+      priceTrend: Math.round(priceTrend * 10) / 10,
+      marketAvgPrice: Math.round(marketAvgPrice),
+      qualityAcceptance: Math.round(qualityAcceptance * 10) / 10,
+      activeSuppliers: uniqueSuppliers.size,
+      deliveriesThisWeek,
+    };
+  }, [buyerOrders, trends, dashboardStats]);
+
+  // Price trend data from trends
+  const priceTrendData = useMemo<PriceTrendData[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-5).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      yourPrice: t.averagePrice || stats.avgPricePerKg,
+      marketAvg: dashboardStats?.averagePrice || stats.marketAvgPrice,
+    }));
+  }, [trends, dashboardStats, stats]);
+
+  // Sourcing mix from orders
+  const sourcingMix = useMemo<SourcingMixData[]>(() => {
+    const mixMap = new Map<string, number>();
+    buyerOrders.forEach(order => {
+      order.items?.forEach(item => {
+        const category = `${item.variety} (Grade ${item.grade})`;
+        const current = mixMap.get(category) || 0;
+        mixMap.set(category, current + (item.quantity || 0));
       });
+    });
+    
+    const total = Array.from(mixMap.values()).reduce((sum, v) => sum + v, 0) / 1000; // Convert to tons
+    if (total === 0) return [];
+    
+    const colors = ["#FF8C00", "#475569", "#94A3B8", "#F59E0B", "#10B981"];
+    let colorIndex = 0;
+    
+    return Array.from(mixMap.entries())
+      .map(([name, value]) => ({
+        name,
+        value: value / 1000, // Convert to tons
+        percentage: Math.round((value / 1000 / total) * 100),
+        color: colors[colorIndex++ % colors.length],
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [buyerOrders]);
 
-      setPriceTrendData([
-        { month: "Aug", yourPrice: 36, marketAvg: 42 },
-        { month: "Sep", yourPrice: 37, marketAvg: 41 },
-        { month: "Oct", yourPrice: 35, marketAvg: 40 },
-        { month: "Nov", yourPrice: 35, marketAvg: 39 },
-        { month: "Dec (Est)", yourPrice: 38, marketAvg: 40 },
-      ]);
+  // Top regions from orders
+  const topRegions = useMemo<SourcingRegion[]>(() => {
+    const regionMap = new Map<string, number>();
+    buyerOrders.forEach(order => {
+      const region = order.origin || order.location || "Unknown";
+      const current = regionMap.get(region) || 0;
+      regionMap.set(region, current + (order.totalQuantity || 0));
+    });
+    
+    const total = Array.from(regionMap.values()).reduce((sum, v) => sum + v, 0) / 1000; // Convert to tons
+    if (total === 0) return [];
+    
+    return Array.from(regionMap.entries())
+      .map(([name, volume]) => ({
+        name,
+        volume: Math.round((volume / 1000) * 10) / 10,
+        percentage: Math.round((volume / 1000 / total) * 100),
+      }))
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 4);
+  }, [buyerOrders]);
 
-      setSourcingMix([
-        { name: "Fresh Roots (Grade A)", value: 14.7, percentage: 60, color: "#FF8C00" },
-        { name: "OFSP Flour", value: 6.125, percentage: 25, color: "#475569" },
-        { name: "Vines/Planting", value: 3.675, percentage: 15, color: "#94A3B8" },
-      ]);
+  // Recent deliveries from orders
+  const recentDeliveries = useMemo<RecentDelivery[]>(() => {
+    return buyerOrders
+      .filter(o => o.status !== "order_placed" && o.status !== "cancelled")
+      .slice(-5)
+      .reverse()
+      .map(order => {
+        const gradeAItems = order.items?.filter(item => item.grade === "A").length || 0;
+        const totalItems = order.items?.length || 1;
+        const grading = `${Math.round((gradeAItems / totalItems) * 100)}% Grade A`;
+        
+        let status: RecentDelivery["status"] = "on_route";
+        if (order.status === "delivered" || order.status === "completed") {
+          status = "approved";
+        } else if (order.status === "in_transit" || order.status === "at_aggregation") {
+          status = "inspecting";
+        }
 
-      setTopRegions([
-        { name: "Homa Bay", volume: 8.5, percentage: 35 },
-        { name: "Migori", volume: 7.2, percentage: 29 },
-        { name: "Kakamega", volume: 5.8, percentage: 24 },
-        { name: "Bungoma", volume: 3.0, percentage: 12 },
-      ]);
-
-      setRecentDeliveries([
-        {
-          batchId: "BATCH-2024-001",
-          supplier: "James Mutua",
-          origin: "Kangundo",
-          weight: 2500,
-          grading: "92% Grade A",
-          status: "on_route",
-        },
-        {
-          batchId: "BATCH-2024-002",
-          supplier: "Mary Wanjiku",
-          origin: "Kathiani",
-          weight: 1800,
-          grading: "88% Grade A",
-          status: "received",
-        },
-        {
-          batchId: "BATCH-2024-003",
-          supplier: "Peter Kamau",
-          origin: "Masinga",
-          weight: 3200,
-          grading: "95% Grade A",
-          status: "inspecting",
-        },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+        return {
+          batchId: order.id,
+          supplier: order.sellerName || order.farmerName || "Unknown",
+          origin: order.origin || order.location || "Unknown",
+          weight: order.totalQuantity || 0,
+          grading,
+          status,
+        };
+      });
+  }, [buyerOrders]);
 
   const getStatusColor = (status: RecentDelivery["status"]) => {
     switch (status) {

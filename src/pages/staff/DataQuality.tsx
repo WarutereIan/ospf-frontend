@@ -13,6 +13,7 @@ import {
   IconTrendingUp,
   IconTrendingDown,
 } from "@tabler/icons-react";
+import { useStaff } from "@/contexts/StaffContext";
 
 interface DataQualityMetric {
   category: string;
@@ -38,126 +39,48 @@ interface DataIssue {
 }
 
 export function DataQuality() {
+  const { filteredDataQualityIssues, fetchDataQualityIssues, resolveIssue, isLoading } = useStaff();
+  
   const [metrics, setMetrics] = useState<DataQualityMetric[]>([]);
-  const [issues, setIssues] = useState<DataIssue[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch data quality issues on mount
   useEffect(() => {
-    setTimeout(() => {
-      setMetrics([
-        {
-          category: "User Data",
-          totalRecords: 1500,
-          validRecords: 1425,
-          invalidRecords: 75,
-          completeness: 95,
-          accuracy: 98,
-          consistency: 97,
-          status: "excellent",
-          issues: ["Missing email addresses (5%)", "Invalid phone numbers (2%)"],
-        },
-        {
-          category: "Transaction Data",
-          totalRecords: 2340,
-          validRecords: 2280,
-          invalidRecords: 60,
-          completeness: 97,
-          accuracy: 99,
-          consistency: 98,
-          status: "excellent",
-          issues: ["Missing timestamps (1%)", "Incomplete buyer information (1.5%)"],
-        },
-        {
-          category: "Produce Listings",
-          totalRecords: 850,
-          validRecords: 765,
-          invalidRecords: 85,
-          completeness: 90,
-          accuracy: 92,
-          consistency: 88,
-          status: "good",
-          issues: ["Missing quality grades (8%)", "Incomplete location data (2%)"],
-        },
-        {
-          category: "Order Data",
-          totalRecords: 1200,
-          validRecords: 1080,
-          invalidRecords: 120,
-          completeness: 90,
-          accuracy: 95,
-          consistency: 93,
-          status: "good",
-          issues: ["Missing delivery addresses (7%)", "Incomplete payment records (3%)"],
-        },
-        {
-          category: "Stock Records",
-          totalRecords: 450,
-          validRecords: 405,
-          invalidRecords: 45,
-          completeness: 90,
-          accuracy: 97,
-          consistency: 95,
-          status: "good",
-          issues: ["Missing batch numbers (8%)", "Incomplete quality check data (2%)"],
-        },
-      ]);
+    fetchDataQualityIssues();
+  }, [fetchDataQualityIssues]);
 
-      setIssues([
-        {
-          id: "ISS001",
-          type: "missing",
-          entity: "User",
-          field: "email",
-          recordId: "U001",
-          severity: "medium",
-          description: "User John Mutua missing email address",
-          detectedAt: "2024-01-15T10:00:00Z",
-        },
-        {
-          id: "ISS002",
-          type: "invalid",
-          entity: "Transaction",
-          field: "amount",
-          recordId: "TXN123",
-          severity: "high",
-          description: "Transaction amount is negative (-5000)",
-          detectedAt: "2024-01-15T09:30:00Z",
-        },
-        {
-          id: "ISS003",
-          type: "duplicate",
-          entity: "Produce",
-          field: "listing_id",
-          recordId: "PRD001",
-          severity: "medium",
-          description: "Duplicate produce listing detected",
-          detectedAt: "2024-01-15T08:15:00Z",
-        },
-        {
-          id: "ISS004",
-          type: "inconsistent",
-          entity: "Order",
-          field: "status",
-          recordId: "ORD456",
-          severity: "high",
-          description: "Order marked as delivered but payment not recorded",
-          detectedAt: "2024-01-14T16:20:00Z",
-        },
-        {
-          id: "ISS005",
-          type: "missing",
-          entity: "Stock",
-          field: "batch_number",
-          recordId: "STK789",
-          severity: "low",
-          description: "Stock record missing batch number",
-          detectedAt: "2024-01-14T14:00:00Z",
-        },
-      ]);
+  // Calculate metrics from issues
+  const issues = filteredDataQualityIssues;
+  
+  // TODO: Calculate metrics from issues data - this is a placeholder
+  useEffect(() => {
+    // Calculate metrics based on issues
+    if (issues.length > 0) {
+      // Group issues by entityType to create metrics
+      const entityTypes = Array.from(new Set(issues.map(i => i.entityType)));
+      const calculatedMetrics: DataQualityMetric[] = entityTypes.map((entityType: string) => {
+        const entityIssues = issues.filter(i => i.entityType === entityType);
+        const totalRecords = entityIssues.length * 10; // Placeholder calculation
+        const invalidRecords = entityIssues.length;
+        const validRecords = totalRecords - invalidRecords;
+        const completeness = totalRecords > 0 ? Math.round((validRecords / totalRecords) * 100) : 100;
+        
+        return {
+          category: entityType,
+          totalRecords,
+          validRecords,
+          invalidRecords,
+          completeness,
+          accuracy: 95, // Placeholder
+          consistency: 90, // Placeholder
+          status: completeness >= 95 ? "excellent" : completeness >= 85 ? "good" : completeness >= 70 ? "fair" : "poor",
+          issues: entityIssues.map(i => i.description),
+        };
+      });
+      setMetrics(calculatedMetrics);
+    }
+  }, [issues]);
 
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+  // Mock data removed - using context data
 
   const getStatusColor = (status: DataQualityMetric["status"]) => {
     switch (status) {
@@ -374,22 +297,35 @@ export function DataQuality() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline" className={getSeverityColor(issue.severity)}>
+                        <Badge variant="outline" className={getSeverityColor(issue.severity === "critical" ? "high" : issue.severity)}>
                           {issue.severity}
                         </Badge>
                         <Badge variant="outline" className="capitalize">
                           {issue.type}
                         </Badge>
-                        <span className="text-sm font-medium">{issue.entity}</span>
+                        <span className="text-sm font-medium">{issue.entity || issue.entityType}</span>
                         <span className="text-sm text-muted-foreground">•</span>
                         <span className="text-sm text-muted-foreground">{issue.field}</span>
                       </div>
                       <p className="text-sm">{issue.description}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Record ID: {issue.recordId} • Detected: {new Date(issue.detectedAt).toLocaleString()}
+                        {issue.recordId && `Record ID: ${issue.recordId} • `}Detected: {new Date(issue.detectedAt).toLocaleString()}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={async () => {
+                        if (confirm(`Resolve issue: ${issue.description}?`)) {
+                          try {
+                            await resolveIssue(issue.id, "Resolved by staff");
+                          } catch (error) {
+                            console.error("Failed to resolve issue:", error);
+                            alert("Failed to resolve issue. Please try again.");
+                          }
+                        }
+                      }}
+                    >
                       Resolve
                     </Button>
                   </div>

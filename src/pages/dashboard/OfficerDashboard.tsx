@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,9 @@ import {
   LineChart,
   HorizontalBarChart,
 } from "@/components/visualizations";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
 
 interface OfficerStats {
   totalFarmers: number;
@@ -58,96 +61,138 @@ interface FarmerActivity {
 }
 
 export function OfficerDashboard() {
-  const [stats, setStats] = useState<OfficerStats>({
-    totalFarmers: 0,
-    activeFarmers: 0,
-    totalOrders: 0,
-    totalRevenue: 0,
-    aggregationCenters: 4,
-    pendingAdvisories: 0,
-    volume: 0,
-    quality: 0,
-    value: 0,
-  });
-  const [recentActivity, setRecentActivity] = useState<FarmerActivity[]>([]);
-  const [monthlyProduction, setMonthlyProduction] = useState<MonthlyProduction[]>([]);
-  const [farmerGrowth, setFarmerGrowth] = useState<FarmerGrowth[]>([]);
-  const [centrePerformance, setCentrePerformance] = useState<CentrePerformance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { 
+    centers, 
+    transactions,
+    inventory,
+    stats: aggregationStats,
+    fetchCenters, 
+    fetchTransactions,
+    fetchInventory,
+    fetchStats,
+    isLoading: aggregationLoading 
+  } = useAggregation();
+  
+  const { 
+    profiles,
+    fetchProfiles,
+    isLoading: profileLoading 
+  } = useProfile();
+  
+  const { 
+    advisories,
+    trends,
+    dashboardStats,
+    fetchAdvisories,
+    fetchTrends,
+    fetchDashboardStats,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
 
+  // Fetch data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setStats({
-        totalFarmers: 1245,
-        activeFarmers: 1200,
-        totalOrders: 450,
-        totalRevenue: 6750000,
-        aggregationCenters: 8,
-        pendingAdvisories: 3,
-        volume: 45,
-        quality: 82,
-        value: 6700000,
-      });
-      setRecentActivity([
-        {
-          id: "F001",
-          name: "James Mutua",
-          subCounty: "Kangundo",
-          totalSales: 5000,
-          orderCount: 45,
-          lastActivity: new Date().toISOString(),
-          status: "active",
-        },
-        {
-          id: "F002",
-          name: "Mary Wanjiku",
-          subCounty: "Kathiani",
-          totalSales: 4500,
-          orderCount: 38,
-          lastActivity: new Date().toISOString(),
-          status: "active",
-        },
-      ]);
-      // Monthly production (12 months)
-      setMonthlyProduction([
-        { month: "Jan", volume: 35 },
-        { month: "Feb", volume: 38 },
-        { month: "Mar", volume: 40 },
-        { month: "Apr", volume: 42 },
-        { month: "May", volume: 43 },
-        { month: "Jun", volume: 44 },
-        { month: "Jul", volume: 43 },
-        { month: "Aug", volume: 44 },
-        { month: "Sep", volume: 45 },
-        { month: "Oct", volume: 44 },
-        { month: "Nov", volume: 45 },
-        { month: "Dec", volume: 45 },
-      ]);
-      // Farmer growth (cumulative)
-      setFarmerGrowth([
-        { month: "Jan", farmers: 800 },
-        { month: "Feb", farmers: 850 },
-        { month: "Mar", farmers: 900 },
-        { month: "Apr", farmers: 950 },
-        { month: "May", farmers: 1000 },
-        { month: "Jun", farmers: 1050 },
-        { month: "Jul", farmers: 1100 },
-        { month: "Aug", farmers: 1150 },
-        { month: "Sep", farmers: 1180 },
-        { month: "Oct", farmers: 1200 },
-        { month: "Nov", farmers: 1220 },
-        { month: "Dec", farmers: 1245 },
-      ]);
-      // Centre performance
-      setCentrePerformance([
-        { name: "Kangundo Main", utilization: 95 },
-        { name: "Tala Satellite", utilization: 88 },
-        { name: "Kathiani Main", utilization: 75 },
-      ]);
-      setIsLoading(false);
-    }, 1000);
+    fetchCenters();
+    fetchTransactions();
+    fetchInventory();
+    fetchStats();
+    fetchProfiles({ role: "farmer" });
+    fetchAdvisories();
+    fetchTrends({ timeRange: "year" });
+    fetchDashboardStats({ timeRange: "year" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const isLoading = aggregationLoading || profileLoading || analyticsLoading;
+
+  // Calculate stats from context data
+  const stats = useMemo<OfficerStats>(() => {
+    const farmers = profiles.filter(p => p.role === "farmer");
+    const activeFarmers = farmers.filter(f => f.status === "active").length;
+    
+    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0) / 1000; // Convert to tons
+    const totalRevenue = transactions
+      .filter(t => t.type === "stock_out")
+      .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+    
+    // Quality score from quality checks or inventory
+    const gradeAItems = inventory.filter(item => (item.grade || item.qualityGrade) === "A").length;
+    const quality = inventory.length > 0 ? Math.round((gradeAItems / inventory.length) * 100) : 0;
+    
+    const pendingAdvisories = advisories.filter(a => !a.readCount || a.readCount === 0).length;
+
+    return {
+      totalFarmers: farmers.length,
+      activeFarmers,
+      totalOrders: transactions.length,
+      totalRevenue,
+      aggregationCenters: centers.length,
+      pendingAdvisories,
+      volume: Math.round(totalVolume),
+      quality,
+      value: totalRevenue,
+    };
+  }, [profiles, centers, transactions, inventory, advisories]);
+
+  // Recent farmer activity
+  const recentActivity = useMemo<FarmerActivity[]>(() => {
+    const farmers = profiles.filter(p => p.role === "farmer");
+    return farmers
+      .slice(0, 5)
+      .map(farmer => {
+        const farmerOrders = transactions.filter(t => t.farmerId === farmer.id);
+        const totalSales = farmerOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        const lastOrder = farmerOrders.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+
+        return {
+          id: farmer.id,
+          name: farmer.name,
+          subCounty: (farmer as any).subCounty || "Unknown",
+          totalSales,
+          orderCount: farmerOrders.length,
+          lastActivity: lastOrder?.createdAt || farmer.createdAt,
+          status: farmer.status === "active" ? "active" as const : "inactive" as const,
+        };
+      })
+      .sort((a, b) => b.totalSales - a.totalSales);
+  }, [profiles, transactions]);
+
+  // Monthly production from trends
+  const monthlyProduction = useMemo<MonthlyProduction[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-12).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      volume: Math.round((t.volume || 0) / 1000), // Convert to tons
+    }));
+  }, [trends]);
+
+  // Farmer growth from trends
+  const farmerGrowth = useMemo<FarmerGrowth[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-12).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      farmers: t.farmers || 0,
+    }));
+  }, [trends]);
+
+  // Centre performance from centers
+  const centrePerformance = useMemo<CentrePerformance[]>(() => {
+    return centers
+      .slice(0, 5)
+      .map(center => {
+        const centerInventory = inventory.filter(i => i.centerId === center.id);
+        const totalCapacity = center.capacity || 1000;
+        const usedCapacity = centerInventory.reduce((sum, i) => sum + i.quantity, 0);
+        const utilization = totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 100) : 0;
+
+        return {
+          name: center.name,
+          utilization,
+        };
+      })
+      .sort((a, b) => b.utilization - a.utilization);
+  }, [centers, inventory]);
 
   return (
     <div className="space-y-6">

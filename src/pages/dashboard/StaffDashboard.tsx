@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,11 @@ import {
   SankeyChart,
   GeographicMap,
 } from "@/components/visualizations";
+import { useStaff } from "@/contexts/StaffContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { TrendData } from "@/types/analytics";
 
 interface ProgramIndicator {
   name: string;
@@ -51,138 +56,168 @@ interface OutcomeData {
 }
 
 export function StaffDashboard() {
-  const [programIndicators, setProgramIndicators] = useState<ProgramIndicator[]>([]);
-  const [beneficiaryGrowth, setBeneficiaryGrowth] = useState<BeneficiaryGrowth[]>([]);
-  const [sparklineData, setSparklineData] = useState<SparklineData[]>([]);
-  const [outcomeData, setOutcomeData] = useState<OutcomeData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { 
+    partners, 
+    activityLogs, 
+    dataQualityIssues, 
+    transactionEvidence, 
+    stats: staffStats,
+    fetchPartners, 
+    fetchActivityLogs, 
+    fetchDataQualityIssues, 
+    fetchTransactionEvidence,
+    fetchStats,
+    isLoading: staffLoading 
+  } = useStaff();
+  
+  const { 
+    dashboardStats, 
+    trends, 
+    performanceMetrics,
+    fetchDashboardStats, 
+    fetchTrends, 
+    fetchPerformanceMetrics,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
+  
+  const { profiles, fetchProfiles } = useProfile();
+  const { centers, inventory, transactions, fetchCenters, fetchInventory, fetchTransactions } = useAggregation();
 
+  // Fetch all data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      // Program indicators
-      setProgramIndicators([
-        { name: "Beneficiaries", current: 1500, target: 2000, unit: "farmers" },
-        { name: "Volume (tonnes)", current: 85, target: 100, unit: "tons" },
-        { name: "Quality (Gr A)", current: 92, target: 80, unit: "%" },
-        { name: "Income increase", current: 60, target: 50, unit: "%" },
-      ]);
-
-      // Beneficiary growth (cumulative)
-      setBeneficiaryGrowth([
-        { month: "Jan", farmers: 800 },
-        { month: "Feb", farmers: 900 },
-        { month: "Mar", farmers: 1000 },
-        { month: "Apr", farmers: 1100 },
-        { month: "May", farmers: 1200 },
-        { month: "Jun", farmers: 1300 },
-        { month: "Jul", farmers: 1400 },
-        { month: "Aug", farmers: 1500 },
-      ]);
-
-      // Sparkline data for indicators
-      setSparklineData([
-        {
-          label: "Farmers",
-          value: 1500,
-          data: [
-            { name: "1", value: 800 },
-            { name: "2", value: 900 },
-            { name: "3", value: 1000 },
-            { name: "4", value: 1100 },
-            { name: "5", value: 1200 },
-            { name: "6", value: 1300 },
-            { name: "7", value: 1400 },
-            { name: "8", value: 1500 },
-          ],
-          color: "#3B82F6",
-        },
-        {
-          label: "Quality",
-          value: 82,
-          data: [
-            { name: "1", value: 75 },
-            { name: "2", value: 78 },
-            { name: "3", value: 80 },
-            { name: "4", value: 81 },
-            { name: "5", value: 82 },
-            { name: "6", value: 82 },
-            { name: "7", value: 82 },
-            { name: "8", value: 82 },
-          ],
-          color: "#22C55E",
-        },
-        {
-          label: "Centres",
-          value: 8,
-          data: [
-            { name: "1", value: 4 },
-            { name: "2", value: 5 },
-            { name: "3", value: 6 },
-            { name: "4", value: 7 },
-            { name: "5", value: 7 },
-            { name: "6", value: 8 },
-            { name: "7", value: 8 },
-            { name: "8", value: 8 },
-          ],
-          color: "#8B5CF6",
-        },
-        {
-          label: "Volume",
-          value: 45,
-          data: [
-            { name: "1", value: 20 },
-            { name: "2", value: 25 },
-            { name: "3", value: 30 },
-            { name: "4", value: 35 },
-            { name: "5", value: 40 },
-            { name: "6", value: 42 },
-            { name: "7", value: 44 },
-            { name: "8", value: 45 },
-          ],
-          color: "#F59E0B",
-        },
-        {
-          label: "Income",
-          value: 25,
-          data: [
-            { name: "1", value: 10 },
-            { name: "2", value: 15 },
-            { name: "3", value: 18 },
-            { name: "4", value: 20 },
-            { name: "5", value: 22 },
-            { name: "6", value: 23 },
-            { name: "7", value: 24 },
-            { name: "8", value: 25 },
-          ],
-          color: "#10B981",
-        },
-        {
-          label: "Trans.",
-          value: 2340,
-          data: [
-            { name: "1", value: 1000 },
-            { name: "2", value: 1200 },
-            { name: "3", value: 1500 },
-            { name: "4", value: 1800 },
-            { name: "5", value: 2000 },
-            { name: "6", value: 2200 },
-            { name: "7", value: 2300 },
-            { name: "8", value: 2340 },
-          ],
-          color: "#EF4444",
-        },
-      ]);
-
-      // Outcome comparison data
-      setOutcomeData([
-        { category: "Income", before: 45, after: 65 },
-        { category: "Quality", before: 32, after: 82 },
-      ]);
-
-      setIsLoading(false);
-    }, 1000);
+    fetchPartners();
+    fetchActivityLogs();
+    fetchDataQualityIssues();
+    fetchTransactionEvidence();
+    fetchStats();
+    fetchDashboardStats({ timeRange: "month" });
+    fetchTrends({ timeRange: "month" });
+    fetchPerformanceMetrics({ timeRange: "month" });
+    fetchProfiles({ role: "farmer" });
+    fetchCenters();
+    fetchInventory();
+    fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const isLoading = staffLoading || analyticsLoading;
+
+  // Calculate quick access stats
+  const quickStats = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const todayLogs = activityLogs.filter(log => log.createdAt.startsWith(today));
+    
+    // Calculate data quality score
+    const totalIssues = dataQualityIssues.length;
+    const resolvedIssues = dataQualityIssues.filter(issue => issue.resolvedAt).length;
+    const qualityScore = totalIssues > 0 ? Math.round((resolvedIssues / totalIssues) * 100) : 100;
+
+    return {
+      partners: partners.length,
+      activityLogs: todayLogs.length,
+      dataQuality: qualityScore,
+      transactions: transactionEvidence.length,
+    };
+  }, [partners, activityLogs, dataQualityIssues, transactionEvidence]);
+
+  // Calculate program indicators from context data
+  const programIndicators = useMemo<ProgramIndicator[]>(() => {
+    const farmers = profiles.filter(p => p.role === "farmer").length;
+    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0) / 1000; // Convert to tonnes
+    const gradeAItems = inventory.filter(item => (item.grade || item.qualityGrade) === "A").length;
+    const qualityPercentage = inventory.length > 0 ? Math.round((gradeAItems / inventory.length) * 100) : 0;
+    
+    // Calculate income increase from performance metrics or trends
+    const incomeIncrease = performanceMetrics.find(m => m.metric === "income_increase")?.value || 0;
+
+    return [
+      { name: "Beneficiaries", current: farmers, target: 2000, unit: "farmers" },
+      { name: "Volume (tonnes)", current: Math.round(totalVolume), target: 100, unit: "tons" },
+      { name: "Quality (Gr A)", current: qualityPercentage, target: 80, unit: "%" },
+      { name: "Income increase", current: Math.round(incomeIncrease), target: 50, unit: "%" },
+    ];
+  }, [profiles, inventory, performanceMetrics]);
+
+  // Transform trends data for beneficiary growth chart
+  const beneficiaryGrowth = useMemo<BeneficiaryGrowth[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      farmers: t.farmers || 0,
+    }));
+  }, [trends]);
+
+  // Calculate sparkline data from trends
+  const sparklineData = useMemo<SparklineData[]>(() => {
+    if (trends.length === 0) return [];
+    
+    const farmersData = trends.map((t, i) => ({ name: String(i + 1), value: t.farmers || 0 }));
+    const qualityData = trends.map((t, i) => ({ name: String(i + 1), value: t.qualityScore || 0 }));
+    const centersData = trends.map((t, i) => ({ name: String(i + 1), value: t.centers || 0 }));
+    const volumeData = trends.map((t, i) => ({ name: String(i + 1), value: t.volume || 0 }));
+    const incomeData = trends.map((t, i) => ({ name: String(i + 1), value: t.incomeIncrease || 0 }));
+    const transactionsData = trends.map((t, i) => ({ name: String(i + 1), value: t.transactions || 0 }));
+
+    const latest = (trends[trends.length - 1] || {}) as TrendData;
+    
+    return [
+      {
+        label: "Farmers",
+        value: latest.farmers || 0,
+        data: farmersData,
+        color: "#3B82F6",
+      },
+      {
+        label: "Quality",
+        value: latest.qualityScore || 0,
+        data: qualityData,
+        color: "#22C55E",
+      },
+      {
+        label: "Centres",
+        value: latest.centers || centers.length,
+        data: centersData,
+        color: "#8B5CF6",
+      },
+      {
+        label: "Volume",
+        value: latest.volume || 0,
+        data: volumeData,
+        color: "#F59E0B",
+      },
+      {
+        label: "Income",
+        value: latest.incomeIncrease || 0,
+        data: incomeData,
+        color: "#10B981",
+      },
+      {
+        label: "Trans.",
+        value: latest.transactions || transactions.length,
+        data: transactionsData,
+        color: "#EF4444",
+      },
+    ];
+  }, [trends, centers, transactions]);
+
+  // Calculate outcome data from performance metrics
+  const outcomeData = useMemo<OutcomeData[]>(() => {
+    const incomeMetric = performanceMetrics.find(m => m.metric === "income_increase");
+    const qualityMetric = performanceMetrics.find(m => m.metric === "quality_score");
+    
+    return [
+      { 
+        category: "Income", 
+        before: incomeMetric?.baseline || 45, 
+        after: incomeMetric?.value || 65 
+      },
+      { 
+        category: "Quality", 
+        before: qualityMetric?.baseline || 32, 
+        after: qualityMetric?.value || 82 
+      },
+    ];
+  }, [performanceMetrics]);
 
   return (
     <div className="space-y-6">
@@ -224,7 +259,7 @@ export function StaffDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Partners</p>
-                  <p className="text-2xl font-bold">4</p>
+                  <p className="text-2xl font-bold">{quickStats.partners}</p>
                   <p className="text-xs text-muted-foreground mt-1">Active stakeholders</p>
                 </div>
                 <IconBuilding className="h-8 w-8 text-blue-600" />
@@ -238,7 +273,7 @@ export function StaffDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Activity Logs</p>
-                  <p className="text-2xl font-bold">234</p>
+                  <p className="text-2xl font-bold">{quickStats.activityLogs}</p>
                   <p className="text-xs text-muted-foreground mt-1">Today's activities</p>
                 </div>
                 <IconDatabase className="h-8 w-8 text-green-600" />
@@ -252,7 +287,7 @@ export function StaffDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Data Quality</p>
-                  <p className="text-2xl font-bold">94%</p>
+                  <p className="text-2xl font-bold">{quickStats.dataQuality}%</p>
                   <p className="text-xs text-muted-foreground mt-1">Overall score</p>
                 </div>
                 <IconCheck className="h-8 w-8 text-green-600" />
@@ -266,7 +301,7 @@ export function StaffDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Transactions</p>
-                  <p className="text-2xl font-bold">1,234</p>
+                  <p className="text-2xl font-bold">{quickStats.transactions.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground mt-1">With evidence</p>
                 </div>
                 <IconReceipt className="h-8 w-8 text-purple-600" />

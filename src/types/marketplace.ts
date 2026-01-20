@@ -1,0 +1,311 @@
+/**
+ * Marketplace Types
+ * 
+ * Types for marketplace-related functionality:
+ * - Produce listings
+ * - Marketplace orders (farmer-buyer transactions)
+ * - Marketplace transactions
+ */
+
+/**
+ * Produce listing status
+ */
+export type ListingStatus = "active" | "sold" | "inactive" | "pending";
+
+/**
+ * Quality grade
+ */
+export type QualityGrade = "A" | "B" | "C";
+
+/**
+ * OFSP variety
+ */
+export type OFSPVariety = "Kenya" | "SPK004" | "Kakamega" | "Kabode" | "Other";
+
+/**
+ * Marketplace Order Status
+ * Order lifecycle for marketplace transactions
+ */
+export type MarketplaceOrderStatus =
+  | "order_placed"
+  | "order_accepted"
+  | "payment_secured"
+  | "in_transit"
+  | "at_aggregation"
+  | "quality_checked"
+  | "quality_approved"
+  | "quality_rejected" // Quality check failed
+  | "out_for_delivery"
+  | "delivered"
+  | "completed"
+  | "rejected"
+  | "disputed"
+  | "cancelled";
+
+/**
+ * Payment Status
+ */
+export type PaymentStatus = 
+  | "pending" 
+  | "secured" 
+  | "released" 
+  | "refunded" 
+  | "disputed";
+
+/**
+ * Produce Listing
+ * Represents produce available for sale on the marketplace
+ */
+export interface ProduceListing {
+  id: string; // UUID
+  farmerId: string; // Reference to farmer profile
+  farmerName: string; // Denormalized for quick display
+  farmerRating?: number; // Denormalized farmer rating
+  variety: OFSPVariety;
+  quantity: number; // Total quantity available (kg)
+  availableQuantity: number; // Remaining quantity (kg)
+  qualityGrade: QualityGrade;
+  pricePerKg: number;
+  location: string;
+  subCounty: string;
+  description?: string;
+  photos?: string[]; // Image URLs
+  status: ListingStatus;
+  responseTime?: number; // Farmer response time in minutes
+  distance?: number; // Distance from buyer (km)
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
+  coordinates?: [number, number]; // [lat, lng]
+}
+
+/**
+ * Marketplace Order
+ * Represents an order placed through the marketplace
+ */
+export interface MarketplaceOrder {
+  id: string; // UUID
+  orderNumber: string; // Human-readable order number
+  listingId?: string; // Reference to produce listing (if order came from listing)
+  farmerId: string; // Reference to farmer
+  farmerName: string; // Denormalized
+  farmerPhone: string;
+  farmerRating?: number;
+  buyerId: string; // Reference to buyer
+  buyerName: string; // Denormalized
+  buyerPhone?: string;
+  variety: OFSPVariety;
+  quantity: number; // kg
+  qualityGrade: QualityGrade;
+  pricePerKg: number;
+  totalAmount: number; // quantity * pricePerKg
+  status: MarketplaceOrderStatus;
+  paymentStatus: PaymentStatus;
+  paymentAmount?: number;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+  deliveryLocation?: string;
+  aggregationCenter?: string;
+  centerLocation?: string;
+  estimatedDeliveryDate?: string; // ISO 8601
+  actualDeliveryDate?: string; // ISO 8601
+  photos?: string[];
+  notes?: string;
+  batchId: string; // Batch ID for traceability
+  qrCode?: string; // QR code
+  qualityScore?: number; // Quality check score
+  qualityFeedback?: string;
+  farmerCoordinates?: [number, number];
+  deliveryCoordinates?: [number, number];
+  currentCoordinates?: [number, number]; // For in-transit tracking
+  canRate?: boolean; // Whether buyer can rate farmer
+  // Extended properties used in dashboards
+  totalQuantity?: number; // Alias for quantity (used in some contexts)
+  items?: Array<{ // Order items (used in some contexts)
+    variety: OFSPVariety;
+    grade: QualityGrade;
+    quantity: number;
+  }>;
+  sellerId?: string; // Alias for farmerId (used in some contexts)
+  sellerName?: string; // Alias for farmerName (used in some contexts)
+  origin?: string; // Origin location (used in some contexts)
+  location?: string; // Location (used in some contexts)
+  // Extended properties for buyer order details
+  farmerDeliveryHistory?: string; // Farmer delivery history (used in some contexts)
+  farmerQualityAverage?: number; // Farmer quality average percentage (used in some contexts)
+  deliveryDate?: string; // Delivery date (used in some contexts, alias for estimatedDeliveryDate or actualDeliveryDate)
+}
+
+/**
+ * Marketplace filters
+ */
+export interface MarketplaceFilters {
+  status?: ListingStatus | "all"; // Filter by listing status
+  variety?: OFSPVariety | "all";
+  qualityGrade?: QualityGrade | "all";
+  minPrice?: number;
+  maxPrice?: number;
+  location?: string;
+  subCounty?: string;
+  farmerId?: string; // Filter by farmer ID (for farmer's own listings)
+  searchQuery?: string;
+  minRating?: number;
+  maxDistance?: number; // km
+}
+
+/**
+ * Order filters
+ */
+export interface MarketplaceOrderFilters {
+  status?: MarketplaceOrderStatus | "all";
+  paymentStatus?: PaymentStatus | "all";
+  farmerId?: string;
+  buyerId?: string;
+  dateRange?: {
+    start: string; // ISO 8601
+    end: string; // ISO 8601
+  };
+  searchQuery?: string;
+}
+
+/**
+ * Sourcing Request Status
+ */
+export type SourcingRequestStatus = "open" | "urgent" | "draft" | "closed" | "fulfilled";
+
+/**
+ * Product Type for Sourcing
+ */
+export type SourcingProductType = "fresh_roots" | "process_grade" | "planting_vines";
+
+/**
+ * Recurring Frequency
+ */
+export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "custom";
+
+/**
+ * Sourcing Request
+ * Buyer's request for sourcing produce
+ */
+export interface SourcingRequest {
+  id: string; // UUID
+  requestId: string; // Human-readable request ID
+  buyerId: string; // Reference to buyer
+  buyerName: string; // Denormalized
+  title: string;
+  productType: SourcingProductType;
+  variety?: OFSPVariety; // OFSP variety for sourcing
+  status: SourcingRequestStatus;
+  fulfilled: number; // Quantity fulfilled
+  total: number; // Total quantity needed
+  quantity?: number; // Alias for total (used in some contexts)
+  unit: "tons" | "kg" | "units";
+  priceRange?: { min: number; max: number };
+  pricePerUnit?: number;
+  priceUnit: "kg" | "unit";
+  deadline: string; // ISO 8601 or formatted date
+  deliveryRegion?: string;
+  qualityGrade?: QualityGrade;
+  suppliers?: SupplierReference[]; // Suppliers who have responded
+  isPastDue?: boolean;
+  isRecurring?: boolean;
+  recurringFrequency?: RecurringFrequency;
+  recurringEndDate?: string; // ISO 8601
+  nextDeliveryDate?: string; // ISO 8601
+  additionalRequirements?: string;
+  deliveryLocation?: string; // Delivery location (used in some contexts)
+  notes?: string; // Additional notes (used in some contexts)
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * Supplier Reference
+ */
+export interface SupplierReference {
+  id: string;
+  name?: string;
+  initials: string;
+  color: string;
+}
+
+/**
+ * Supplier Offer
+ * Farmer's offer to fulfill sourcing request
+ */
+export interface SupplierOffer {
+  id: string; // UUID
+  sourcingRequestId: string;
+  farmerId: string;
+  supplierName: string;
+  rating?: number;
+  isNewSupplier?: boolean;
+  quantity: number;
+  quantityUnit: "kg" | "tons" | "units";
+  pricePerKg: number;
+  grade: QualityGrade;
+  batchId?: string; // Batch ID for traceability
+  qrCode?: string; // QR code for traceability
+  status?: "pending" | "accepted" | "rejected";
+  createdAt: string; // ISO 8601
+}
+
+/**
+ * Recurring Order
+ * Recurring marketplace order
+ */
+export interface RecurringOrder {
+  id: string; // UUID
+  buyerId: string;
+  buyerName: string;
+  farmerId: string;
+  farmerName: string;
+  variety: OFSPVariety;
+  quantity: number; // kg
+  qualityGrade: QualityGrade;
+  pricePerKg: number;
+  frequency: RecurringFrequency;
+  startDate: string; // ISO 8601
+  endDate?: string; // ISO 8601
+  nextDeliveryDate: string; // ISO 8601
+  nextDelivery?: string; // Alias for nextDeliveryDate (formatted date)
+  isActive: boolean;
+  status?: "active" | "paused" | "cancelled"; // Order status
+  completedDeliveries?: number; // Number of completed deliveries
+  totalDeliveries?: number; // Total number of expected deliveries
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * Sourcing Request Filters
+ */
+export interface SourcingRequestFilters {
+  status?: SourcingRequestStatus | "all";
+  productType?: SourcingProductType | "all";
+  buyerId?: string;
+  dateRange?: {
+    start: string; // ISO 8601
+    end: string; // ISO 8601
+  };
+  searchQuery?: string;
+}
+
+/**
+ * Marketplace statistics
+ */
+export interface MarketplaceStats {
+  totalListings: number;
+  activeListings: number;
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  totalVolume: number; // Total kg sold
+  totalValue: number; // Total revenue
+  averagePrice: number; // Average price per kg
+  avgPricePerKg?: number; // Alias for averagePrice (used in some contexts)
+  totalSourcingRequests?: number;
+  activeSourcingRequests?: number;
+  totalRecurringOrders?: number;
+}

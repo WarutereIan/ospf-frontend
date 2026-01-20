@@ -17,21 +17,9 @@ import {
   IconCalendar,
 } from "@tabler/icons-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-
-interface WastageEntry {
-  id: string;
-  date: string;
-  farmerId: string; // Track farmer origin
-  farmerName: string; // Track farmer origin
-  inventoryId?: string; // Link to inventory batch
-  variety: string;
-  qualityGrade: "A" | "B" | "C";
-  quantity: number; // kg
-  reason: string;
-  category: "spoilage" | "damage" | "expired" | "other";
-  recordedBy: string;
-  notes?: string;
-}
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { WastageEntry } from "@/types/aggregation";
 
 const wastageCategories = [
   { value: "spoilage", label: "Spoilage", color: "bg-red-100 text-red-800" },
@@ -41,14 +29,15 @@ const wastageCategories = [
 ];
 
 export function WastageTracking() {
-  const [wastageEntries, setWastageEntries] = useState<WastageEntry[]>([]);
+  const { wastageEntries, fetchWastageEntries, recordWastageEntry, inventory, fetchInventory, centers, fetchCenters, selectedCenter, isLoading, wastageFilters, setWastageFilters } = useAggregation();
+  const { user } = useAuth();
+  
   const [filteredEntries, setFilteredEntries] = useState<WastageEntry[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [varietyFilter, setVarietyFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
 
   const [newEntry, setNewEntry] = useState<Partial<WastageEntry>>({
     farmerId: "",
@@ -62,85 +51,12 @@ export function WastageTracking() {
     notes: "",
   });
 
-  // Sample inventory for selection - TODO: Replace with API
-  const sampleInventory = [
-    {
-      id: "INV-001",
-      farmerId: "F001",
-      farmerName: "James Mutua",
-      variety: "Kenya",
-      qualityGrade: "A" as const,
-      quantity: 500,
-    },
-    {
-      id: "INV-002",
-      farmerId: "F002",
-      farmerName: "Mary Wanjiku",
-      variety: "SPK004",
-      qualityGrade: "A" as const,
-      quantity: 300,
-    },
-    {
-      id: "INV-003",
-      farmerId: "F003",
-      farmerName: "Peter Kamau",
-      variety: "Kabode",
-      qualityGrade: "B" as const,
-      quantity: 200,
-    },
-  ];
-
+  // Fetch wastage entries and inventory on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleEntries: WastageEntry[] = [
-        {
-          id: "WST-001",
-          date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          inventoryId: "INV-001",
-          variety: "Kenya",
-          qualityGrade: "B",
-          quantity: 25,
-          reason: "Mold growth due to high humidity",
-          category: "spoilage",
-          recordedBy: "Peter Kariuki",
-          notes: "Found during daily inspection",
-        },
-        {
-          id: "WST-002",
-          date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
-          inventoryId: "INV-002",
-          variety: "SPK004",
-          qualityGrade: "C",
-          quantity: 15,
-          reason: "Bruising during transport",
-          category: "damage",
-          recordedBy: "Jane Muthoni",
-        },
-        {
-          id: "WST-003",
-          date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-          farmerId: "F003",
-          farmerName: "Peter Kamau",
-          inventoryId: "INV-003",
-          variety: "Kabode",
-          qualityGrade: "A",
-          quantity: 10,
-          reason: "Exceeded storage duration",
-          category: "expired",
-          recordedBy: "David Kimani",
-          notes: "Stock in storage for 9 days",
-        },
-      ];
-      setWastageEntries(sampleEntries);
-      setFilteredEntries(sampleEntries);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchCenters();
+    fetchInventory(selectedCenter?.id);
+    fetchWastageEntries();
+  }, [fetchCenters, fetchInventory, fetchWastageEntries, selectedCenter?.id]);
 
   useEffect(() => {
     let filtered = [...wastageEntries];
@@ -184,40 +100,52 @@ export function WastageTracking() {
     setFilteredEntries(filtered);
   }, [wastageEntries, searchTerm, varietyFilter, categoryFilter, dateFilter]);
 
-  const handleAddWastage = () => {
+  const handleAddWastage = async () => {
     if (!newEntry.farmerId || !newEntry.variety || !newEntry.qualityGrade || !newEntry.quantity || !newEntry.reason || !newEntry.category) {
       alert("Please fill all required fields");
       return;
     }
 
-    const entry: WastageEntry = {
-      id: `WST-${String(wastageEntries.length + 1).padStart(3, "0")}`,
-      date: new Date().toISOString(),
-      farmerId: newEntry.farmerId!,
-      farmerName: newEntry.farmerName!,
-      inventoryId: newEntry.inventoryId,
-      variety: newEntry.variety!,
-      qualityGrade: newEntry.qualityGrade!,
-      quantity: newEntry.quantity!,
-      reason: newEntry.reason!,
-      category: newEntry.category!,
-      recordedBy: "Current User", // TODO: Get from auth context
-      notes: newEntry.notes,
-    };
+    if (!selectedCenter) {
+      alert("Please select an aggregation center");
+      return;
+    }
 
-    setWastageEntries([entry, ...wastageEntries]);
-    setNewEntry({
-      farmerId: "",
-      farmerName: "",
-      inventoryId: "",
-      variety: "",
-      qualityGrade: undefined,
-      quantity: 0,
-      reason: "",
-      category: undefined,
-      notes: "",
-    });
-    setIsDialogOpen(false);
+    try {
+      const wastageEntry: Partial<WastageEntry> = {
+        centerId: selectedCenter.id,
+        date: new Date().toISOString(),
+        farmerId: newEntry.farmerId,
+        farmerName: newEntry.farmerName || "",
+        inventoryId: newEntry.inventoryId,
+        variety: newEntry.variety || "",
+        qualityGrade: newEntry.qualityGrade as "A" | "B" | "C",
+        quantity: newEntry.quantity || 0,
+        reason: newEntry.reason || "",
+        category: newEntry.category as "spoilage" | "damage" | "expired" | "other",
+        recordedBy: user?.id || "",
+        notes: newEntry.notes,
+      };
+
+      await recordWastageEntry(wastageEntry);
+      
+      setNewEntry({
+        farmerId: "",
+        farmerName: "",
+        inventoryId: "",
+        variety: "",
+        qualityGrade: undefined,
+        quantity: 0,
+        reason: "",
+        category: undefined,
+        notes: "",
+      });
+      setIsDialogOpen(false);
+      alert("Wastage entry recorded successfully!");
+    } catch (error) {
+      console.error("Failed to record wastage:", error);
+      alert("Failed to record wastage. Please try again.");
+    }
   };
 
   const totalWastage = wastageEntries.reduce((sum, entry) => sum + entry.quantity, 0);
@@ -246,12 +174,14 @@ export function WastageTracking() {
             Export Report
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger>
-              <Button size="sm">
-                <IconPlus className="mr-2 h-4 w-4" />
-                Record Wastage
-              </Button>
-            </DialogTrigger>
+            <DialogTrigger
+              render={
+                <Button size="sm">
+                  <IconPlus className="mr-2 h-4 w-4" />
+                  Record Wastage
+                </Button>
+              }
+            />
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Record Wastage</DialogTitle>
@@ -263,7 +193,7 @@ export function WastageTracking() {
                   <Select
                     value={newEntry.inventoryId}
                     onValueChange={(value) => {
-                      const selected = sampleInventory.find((inv) => inv.id === value);
+                      const selected = inventory.find((inv) => inv.id === value);
                       if (selected) {
                         setNewEntry((prev) => ({
                           ...prev,
@@ -280,7 +210,7 @@ export function WastageTracking() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {sampleInventory.map((inv) => (
+                      {inventory.map((inv) => (
                         <SelectItem key={inv.id} value={inv.id}>
                           {inv.farmerName} - {inv.variety} Grade {inv.qualityGrade} ({inv.quantity} kg)
                         </SelectItem>
@@ -494,7 +424,7 @@ export function WastageTracking() {
                     <TableRow key={entry.id}>
                       <TableCell className="font-medium">{entry.id}</TableCell>
                       <TableCell>
-                        {new Date(entry.date).toLocaleDateString()}
+                        {new Date(entry.createdAt || entry.date).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">

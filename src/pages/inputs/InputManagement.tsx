@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,59 +29,20 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { IconEdit, IconTrash, IconPlus, IconSeeding, IconPhoto, IconX, IconLoader2 } from "@tabler/icons-react";
-
-interface Input {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  price: number;
-  unit: string;
-  stock: number;
-  minStock: number;
-  status: "available" | "low_stock" | "out_of_stock";
-  image?: string;
-}
+import { useInput } from "@/contexts/InputContext";
+import type { Input as InputType, InputCategory } from "@/types/input";
 
 export default function InputManagement() {
-  const [inputs, setInputs] = useState<Input[]>([
-    {
-      id: "1",
-      name: "OFSP Vines (Kenya)",
-      category: "Planting Material",
-      description: "High-quality Kenya variety OFSP vines for planting",
-      price: 30,
-      unit: "cutting",
-      stock: 500,
-      minStock: 200,
-      status: "available",
-    },
-    {
-      id: "2",
-      name: "NPK Fertilizer",
-      category: "Fertilizer",
-      description: "Balanced NPK fertilizer for optimal growth",
-      price: 150,
-      unit: "kg",
-      stock: 50,
-      minStock: 100,
-      status: "low_stock",
-    },
-    {
-      id: "3",
-      name: "Organic Compost",
-      category: "Soil Amendment",
-      description: "Rich organic compost for soil enrichment",
-      price: 80,
-      unit: "kg",
-      stock: 0,
-      minStock: 50,
-      status: "out_of_stock",
-    },
-  ]);
+  const { inputs, fetchInputs, createInput, updateInput, deleteInput, isLoading } = useInput();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingInput, setEditingInput] = useState<Input | null>(null);
+  const [editingInput, setEditingInput] = useState<InputType | null>(null);
+
+  // Fetch inputs on mount
+  useEffect(() => {
+    fetchInputs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -123,19 +84,19 @@ export default function InputManagement() {
     setDialogOpen(true);
   };
 
-  const handleEditInput = (input: Input) => {
+  const handleEditInput = (input: InputType) => {
     setEditingInput(input);
     setFormData({
       name: input.name,
       category: input.category,
-      description: input.description,
+      description: input.description || "",
       price: input.price.toString(),
       unit: input.unit,
       stock: input.stock.toString(),
-      minStock: input.minStock.toString(),
-      image: input.image || "",
+      minStock: input.minimumStock?.toString() || "",
+      image: input.images && input.images.length > 0 ? input.images[0] : "",
     });
-    setImagePreview(input.image || null);
+    setImagePreview(input.images && input.images.length > 0 ? input.images[0] : null);
     setDialogOpen(true);
   };
 
@@ -177,38 +138,62 @@ export default function InputManagement() {
     setFormData({ ...formData, image: "" });
   };
 
-  const handleSaveInput = () => {
-    const newInput: Input = {
-      id: editingInput?.id || Date.now().toString(),
-      name: formData.name,
-      category: formData.category,
-      description: formData.description,
-      price: parseFloat(formData.price),
-      unit: formData.unit,
-      stock: parseInt(formData.stock),
-      minStock: parseInt(formData.minStock),
-      status:
-        parseInt(formData.stock) === 0
-          ? "out_of_stock"
-          : parseInt(formData.stock) < parseInt(formData.minStock)
-          ? "low_stock"
-          : "available",
-      image: formData.image || undefined,
-    };
+  const handleSaveInput = async () => {
+    try {
+      const inputData: Partial<InputType> = {
+        name: formData.name,
+        category: formData.category as InputCategory,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        unit: formData.unit,
+        stock: parseInt(formData.stock),
+        minimumStock: parseInt(formData.minStock),
+        status:
+          parseInt(formData.stock) === 0
+            ? "out_of_stock"
+            : parseInt(formData.stock) < parseInt(formData.minStock)
+            ? "inactive"
+            : "active",
+        images: formData.image ? [formData.image] : [],
+      };
 
-    if (editingInput) {
-      setInputs(inputs.map((i) => (i.id === editingInput.id ? newInput : i)));
-    } else {
-      setInputs([...inputs, newInput]);
+      if (editingInput) {
+        await updateInput(editingInput.id, inputData);
+      } else {
+        await createInput(inputData);
+      }
+
+      setDialogOpen(false);
+      setEditingInput(null);
+      setFormData({
+        name: "",
+        category: "",
+        description: "",
+        price: "",
+        unit: "",
+        stock: "",
+        minStock: "",
+        image: "",
+      });
+      setImagePreview(null);
+      // Refresh inputs
+      await fetchInputs();
+    } catch (error) {
+      console.error("Failed to save input:", error);
+      alert("Failed to save input. Please try again.");
     }
-
-    setDialogOpen(false);
-    setImagePreview(null);
   };
 
-  const handleDeleteInput = (id: string) => {
+  const handleDeleteInput = async (id: string) => {
     if (confirm("Are you sure you want to delete this input?")) {
-      setInputs(inputs.filter((i) => i.id !== id));
+      try {
+        await deleteInput(id);
+        // Refresh inputs
+        await fetchInputs();
+      } catch (error) {
+        console.error("Failed to delete input:", error);
+        alert("Failed to delete input. Please try again.");
+      }
     }
   };
 
@@ -236,12 +221,14 @@ export default function InputManagement() {
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger>
-            <Button onClick={handleAddInput}>
-              <IconPlus className="mr-2 h-4 w-4" />
-              Add New Input
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button onClick={handleAddInput}>
+                <IconPlus className="mr-2 h-4 w-4" />
+                Add New Input
+              </Button>
+            }
+          />
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -448,9 +435,9 @@ export default function InputManagement() {
               {inputs.map((input) => (
                 <TableRow key={input.id}>
                   <TableCell>
-                    {input.image ? (
+                    {input.images && input.images.length > 0 ? (
                       <img
-                        src={input.image}
+                        src={input.images[0]}
                         alt={input.name}
                         className="w-12 h-12 object-cover rounded-md"
                       />
@@ -478,7 +465,7 @@ export default function InputManagement() {
                     <div>
                       <div className="font-medium">{input.stock} {input.unit}s</div>
                       <div className="text-xs text-muted-foreground">
-                        Min: {input.minStock}
+                        Min: {input.minimumStock || 0}
                       </div>
                     </div>
                   </TableCell>

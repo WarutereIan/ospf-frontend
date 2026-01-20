@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,8 +34,10 @@ import {
   ProgressBar,
 } from "@/components/visualizations";
 import { OnFarmSortingGuide } from "@/components/farmer/OnFarmSortingGuide";
-
 import { IconInfoCircle } from "@tabler/icons-react";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { ProduceListing } from "@/types/marketplace";
 
 // OFSP Varieties
 const ofspVarieties = [
@@ -59,53 +61,10 @@ const subCounties = [
   { label: "Yatta", value: "yatta" },
 ];
 
-interface ProduceListing {
-  id: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  location: string;
-  description: string;
-  status: "active" | "sold" | "inactive";
-  createdAt: string;
-  photos?: string[];
-  batchId: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-}
-
-// Sample data - will be replaced with API calls
-const sampleListings: ProduceListing[] = [
-  {
-    id: "LST-001",
-    variety: "kenya",
-    quantity: 500,
-    qualityGrade: "A",
-    pricePerKg: 150,
-    location: "kangundo",
-    description: "Fresh harvest, Grade A quality",
-    status: "active",
-    createdAt: new Date().toISOString(),
-    batchId: "BATCH-LST-001",
-    qrCode: "QR-BATCH-LST-001",
-  },
-  {
-    id: "LST-002",
-    variety: "spk004",
-    quantity: 300,
-    qualityGrade: "B",
-    pricePerKg: 120,
-    location: "kangundo",
-    description: "Good quality, ready for market",
-    status: "active",
-    createdAt: new Date().toISOString(),
-    batchId: "BATCH-LST-002",
-    qrCode: "QR-BATCH-LST-002",
-  },
-];
-
 export function ProduceManagement() {
-  const [listings, setListings] = useState<ProduceListing[]>(sampleListings);
+  const { listings, fetchListings, createListing, updateListing, deleteListing, isLoading, listingFilters, setListingFilters } = useMarketplace();
+  const { user } = useAuth();
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterVariety, setFilterVariety] = useState("all");
@@ -119,16 +78,29 @@ export function ProduceManagement() {
     description: "",
   });
 
+  // Fetch farmer's listings on mount and when filters change
+  useEffect(() => {
+    if (user?.id) {
+      const filters: any = {
+        farmerId: user.id,
+        status: filterStatus !== "all" ? filterStatus : undefined,
+        variety: filterVariety !== "all" ? filterVariety : undefined,
+        searchQuery: searchTerm || undefined,
+      };
+      fetchListings(filters);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterStatus, filterVariety, user?.id]);
+
+  // Apply client-side search filter
   const filteredListings = listings.filter((listing) => {
     const matchesSearch =
       listing.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
       listing.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || listing.status === filterStatus;
-    const matchesVariety = filterVariety === "all" || listing.variety === filterVariety;
-    return matchesSearch && matchesStatus && matchesVariety;
+    return matchesSearch;
   });
 
-  const handleAddListing = () => {
+  const handleAddListing = async () => {
     if (
       newListing.variety &&
       newListing.quantity &&
@@ -136,35 +108,51 @@ export function ProduceManagement() {
       newListing.pricePerKg &&
       newListing.location
     ) {
-      const listing: ProduceListing = {
-        id: `LST-${String(listings.length + 1).padStart(3, "0")}`,
-        variety: newListing.variety,
-        quantity: parseInt(newListing.quantity),
-        qualityGrade: newListing.qualityGrade,
-        pricePerKg: parseFloat(newListing.pricePerKg),
-        location: newListing.location,
-        description: newListing.description,
-        status: "active",
-        createdAt: new Date().toISOString(),
-        batchId: `BATCH-LST-${String(listings.length + 1).padStart(3, "0")}`,
-        qrCode: `QR-BATCH-LST-${String(listings.length + 1).padStart(3, "0")}`,
-      };
+      try {
+        const listing: Partial<ProduceListing> = {
+          variety: newListing.variety as any,
+          quantity: parseInt(newListing.quantity),
+          availableQuantity: parseInt(newListing.quantity),
+          qualityGrade: newListing.qualityGrade as any,
+          pricePerKg: parseFloat(newListing.pricePerKg),
+          location: newListing.location,
+          subCounty: newListing.location,
+          description: newListing.description,
+          status: "active",
+        };
 
-      setListings([...listings, listing]);
-      setNewListing({
-        variety: "",
-        quantity: "",
-        qualityGrade: "",
-        pricePerKg: "",
-        location: "",
-        description: "",
-      });
-      setNewListingOpen(false);
+        await createListing(listing);
+        setNewListing({
+          variety: "",
+          quantity: "",
+          qualityGrade: "",
+          pricePerKg: "",
+          location: "",
+          description: "",
+        });
+        setNewListingOpen(false);
+        // Refresh listings
+        if (user?.id) {
+          await fetchListings({ farmerId: user.id });
+        }
+      } catch (error) {
+        console.error("Failed to create listing:", error);
+        alert("Failed to create listing. Please try again.");
+      }
     }
   };
 
-  const handleDeleteListing = (id: string) => {
-    setListings(listings.filter((listing) => listing.id !== id));
+  const handleDeleteListing = async (id: string) => {
+    try {
+      await deleteListing(id);
+      // Refresh listings
+      if (user?.id) {
+        await fetchListings({ farmerId: user.id });
+      }
+    } catch (error) {
+      console.error("Failed to delete listing:", error);
+      alert("Failed to delete listing. Please try again.");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -231,12 +219,14 @@ export function ProduceManagement() {
           </p>
         </div>
         <Dialog open={newListingOpen} onOpenChange={setNewListingOpen}>
-          <DialogTrigger>
-            <Button>
-              <IconPlus className="mr-2 h-4 w-4" />
-              Post Produce
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button>
+                <IconPlus className="mr-2 h-4 w-4" />
+                Post Produce
+              </Button>
+            }
+          />
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Post New Produce Listing</DialogTitle>
@@ -389,12 +379,14 @@ export function ProduceManagement() {
               </CardDescription>
             </div>
             <Dialog>
-              <DialogTrigger>
-                <Button variant="outline">
-                  <IconInfoCircle className="mr-2 h-4 w-4" />
-                  View Guide
-                </Button>
-              </DialogTrigger>
+              <DialogTrigger
+                render={
+                  <Button variant="outline">
+                    <IconInfoCircle className="mr-2 h-4 w-4" />
+                    View Guide
+                  </Button>
+                }
+              />
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>On-Farm Sorting Guide</DialogTitle>

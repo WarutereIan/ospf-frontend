@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { IconBook } from "@tabler/icons-react";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FarmerStats {
   totalRevenue: number;
@@ -69,87 +73,161 @@ interface RecentOrder {
 }
 
 export function FarmerDashboard() {
-  const [stats, setStats] = useState<FarmerStats>({
-    totalRevenue: 0,
-    orderCount: 0,
-    activeListings: 0,
-    pendingOrders: 0,
-    completedOrders: 0,
-    avgOrderValue: 0,
-    peerRank: 0,
-    totalFarmers: 0,
-    earningsThisMonth: 0,
-    earningsLastMonth: 0,
-    quantityDelivered: 0,
-    quantityLastMonth: 0,
-    qualityScore: 0,
-    rankingPercentile: 0,
-  });
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [monthlyEarnings, setMonthlyEarnings] = useState<MonthlyEarnings[]>([]);
-  const [qualityHistory, setQualityHistory] = useState<QualityHistory[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { 
+    orders, 
+    listings,
+    fetchOrders,
+    fetchListings,
+    isLoading: marketplaceLoading 
+  } = useMarketplace();
+  
+  const { 
+    selectedRatingSummary,
+    fetchRatingSummary,
+    isLoading: profileLoading 
+  } = useProfile();
+  
+  const { 
+    leaderboards,
+    trends,
+    fetchLeaderboard,
+    fetchTrends,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
 
+  // Fetch data on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    // Simulating data fetch
-    setTimeout(() => {
-      setStats({
-        totalRevenue: 125000,
-        orderCount: 24,
-        activeListings: 8,
-        pendingOrders: 3,
-        completedOrders: 18,
-        avgOrderValue: 5208,
-        peerRank: 12,
-        totalFarmers: 150,
-        earningsThisMonth: 45000,
-        earningsLastMonth: 40000,
-        quantityDelivered: 850,
-        quantityLastMonth: 780,
-        qualityScore: 92,
-        rankingPercentile: 15,
-      });
-      setRecentOrders([
-        {
-          id: "ORD-001",
-          buyerName: "John Mwangi",
-          quantity: 500,
-          totalAmount: 75000,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-          variety: "Kenya",
-          qualityGrade: "A",
-        },
-        {
-          id: "ORD-002",
-          buyerName: "Mary Wanjiku",
-          quantity: 300,
-          totalAmount: 45000,
-          status: "accepted",
-          createdAt: new Date().toISOString(),
-          variety: "SPK004",
-          qualityGrade: "A",
-        },
-      ]);
-      // Last 6 months earnings data
-      setMonthlyEarnings([
-        { month: "Jul", amount: 28000 },
-        { month: "Aug", amount: 32000 },
-        { month: "Sep", amount: 35000 },
-        { month: "Oct", amount: 38000 },
-        { month: "Nov", amount: 40000 },
-        { month: "Dec", amount: 45000 },
-      ]);
-      // Quality history (last 3 months)
-      setQualityHistory([
-        { month: "Oct", rating: 4.0 },
-        { month: "Nov", rating: 5.0 },
-        { month: "Dec", rating: 4.5 },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    if (user?.id) {
+      fetchOrders({ farmerId: user.id });
+      fetchListings({ farmerId: user.id });
+      fetchRatingSummary(user.id);
+      fetchLeaderboard("revenue", "month");
+      fetchTrends({ timeRange: "month" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  const isLoading = marketplaceLoading || profileLoading || analyticsLoading;
+
+  // Filter farmer's orders and listings
+  const farmerOrders = useMemo(() => {
+    return orders.filter(order => order.farmerId === user?.id || order.sellerId === user?.id);
+  }, [orders, user?.id]);
+
+  const farmerListings = useMemo(() => {
+    return listings.filter(listing => listing.farmerId === user?.id);
+  }, [listings, user?.id]);
+
+  // Calculate stats from context data
+  const stats = useMemo<FarmerStats>(() => {
+    const completedOrders = farmerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+    const pendingOrders = farmerOrders.filter(o => o.status === "order_placed" || o.status === "order_accepted" || o.status === "in_transit");
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalQuantity = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || 0), 0);
+    const avgOrderValue = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
+
+    // Current month earnings
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    const earningsThisMonth = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === thisMonth && orderDate.getFullYear() === thisYear;
+      })
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Last month earnings
+    const lastMonth = thisMonth === 0 ? 11 : thisMonth - 1;
+    const lastMonthYear = thisMonth === 0 ? thisYear - 1 : thisYear;
+    const earningsLastMonth = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === lastMonth && orderDate.getFullYear() === lastMonthYear;
+      })
+      .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+    // Quantity delivered this month
+    const quantityDelivered = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === thisMonth && orderDate.getFullYear() === thisYear;
+      })
+      .reduce((sum, o) => sum + (o.totalQuantity || 0), 0);
+
+    // Quantity last month
+    const quantityLastMonth = completedOrders
+      .filter(o => {
+        const orderDate = new Date(o.createdAt);
+        return orderDate.getMonth() === lastMonth && orderDate.getFullYear() === lastMonthYear;
+      })
+      .reduce((sum, o) => sum + (o.totalQuantity || 0), 0);
+
+    // Quality score from rating summary
+    const qualityScore = selectedRatingSummary?.averageRating 
+      ? selectedRatingSummary.averageRating * 20 // Convert 5-star to percentage
+      : 0;
+
+    // Peer rank from leaderboard
+    const leaderboard = leaderboards.find(l => l.metric === "revenue");
+    const farmerEntry = leaderboard?.entries.find(e => e.userId === user?.id);
+    const peerRank = farmerEntry?.rank || 0;
+    const totalFarmers = leaderboard?.entries.length || 0;
+    const rankingPercentile = totalFarmers > 0 ? Math.round((peerRank / totalFarmers) * 100) : 0;
+
+    return {
+      totalRevenue,
+      orderCount: farmerOrders.length,
+      activeListings: farmerListings.filter(l => l.status === "active").length,
+      pendingOrders: pendingOrders.length,
+      completedOrders: completedOrders.length,
+      avgOrderValue: Math.round(avgOrderValue),
+      peerRank,
+      totalFarmers,
+      earningsThisMonth,
+      earningsLastMonth,
+      quantityDelivered,
+      quantityLastMonth,
+      qualityScore: Math.round(qualityScore),
+      rankingPercentile,
+    };
+  }, [farmerOrders, farmerListings, selectedRatingSummary, leaderboards, user?.id]);
+
+  // Recent orders
+  const recentOrders = useMemo<RecentOrder[]>(() => {
+    return farmerOrders
+      .slice(-5)
+      .reverse()
+      .map(order => ({
+        id: order.id,
+        buyerName: order.buyerName || "Unknown",
+        quantity: order.totalQuantity || 0,
+        totalAmount: order.totalAmount || 0,
+        status: order.status,
+        createdAt: order.createdAt,
+        variety: order.items?.[0]?.variety || "Unknown",
+        qualityGrade: order.items?.[0]?.grade || "N/A",
+      }));
+  }, [farmerOrders]);
+
+  // Monthly earnings from trends
+  const monthlyEarnings = useMemo<MonthlyEarnings[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-6).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      amount: t.revenue || 0,
+    }));
+  }, [trends]);
+
+  // Quality history from rating summary or trends
+  const qualityHistory = useMemo<QualityHistory[]>(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-3).map(t => ({
+      month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
+      rating: t.qualityScore ? t.qualityScore / 20 : 0, // Convert percentage to 5-star
+    }));
+  }, [trends]);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -404,12 +482,14 @@ export function FarmerDashboard() {
                 </Button>
               </Link>
               <Dialog>
-                <DialogTrigger>
-                  <Button variant="outline" className="w-full justify-start">
-                    <IconBook className="mr-2 h-4 w-4" />
-                    Farming Guide
-                  </Button>
-                </DialogTrigger>
+                <DialogTrigger
+                  render={
+                    <Button variant="outline" className="w-full justify-start">
+                      <IconBook className="mr-2 h-4 w-4" />
+                      Farming Guide
+                    </Button>
+                  }
+                />
                 <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Agronomic Practices Guide</DialogTitle>

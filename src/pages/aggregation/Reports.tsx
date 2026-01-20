@@ -24,6 +24,8 @@ import {
   IconUsers,
 } from "@tabler/icons-react";
 import { LineChart, PieChart } from "@/components/visualizations";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
 
 interface DailySummary {
   date: string;
@@ -47,66 +49,71 @@ interface WeeklySummary {
 }
 
 export function AggregationReports() {
+  const { transactions, fetchTransactions, stats, fetchStats, qualityChecks, fetchQualityChecks, selectedCenter } = useAggregation();
+  const { performanceMetrics, fetchPerformanceMetrics } = useAnalytics();
+  
   const [reportType, setReportType] = useState<"daily" | "weekly">("daily");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
   const [selectedWeek, setSelectedWeek] = useState("2024-W03");
-  const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
-  const [weeklySummaries, setWeeklySummaries] = useState<WeeklySummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Fetch data on mount and when report type changes
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setIsLoading(true);
-    setTimeout(() => {
-      if (reportType === "daily") {
-        // Generate last 7 days of daily summaries
-        const summaries: DailySummary[] = [];
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          summaries.push({
-            date: date.toISOString().split("T")[0],
-            stockIn: Math.floor(Math.random() * 500) + 200,
-            stockOut: Math.floor(Math.random() * 400) + 150,
-            qualityChecks: Math.floor(Math.random() * 20) + 10,
-            farmersServed: Math.floor(Math.random() * 15) + 5,
-            buyersServed: Math.floor(Math.random() * 8) + 2,
-            netStock: 0,
-          });
-        }
-        // Calculate net stock
-        summaries.forEach((summary, index) => {
-          if (index === 0) {
-            summary.netStock = summary.stockIn - summary.stockOut;
-          } else {
-            summary.netStock = summaries[index - 1].netStock + summary.stockIn - summary.stockOut;
-          }
-        });
-        setDailySummaries(summaries);
-      } else {
-        // Generate last 4 weeks of weekly summaries
-        const summaries: WeeklySummary[] = [];
-        for (let i = 3; i >= 0; i--) {
-          const weekStart = new Date();
-          weekStart.setDate(weekStart.getDate() - (i * 7));
-          const weekNum = getWeekNumber(weekStart);
-          summaries.push({
-            week: `Week ${weekNum}`,
-            totalStockIn: Math.floor(Math.random() * 3000) + 1500,
-            totalStockOut: Math.floor(Math.random() * 2500) + 1200,
-            avgDailyIn: Math.floor(Math.random() * 500) + 250,
-            avgDailyOut: Math.floor(Math.random() * 400) + 200,
-            qualityChecks: Math.floor(Math.random() * 100) + 50,
-            farmersServed: Math.floor(Math.random() * 80) + 40,
-            buyersServed: Math.floor(Math.random() * 40) + 20,
-          });
-        }
-        setWeeklySummaries(summaries);
-      }
-      setIsLoading(false);
-    }, 1000);
-  }, [reportType]);
+    fetchTransactions();
+    fetchStats();
+    fetchQualityChecks();
+    fetchPerformanceMetrics();
+  }, [fetchTransactions, fetchStats, fetchQualityChecks, fetchPerformanceMetrics]);
 
+  // Calculate daily summaries from transactions
+  const dailySummaries: DailySummary[] = (() => {
+    const summaries: DailySummary[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split("T")[0];
+      
+      const dayTransactions = transactions.filter((t) => {
+        const txnDate = new Date(t.createdAt).toISOString().split("T")[0];
+        return txnDate === dateStr;
+      });
+
+      const stockIn = dayTransactions
+        .filter((t) => t.type === "stock_in")
+        .reduce((sum, t) => sum + t.quantity, 0);
+      const stockOut = dayTransactions
+        .filter((t) => t.type === "stock_out")
+        .reduce((sum, t) => sum + t.quantity, 0);
+      
+      const dayQualityChecks = qualityChecks.filter((qc) => {
+        const qcDate = new Date(qc.checkedAt || qc.createdAt).toISOString().split("T")[0];
+        return qcDate === dateStr;
+      });
+
+      summaries.push({
+        date: dateStr,
+        stockIn,
+        stockOut,
+        qualityChecks: dayQualityChecks.length,
+        farmersServed: new Set(dayTransactions.filter((t) => t.farmerId).map((t) => t.farmerId)).size,
+        buyersServed: new Set(dayTransactions.filter((t) => t.buyerId).map((t) => t.buyerId)).size,
+        netStock: 0,
+      });
+    }
+    
+    // Calculate net stock
+    summaries.forEach((summary, index) => {
+      if (index === 0) {
+        summary.netStock = summary.stockIn - summary.stockOut;
+      } else {
+        summary.netStock = summaries[index - 1].netStock + summary.stockIn - summary.stockOut;
+      }
+    });
+    
+    return summaries;
+  })();
+
+  // Helper function to get week number
   const getWeekNumber = (date: Date): number => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
@@ -114,6 +121,47 @@ export function AggregationReports() {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   };
+
+  // Calculate weekly summaries
+  const weeklySummaries: WeeklySummary[] = (() => {
+    const summaries: WeeklySummary[] = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      const weekNum = getWeekNumber(weekStart);
+      
+      const weekTransactions = transactions.filter((t) => {
+        const txnDate = new Date(t.createdAt);
+        return txnDate >= weekStart && txnDate <= weekEnd;
+      });
+
+      const totalStockIn = weekTransactions
+        .filter((t) => t.type === "stock_in")
+        .reduce((sum, t) => sum + t.quantity, 0);
+      const totalStockOut = weekTransactions
+        .filter((t) => t.type === "stock_out")
+        .reduce((sum, t) => sum + t.quantity, 0);
+
+      const weekQualityChecks = qualityChecks.filter((qc) => {
+        const qcDate = new Date(qc.checkedAt || qc.createdAt);
+        return qcDate >= weekStart && qcDate <= weekEnd;
+      });
+
+      summaries.push({
+        week: `Week ${weekNum}`,
+        totalStockIn,
+        totalStockOut,
+        avgDailyIn: totalStockIn / 7,
+        avgDailyOut: totalStockOut / 7,
+        qualityChecks: weekQualityChecks.length,
+        farmersServed: new Set(weekTransactions.filter((t) => t.farmerId).map((t) => t.farmerId)).size,
+        buyersServed: new Set(weekTransactions.filter((t) => t.buyerId).map((t) => t.buyerId)).size,
+      });
+    }
+    return summaries;
+  })();
 
   const handleExport = (format: "csv" | "pdf") => {
     // TODO: Implement export functionality

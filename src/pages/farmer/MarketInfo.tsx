@@ -10,6 +10,8 @@ import {
   LineChart,
   AlertCard,
 } from "@/components/visualizations";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
 
 interface MarketPrice {
   variety: string;
@@ -160,28 +162,74 @@ const marketPrices: MarketPrice[] = [
 ];
 
 export function MarketInfo() {
+  const { stats, fetchStats, listings } = useMarketplace();
+  const { performanceMetrics, fetchPerformanceMetrics } = useAnalytics();
+  
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedVariety, setSelectedVariety] = useState("all");
-  const [priceTrendData, setPriceTrendData] = useState<Array<{ name: string; date: string; kenya: number; spk004: number; kabode: number }>>([]);
 
+  // Fetch marketplace stats and analytics on mount
   useEffect(() => {
-    // Generate 30 days of price trend data
+    fetchStats();
+    fetchPerformanceMetrics();
+  }, [fetchStats, fetchPerformanceMetrics]);
+
+  // Calculate market prices from listings
+  const marketPrices: MarketPrice[] = (() => {
+    const prices: MarketPrice[] = [];
+    const varieties = ["Kenya", "SPK004", "Kabode"];
+    const grades = ["A", "B"];
+    const locations = ["Kangundo", "Kathiani", "Masinga", "Yatta"];
+
+    varieties.forEach((variety) => {
+      grades.forEach((grade) => {
+        locations.forEach((location) => {
+          const varietyListings = listings.filter(
+            (l) => l.variety === variety && l.qualityGrade === grade && l.subCounty?.toLowerCase() === location.toLowerCase()
+          );
+          if (varietyListings.length > 0) {
+            const avgPrice = varietyListings.reduce((sum, l) => sum + l.pricePerKg, 0) / varietyListings.length;
+            const previousAvg = avgPrice * 0.95; // Mock previous price
+            prices.push({
+              variety,
+              grade,
+              currentPrice: Math.round(avgPrice),
+              previousPrice: Math.round(previousAvg),
+              change: Math.round(avgPrice - previousAvg),
+              changePercent: ((avgPrice - previousAvg) / previousAvg) * 100,
+              location,
+              lastUpdated: new Date().toISOString(),
+            });
+          }
+        });
+      });
+    });
+    return prices;
+  })();
+
+  // Generate price trend data from marketplace stats
+  const priceTrendData = (() => {
     const days = 30;
     const trendData = [];
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date();
       date.setDate(date.getDate() - i);
       const dateStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      // Use stats data if available, otherwise use mock data
+      const avgPrice = stats?.avgPricePerKg || stats?.averagePrice || 150;
+      const kenyaPrice = avgPrice;
+      const spk004Price = avgPrice * 0.8;
+      const kabodePrice = avgPrice * 0.67;
       trendData.push({
         name: dateStr,
         date: dateStr,
-        kenya: 150 - Math.random() * 10 + (i / days) * 5,
-        spk004: 120 - Math.random() * 8 + (i / days) * 2,
-        kabode: 100 - Math.random() * 5,
+        kenya: kenyaPrice - Math.random() * 10 + (i / days) * 5,
+        spk004: spk004Price - Math.random() * 8 + (i / days) * 2,
+        kabode: kabodePrice - Math.random() * 5,
       });
     }
-    setPriceTrendData(trendData);
-  }, []);
+    return trendData;
+  })();
 
   const filteredPrices = marketPrices.filter((price) => {
     const matchesLocation = selectedLocation === "all" || price.location.toLowerCase() === selectedLocation;

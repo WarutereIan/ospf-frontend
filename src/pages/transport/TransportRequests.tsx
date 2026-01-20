@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,85 +25,24 @@ import {  Select,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { IconTruck, IconMapPin, IconClock, IconWeight, IconCurrency } from "@tabler/icons-react";
-
-interface TransportRequest {
-  id: string;
-  type: "produce_pickup" | "produce_delivery" | "input_delivery";
-  requester: string;
-  from: string;
-  to: string;
-  distance: number;
-  scheduledTime: string;
-  weight: number;
-  description: string;
-  amount: number;
-  status: "pending" | "accepted" | "rejected";
-  createdAt: string;
-}
+import { useTransport } from "@/contexts/TransportContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { TransportRequest } from "@/types/transport";
 
 export default function TransportRequests() {
-  const [requests, setRequests] = useState<TransportRequest[]>([
-    {
-      id: "1",
-      type: "produce_pickup",
-      requester: "John Kamau (Farmer)",
-      from: "Kangundo Farm",
-      to: "Tala Satellite Aggregation Center",
-      distance: 5,
-      scheduledTime: "2024-01-15 14:00",
-      weight: 250,
-      description: "250kg of OFSP (Grade A)",
-      amount: 500,
-      status: "pending",
-      createdAt: "2024-01-14 10:30",
-    },
-    {
-      id: "2",
-      type: "input_delivery",
-      requester: "AgriInputs Co.",
-      from: "AgriInputs Warehouse",
-      to: "Mary Wanjiku Farm",
-      distance: 8,
-      scheduledTime: "2024-01-15 15:30",
-      weight: 50,
-      description: "50kg NPK Fertilizer",
-      amount: 500,
-      status: "pending",
-      createdAt: "2024-01-14 11:00",
-    },
-    {
-      id: "3",
-      type: "produce_delivery",
-      requester: "Kathiani Main Centre",
-      from: "Kathiani Main Aggregation Center",
-      to: "Nairobi Wholesale Market",
-      distance: 50,
-      scheduledTime: "2024-01-16 06:00",
-      weight: 1000,
-      description: "1 ton of Grade A OFSP",
-      amount: 4000,
-      status: "pending",
-      createdAt: "2024-01-14 09:00",
-    },
-    {
-      id: "4",
-      type: "produce_delivery",
-      requester: "Kilala Buyer (Restaurant)",
-      from: "Kilala Satellite Aggregation Center",
-      to: "Tala Town Restaurant",
-      distance: 3,
-      scheduledTime: "2024-01-15 11:00",
-      weight: 50,
-      description: "50kg of Grade B OFSP for restaurant",
-      amount: 300,
-      status: "pending",
-      createdAt: "2024-01-14 15:00",
-    },
-  ]);
-
+  const { requests, fetchRequests, acceptRequest, rejectRequest, isLoading } = useTransport();
+  const { user } = useAuth();
+  
   const [selectedRequest, setSelectedRequest] = useState<TransportRequest | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  // Fetch requests on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchRequests({ providerId: user.id, status: filterStatus !== "all" ? filterStatus as any : undefined });
+    }
+  }, [user?.id, filterStatus, fetchRequests]);
 
   const filteredRequests = requests.filter(
     (req) => filterStatus === "all" || req.status === filterStatus
@@ -114,19 +53,35 @@ export default function TransportRequests() {
     setDetailsDialogOpen(true);
   };
 
-  const handleAcceptRequest = (id: string) => {
-    setRequests(requests.map(req =>
-      req.id === id ? { ...req, status: "accepted" as const } : req
-    ));
-    setDetailsDialogOpen(false);
-    alert("Request accepted! Please mark the collection in the Collection page before starting delivery.");
+  const handleAcceptRequest = async (id: string) => {
+    try {
+      if (!user?.id) {
+        alert("User ID not found. Please log in again.");
+        return;
+      }
+      await acceptRequest(id, user.id);
+      setDetailsDialogOpen(false);
+      alert("Request accepted! Please mark the collection in the Collection page before starting delivery.");
+      // Refresh requests
+      await fetchRequests({ providerId: user.id });
+    } catch (error) {
+      console.error("Failed to accept request:", error);
+      alert("Failed to accept request. Please try again.");
+    }
   };
 
-  const handleRejectRequest = (id: string) => {
-    setRequests(requests.map(req =>
-      req.id === id ? { ...req, status: "rejected" as const } : req
-    ));
-    setDetailsDialogOpen(false);
+  const handleRejectRequest = async (id: string) => {
+    try {
+      await rejectRequest(id);
+      setDetailsDialogOpen(false);
+      // Refresh requests
+      if (user?.id) {
+        await fetchRequests({ providerId: user.id });
+      }
+    } catch (error) {
+      console.error("Failed to reject request:", error);
+      alert("Failed to reject request. Please try again.");
+    }
   };
 
   const getTypeBadge = (type: string) => {
@@ -212,7 +167,7 @@ export default function TransportRequests() {
               {filteredRequests.map((request) => (
                 <TableRow key={request.id}>
                   <TableCell>{getTypeBadge(request.type)}</TableCell>
-                  <TableCell>{request.requester}</TableCell>
+                  <TableCell>{request.requesterName || request.requester}</TableCell>
                   <TableCell>
                     <div className="text-sm">
                       <div className="font-medium">{request.from}</div>
@@ -285,7 +240,7 @@ export default function TransportRequests() {
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Requested By</Label>
-                <div className="font-medium">{selectedRequest.requester}</div>
+                <div className="font-medium">{selectedRequest.requesterName || selectedRequest.requester}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

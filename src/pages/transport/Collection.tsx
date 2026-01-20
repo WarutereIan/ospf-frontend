@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,85 +40,29 @@ import {
   IconUser,
   IconPhoto,
 } from "@tabler/icons-react";
-
-interface CollectionRequest {
-  id: string;
-  requestId: string;
-  type: "produce_pickup" | "produce_delivery" | "input_delivery";
-  requester: string;
-  from: string;
-  to: string;
-  distance: number;
-  scheduledTime: string;
-  weight: number;
-  description: string;
-  amount: number;
-  status: "accepted" | "collection_pending" | "collected" | "in_transit";
-  collectionStatus?: "pending" | "collected";
-  collectionDate?: string;
-  collectionTime?: string;
-  collectedBy?: string;
-  collectionNotes?: string;
-  createdAt: string;
-}
+import { useTransport } from "@/contexts/TransportContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { TransportRequest } from "@/types/transport";
 
 export default function Collection() {
-  const [collections, setCollections] = useState<CollectionRequest[]>([
-    {
-      id: "1",
-      requestId: "REQ-001",
-      type: "produce_pickup",
-      requester: "John Kamau (Farmer)",
-      from: "Kangundo Farm",
-      to: "Tala Satellite Aggregation Center",
-      distance: 5,
-      scheduledTime: "2024-01-15 14:00",
-      weight: 250,
-      description: "250kg of OFSP (Grade A)",
-      amount: 500,
-      status: "accepted",
-      collectionStatus: "pending",
-      createdAt: "2024-01-14 10:30",
-    },
-    {
-      id: "2",
-      requestId: "REQ-002",
-      type: "input_delivery",
-      requester: "AgriInputs Co.",
-      from: "AgriInputs Warehouse",
-      to: "Mary Wanjiku Farm",
-      distance: 8,
-      scheduledTime: "2024-01-15 15:30",
-      weight: 50,
-      description: "50kg NPK Fertilizer",
-      amount: 500,
-      status: "accepted",
-      collectionStatus: "collected",
-      collectionDate: "2024-01-15",
-      collectionTime: "15:00",
-      collectedBy: "Driver Name",
-      collectionNotes: "All items collected and verified",
-      createdAt: "2024-01-14 11:00",
-    },
-    {
-      id: "3",
-      requestId: "REQ-003",
-      type: "produce_delivery",
-      requester: "Kathiani Main Centre",
-      from: "Kathiani Main Aggregation Center",
-      to: "Nairobi Wholesale Market",
-      distance: 50,
-      scheduledTime: "2024-01-16 06:00",
-      weight: 1000,
-      description: "1 ton of Grade A OFSP",
-      amount: 4000,
-      status: "collection_pending",
-      collectionStatus: "pending",
-      createdAt: "2024-01-14 09:00",
-    },
-  ]);
+  const { requests, activeDeliveries, fetchRequests, fetchActiveDeliveries, updateRequestStatus, isLoading } = useTransport();
+  const { user } = useAuth();
+  
+  // Get accepted requests that need collection
+  const baseCollections = requests.filter(req => 
+    req.status === "accepted" || req.status === "in_transit"
+  );
 
-  const [selectedCollection, setSelectedCollection] = useState<CollectionRequest | null>(null);
+  // Local state to track collection updates
+  const [collectionUpdates, setCollectionUpdates] = useState<Record<string, Partial<TransportRequest>>>({});
+  
+  // Merge base collections with local updates
+  const collections = baseCollections.map(req => ({
+    ...req,
+    ...collectionUpdates[req.id],
+  }));
+
+  const [selectedCollection, setSelectedCollection] = useState<TransportRequest | null>(null);
   const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
   const [collectionForm, setCollectionForm] = useState({
     collectionDate: new Date().toISOString().split("T")[0],
@@ -132,7 +76,7 @@ export default function Collection() {
     (col) => filterStatus === "all" || col.collectionStatus === filterStatus
   );
 
-  const handleMarkCollection = (collection: CollectionRequest) => {
+  const handleMarkCollection = (collection: TransportRequest) => {
     setSelectedCollection(collection);
     setCollectionForm({
       collectionDate: new Date().toISOString().split("T")[0],
@@ -143,31 +87,39 @@ export default function Collection() {
     setCollectionDialogOpen(true);
   };
 
-  const handleSubmitCollection = () => {
+  const handleSubmitCollection = async () => {
     if (!selectedCollection || !collectionForm.collectedBy) {
       alert("Please fill in all required fields");
       return;
     }
 
-    setCollections(
-      collections.map((col) =>
-        col.id === selectedCollection.id
-          ? {
-              ...col,
-              collectionStatus: "collected" as const,
-              collectionDate: collectionForm.collectionDate,
-              collectionTime: collectionForm.collectionTime,
-              collectedBy: collectionForm.collectedBy,
-              collectionNotes: collectionForm.collectionNotes,
-              status: "in_transit" as const,
-            }
-          : col
-      )
-    );
+    try {
+      // Update local state with collection details
+      setCollectionUpdates(prev => ({
+        ...prev,
+        [selectedCollection.id]: {
+          collectionStatus: "collected" as const,
+          collectionDate: collectionForm.collectionDate,
+          collectionTime: collectionForm.collectionTime,
+          collectedBy: collectionForm.collectedBy,
+          collectionNotes: collectionForm.collectionNotes,
+          collectedAt: new Date().toISOString(),
+        }
+      }));
 
-    setCollectionDialogOpen(false);
-    setSelectedCollection(null);
-    alert("Collection marked successfully! You can now proceed with delivery.");
+      // Update request status to in_transit
+      await updateRequestStatus(selectedCollection.id, "in_transit");
+
+      setCollectionDialogOpen(false);
+      setSelectedCollection(null);
+      alert("Collection marked successfully! You can now proceed with delivery.");
+      
+      // Refresh requests to get updated data
+      await fetchRequests();
+    } catch (error) {
+      console.error("Failed to mark collection:", error);
+      alert("Failed to mark collection. Please try again.");
+    }
   };
 
   const getTypeBadge = (type: string) => {
@@ -221,7 +173,7 @@ export default function Collection() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {collections.filter((c) => c.collectionStatus === "pending").length}
+              {collections.filter((c) => c.status === "accepted").length}
             </div>
             <p className="text-xs text-muted-foreground">Awaiting collection</p>
           </CardContent>
@@ -232,7 +184,7 @@ export default function Collection() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {collections.filter((c) => c.collectionStatus === "collected").length}
+              {collections.filter((c) => c.status === "in_transit").length}
             </div>
             <p className="text-xs text-muted-foreground">Ready for delivery</p>
           </CardContent>
@@ -302,7 +254,7 @@ export default function Collection() {
                     <TableCell className="font-medium font-mono text-xs">{collection.requestId}</TableCell>
                     <TableCell className="whitespace-nowrap">{getTypeBadge(collection.type)}</TableCell>
                     <TableCell className="text-xs max-w-[140px]">
-                      <div className="truncate" title={collection.requester}>{collection.requester}</div>
+                      <div className="truncate" title={collection.requesterName}>{collection.requesterName}</div>
                     </TableCell>
                     <TableCell className="text-xs max-w-[170px]">
                       <div className="font-medium truncate" title={collection.from}>{collection.from}</div>
@@ -323,22 +275,22 @@ export default function Collection() {
                         KES {collection.amount}
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">{getCollectionStatusBadge(collection.collectionStatus)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{getCollectionStatusBadge(collection.status)}</TableCell>
                     <TableCell className="text-xs max-w-[140px]">
-                      {collection.collectionStatus === "collected" ? (
+                      {collection.status === "in_transit" && collection.pickupAt ? (
                         <div>
                           <div className="text-muted-foreground truncate">
                             <IconCalendar className="h-3 w-3 inline mr-1" />
-                            {collection.collectionDate}
+                            {collection.pickupAt.split("T")[0]}
                           </div>
                           <div className="text-muted-foreground truncate">
                             <IconClock className="h-3 w-3 inline mr-1" />
-                            {collection.collectionTime}
+                            {collection.pickupAt.split("T")[1]?.slice(0, 5)}
                           </div>
-                          {collection.collectedBy && (
-                            <div className="text-muted-foreground truncate" title={collection.collectedBy}>
+                          {collection.driverName && (
+                            <div className="text-muted-foreground truncate" title={collection.driverName}>
                               <IconUser className="h-3 w-3 inline mr-1" />
-                              {collection.collectedBy}
+                              {collection.driverName}
                             </div>
                           )}
                         </div>
@@ -347,7 +299,7 @@ export default function Collection() {
                       )}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      {collection.collectionStatus === "pending" && (
+                      {collection.status === "accepted" && (
                         <Button
                           size="sm"
                           onClick={() => handleMarkCollection(collection)}
@@ -357,7 +309,7 @@ export default function Collection() {
                           Mark Collected
                         </Button>
                       )}
-                      {collection.collectionStatus === "collected" && (
+                      {collection.status === "in_transit" && (
                         <Badge className="bg-success text-success-foreground text-xs">
                           Ready
                         </Badge>

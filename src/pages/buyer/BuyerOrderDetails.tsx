@@ -14,98 +14,27 @@ import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimelin
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { RateFarmer } from "./RateFarmer";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
-
-interface BuyerOrder {
-  id: string;
-  farmerId: string;
-  farmerName: string;
-  farmerPhone: string;
-  farmerRating?: number;
-  aggregationCenter: string;
-  centerLocation: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  totalAmount: number;
-  status:
-    | "order_placed"
-    | "order_accepted"
-    | "payment_secured"
-    | "in_transit"
-    | "at_aggregation"
-    | "quality_checked"
-    | "quality_approved"
-    | "out_for_delivery"
-    | "delivered"
-    | "completed"
-    | "rejected"
-    | "disputed";
-  createdAt: string;
-  deliveryLocation?: string;
-  paymentStatus?: EscrowStatusType;
-  paymentAmount?: number;
-  photos?: string[];
-  canRate: boolean;
-  qualityScore?: number;
-  qualityFeedback?: string;
-  estimatedDeliveryDate?: string;
-  actualDeliveryDate?: string;
-  farmerDeliveryHistory?: number;
-  farmerQualityAverage?: number;
-  batchId: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-  farmerCoordinates?: [number, number]; // [lat, lng]
-  deliveryCoordinates?: [number, number]; // [lat, lng]
-  currentCoordinates?: [number, number]; // [lat, lng] - for in-transit orders
-}
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { usePayment } from "@/contexts/PaymentContext";
+import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function BuyerOrderDetails() {
   const { id } = useParams<{ id: string }>();
-  const [order, setOrder] = useState<BuyerOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
+  const { payments, fetchPayments } = usePayment();
+  
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
 
+  // Fetch order details on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      // Mock order data - in real app, fetch by ID
-      const mockOrder: BuyerOrder = {
-        id: id || "ORD-001",
-        farmerId: "F001",
-        farmerName: "James Mutua",
-        farmerPhone: "+254712345678",
-        farmerRating: 4.8,
-        aggregationCenter: "Kangundo Main Aggregation Center",
-        centerLocation: "Kangundo Subcounty",
-        variety: "Kenya",
-        quantity: 500,
-        qualityGrade: "A",
-        pricePerKg: 150,
-        totalAmount: 75000,
-        status: "quality_approved",
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        deliveryLocation: "Nairobi",
-        paymentStatus: "ready_for_release",
-        paymentAmount: 75000,
-        canRate: false,
-        qualityScore: 95,
-        qualityFeedback: "Excellent quality - premium grade, uniform size",
-        estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-        farmerDeliveryHistory: 25,
-        farmerQualityAverage: 92,
-        batchId: `BATCH-${id || "ORD-001"}`,
-        qrCode: `QR-BATCH-${id || "ORD-001"}`,
-        farmerCoordinates: [-1.2833, 37.3500], // Farmer location in Kangundo
-        deliveryCoordinates: [-1.2833, 37.3667], // Aggregation center
-        currentCoordinates: ["in_transit", "out_for_delivery"].includes("quality_approved")
-          ? [-1.2900, 37.3600] 
-          : undefined, // Current location if in transit
-      };
-      setOrder(mockOrder);
-      setIsLoading(false);
-    }, 500);
-  }, [id]);
+    if (id) {
+      fetchOrderById(id);
+      fetchPayments({ orderId: id });
+    }
+  }, [id, fetchOrderById, fetchPayments]);
+
+  const order = selectedOrder;
+  const payment = payments.find((p) => p.orderId === id);
 
   if (isLoading) {
     return (
@@ -293,7 +222,7 @@ export function BuyerOrderDetails() {
             coordinates: order.farmerCoordinates,
           }}
           deliveryLocation={{
-            name: order.aggregationCenter,
+            name: order.aggregationCenter || order.deliveryLocation || "Delivery Location",
             coordinates: order.deliveryCoordinates,
           }}
           currentLocation={
@@ -317,17 +246,21 @@ export function BuyerOrderDetails() {
             <CardTitle>Aggregation Center</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Center</p>
-              <p className="font-medium">{order.aggregationCenter}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Location</p>
-              <p className="flex items-center gap-1">
-                <IconMapPin className="h-4 w-4" />
-                {order.centerLocation}
-              </p>
-            </div>
+            {order.aggregationCenter && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Center</p>
+                <p className="font-medium">{order.aggregationCenter}</p>
+              </div>
+            )}
+            {order.centerLocation && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Location</p>
+                <p className="flex items-center gap-1">
+                  <IconMapPin className="h-4 w-4" />
+                  {order.centerLocation}
+                </p>
+              </div>
+            )}
             <div>
               <p className="text-sm text-muted-foreground mb-1">Delivery To</p>
               <p className="font-medium">{order.deliveryLocation}</p>
@@ -395,15 +328,15 @@ export function BuyerOrderDetails() {
       )}
 
       {/* Payment Status */}
-      {order.paymentStatus && (
+      {payment && (
         <Card>
           <CardHeader>
             <CardTitle>Payment Status</CardTitle>
           </CardHeader>
           <CardContent>
             <EscrowStatus
-              status={order.paymentStatus}
-              amount={order.paymentAmount || 0}
+              status={payment.status as EscrowStatusType}
+              amount={payment.amount || order.totalAmount}
               orderId={order.id}
             />
           </CardContent>

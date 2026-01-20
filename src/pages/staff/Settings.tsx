@@ -42,6 +42,10 @@ export function Settings() {
 
   const [hasChanges, setHasChanges] = useState(false);
 
+  const getSettingValue = <T,>(key: string, defaultValue: T): T => {
+    return (settings as unknown as Record<string, T>)[key] ?? defaultValue;
+  };
+
   const handleSettingChange = (key: string, value: any) => {
     setSettings({ ...settings, [key]: value });
     setHasChanges(true);
@@ -93,7 +97,7 @@ export function Settings() {
                 <Input
                   type="number"
                   className="w-24"
-                  value={settings.priceSpikeThreshold}
+                  value={getSettingValue("priceSpikeThreshold", 20) as number}
                   onChange={(e) =>
                     handleSettingChange("priceSpikeThreshold", parseFloat(e.target.value))
                   }
@@ -123,7 +127,7 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.qualityDropAlert}
+                checked={getSettingValue("qualityDropAlert", true) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("qualityDropAlert", checked)}
               />
             </div>
@@ -139,7 +143,7 @@ export function Settings() {
                 <Input
                   type="number"
                   className="w-24"
-                  value={settings.capacityAlert}
+                  value={getSettingValue("capacityAlert", 80) as number}
                   onChange={(e) =>
                     handleSettingChange("capacityAlert", parseFloat(e.target.value))
                   }
@@ -156,12 +160,12 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.orderDelayAlert}
+                checked={getSettingValue("orderDelayAlert", true) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("orderDelayAlert", checked)}
               />
             </div>
 
-            {settings.orderDelayAlert && (
+            {(getSettingValue("orderDelayAlert", true) as boolean) && (
               <div className="flex items-center justify-between pl-6">
                 <div className="space-y-0.5">
                   <Label className="text-sm">Delay Threshold</Label>
@@ -171,7 +175,7 @@ export function Settings() {
                   <Input
                     type="number"
                     className="w-24"
-                    value={settings.delayThreshold}
+                    value={getSettingValue("delayThreshold", 24) as number}
                     onChange={(e) =>
                       handleSettingChange("delayThreshold", parseFloat(e.target.value))
                     }
@@ -207,7 +211,7 @@ export function Settings() {
                   type="number"
                   step="0.1"
                   className="w-24"
-                  value={settings.platformFee}
+                  value={getSettingValue("platformFee", 2.0) as number}
                   onChange={(e) =>
                     handleSettingChange("platformFee", parseFloat(e.target.value))
                   }
@@ -224,12 +228,12 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.autoReleasePayment}
+                checked={getSettingValue("autoReleasePayment", true) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("autoReleasePayment", checked)}
               />
             </div>
 
-            {settings.autoReleasePayment && (
+            {(getSettingValue("autoReleasePayment", true) as boolean) && (
               <div className="flex items-center justify-between pl-6">
                 <div className="space-y-0.5">
                   <Label className="text-sm">Auto-Release After</Label>
@@ -241,7 +245,7 @@ export function Settings() {
                   <Input
                     type="number"
                     className="w-24"
-                    value={settings.autoReleaseHours}
+                    value={getSettingValue("autoReleaseHours", 24) as number}
                     onChange={(e) =>
                       handleSettingChange("autoReleaseHours", parseFloat(e.target.value))
                     }
@@ -259,7 +263,7 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.smsNotifications}
+                checked={getSettingValue("smsNotifications", true) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("smsNotifications", checked)}
               />
             </div>
@@ -272,7 +276,7 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.emailNotifications}
+                checked={getSettingValue("emailNotifications", true) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("emailNotifications", checked)}
               />
             </div>
@@ -299,7 +303,7 @@ export function Settings() {
                 </p>
               </div>
               <Switch
-                checked={settings.requireTwoFactor}
+                checked={getSettingValue("requireTwoFactor", false) as boolean}
                 onCheckedChange={(checked) => handleSettingChange("requireTwoFactor", checked)}
               />
             </div>
@@ -315,7 +319,7 @@ export function Settings() {
                 <Input
                   type="number"
                   className="w-24"
-                  value={settings.sessionTimeout}
+                  value={getSettingValue("sessionTimeout", 30) as number}
                   onChange={(e) =>
                     handleSettingChange("sessionTimeout", parseFloat(e.target.value))
                   }
@@ -332,7 +336,7 @@ export function Settings() {
                 </p>
               </div>
               <Select
-                value={settings.passwordPolicy}
+                value={getSettingValue("passwordPolicy", "medium") as string}
                 onValueChange={(value) => handleSettingChange("passwordPolicy", value)}
               >
                 <SelectTrigger className="w-[150px]">
@@ -357,7 +361,7 @@ export function Settings() {
                 <Input
                   type="number"
                   className="w-24"
-                  value={settings.auditLogRetention}
+                  value={getSettingValue("auditLogRetention", 90) as number}
                   onChange={(e) =>
                     handleSettingChange("auditLogRetention", parseFloat(e.target.value))
                   }

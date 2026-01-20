@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,49 +24,26 @@ import {
   IconRefresh,
   IconCalendar,
 } from "@tabler/icons-react";
-
-interface RecurringOrder {
-  id: string;
-  farmerId: string;
-  farmerName: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  frequency: "weekly" | "biweekly" | "monthly";
-  startDate: string;
-  nextDelivery: string;
-  status: "active" | "paused" | "cancelled";
-  autoRenew: boolean;
-  totalDeliveries: number;
-  completedDeliveries: number;
-}
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { RecurringOrder } from "@/types/marketplace";
 
 export function RecurringOrders() {
-  const [orders, setOrders] = useState<RecurringOrder[]>([]);
+  const { recurringOrders, fetchRecurringOrders, createRecurringOrder, updateRecurringOrder, cancelRecurringOrder, isLoading } = useMarketplace();
+  const { user } = useAuth();
+  
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<RecurringOrder | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sample data
-  const sampleOrders: RecurringOrder[] = [
-    {
-      id: "REC-001",
-      farmerId: "F001",
-      farmerName: "James Mutua",
-      variety: "Kenya",
-      quantity: 500,
-      qualityGrade: "A",
-      pricePerKg: 150,
-      frequency: "weekly",
-      startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-      nextDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "active",
-      autoRenew: true,
-      totalDeliveries: 12,
-      completedDeliveries: 2,
-    },
-  ];
+  // Fetch recurring orders on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchRecurringOrders();
+    }
+  }, [user?.id, fetchRecurringOrders]);
+
+  const orders = recurringOrders;
 
   const handleCreateOrder = () => {
     setEditingOrder(null);
@@ -78,15 +55,27 @@ export function RecurringOrders() {
     setDialogOpen(true);
   };
 
-  const handleDeleteOrder = (orderId: string) => {
+  const handleDeleteOrder = async (orderId: string) => {
     if (confirm("Are you sure you want to cancel this recurring order?")) {
-      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      try {
+        await cancelRecurringOrder(orderId);
+        await fetchRecurringOrders();
+      } catch (error) {
+        console.error("Failed to cancel recurring order:", error);
+        alert("Failed to cancel recurring order. Please try again.");
+      }
     }
   };
 
-  const handleToggleStatus = (orderId: string, currentStatus: string) => {
+  const handleToggleStatus = async (orderId: string, currentStatus: string) => {
     const newStatus = currentStatus === "active" ? "paused" : "active";
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
+    try {
+      await updateRecurringOrder(orderId, { status: newStatus as "active" | "paused" });
+      await fetchRecurringOrders();
+    } catch (error) {
+      console.error("Failed to update recurring order status:", error);
+      alert("Failed to update recurring order status. Please try again.");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -163,7 +152,7 @@ export function RecurringOrders() {
                       <TableCell>{order.quantity} kg</TableCell>
                       <TableCell>{getFrequencyLabel(order.frequency)}</TableCell>
                       <TableCell>
-                        {new Date(order.nextDelivery).toLocaleDateString()}
+                        {new Date(order.nextDeliveryDate || order.nextDelivery || "").toLocaleDateString()}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -176,7 +165,7 @@ export function RecurringOrders() {
                             />
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {order.completedDeliveries}/{order.totalDeliveries}
+                            {order.completedDeliveries || 0}/{order.totalDeliveries || 0}
                           </span>
                         </div>
                       </TableCell>

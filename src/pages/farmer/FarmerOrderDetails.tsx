@@ -15,85 +15,26 @@ import {
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
-
-interface FarmerOrder {
-  id: string;
-  buyerName: string;
-  buyerPhone: string;
-  buyerId: string;
-  variety: string;
-  quantity: number;
-  qualityGrade: string;
-  pricePerKg: number;
-  totalAmount: number;
-  status:
-    | "order_placed"
-    | "order_accepted"
-    | "payment_secured"
-    | "rejected"
-    | "in_transit"
-    | "at_aggregation"
-    | "quality_checked"
-    | "quality_approved"
-    | "quality_rejected"
-    | "out_for_delivery"
-    | "delivered"
-    | "completed"
-    | "disputed";
-  createdAt: string;
-  aggregationCenter?: string;
-  centerLocation?: string;
-  deliveryLocation?: string;
-  notes?: string;
-  paymentStatus?: EscrowStatusType;
-  paymentAmount?: number;
-  photos?: string[];
-  qualityScore?: number;
-  qualityFeedback?: string;
-  estimatedDeliveryDate?: string;
-  actualDeliveryDate?: string;
-  daysToDeliver?: number;
-  batchId: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-}
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { usePayment } from "@/contexts/PaymentContext";
+import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function FarmerOrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<FarmerOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
+  const { payments, fetchPayments } = usePayment();
 
+  // Fetch order details on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      // Mock order data - in real app, fetch by ID
-      const mockOrder: FarmerOrder = {
-        id: id || "ORD-001",
-        buyerId: "B001",
-        buyerName: "John Mwangi",
-        buyerPhone: "+254712345678",
-        variety: "Kenya",
-        quantity: 500,
-        qualityGrade: "A",
-        pricePerKg: 150,
-        totalAmount: 75000,
-        status: "quality_approved",
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        aggregationCenter: "Kangundo Main Aggregation Center",
-        centerLocation: "Kangundo Subcounty",
-        deliveryLocation: "Nairobi",
-        paymentStatus: "ready_for_release",
-        paymentAmount: 75000,
-        qualityScore: 95,
-        qualityFeedback: "Excellent quality - premium grade, uniform size",
-        estimatedDeliveryDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-        batchId: `BATCH-${id || "ORD-001"}`,
-        qrCode: `QR-BATCH-${id || "ORD-001"}`,
-      };
-      setOrder(mockOrder);
-      setIsLoading(false);
-    }, 500);
-  }, [id]);
+    if (id) {
+      fetchOrderById(id);
+      fetchPayments({ orderId: id });
+    }
+  }, [id, fetchOrderById, fetchPayments]);
+
+  const order = selectedOrder;
+  const payment = payments.find((p) => p.orderId === id);
 
   if (isLoading) {
     return (
@@ -307,15 +248,15 @@ export function FarmerOrderDetails() {
       )}
 
       {/* Payment Status */}
-      {order.paymentStatus && (
+      {payment && (
         <Card>
           <CardHeader>
             <CardTitle>Payment Status</CardTitle>
           </CardHeader>
           <CardContent>
             <EscrowStatus
-              status={order.paymentStatus}
-              amount={order.paymentAmount || 0}
+              status={payment.status as EscrowStatusType}
+              amount={payment.amount || order.totalAmount}
               orderId={order.id}
             />
           </CardContent>

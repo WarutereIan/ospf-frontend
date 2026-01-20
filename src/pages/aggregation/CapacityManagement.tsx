@@ -11,91 +11,57 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-
-interface CapacityData {
-  centerId: string;
-  centerName: string;
-  totalCapacity: number; // kg
-  currentStock: number; // kg
-  utilization: number; // percentage
-  availableSpace: number; // kg
-  status: "low" | "moderate" | "high" | "full";
-  varietyBreakdown: {
-    variety: string;
-    quantity: number;
-    percentage: number;
-  }[];
-}
+import { useAggregation } from "@/contexts/AggregationContext";
+import type { AggregationCenter, InventoryItem } from "@/types/aggregation";
 
 export function CapacityManagement() {
-  const [capacityData, setCapacityData] = useState<CapacityData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { centers, fetchCenters, inventory, fetchInventory, isLoading } = useAggregation();
 
+  // Fetch centers and inventory on mount
   useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleData: CapacityData[] = [
-        {
-          centerId: "C001",
-          centerName: "Kangundo Main Aggregation Center",
-          totalCapacity: 10000,
-          currentStock: 7500,
-          utilization: 75,
-          availableSpace: 2500,
-          status: "high",
-          varietyBreakdown: [
-            { variety: "Kenya", quantity: 3000, percentage: 40 },
-            { variety: "SPK004", quantity: 2500, percentage: 33.3 },
-            { variety: "Kabode", quantity: 2000, percentage: 26.7 },
-          ],
-        },
-        {
-          centerId: "C002",
-          centerName: "Kathiani Main Aggregation Center",
-          totalCapacity: 8000,
-          currentStock: 3200,
-          utilization: 40,
-          availableSpace: 4800,
-          status: "moderate",
-          varietyBreakdown: [
-            { variety: "Kenya", quantity: 1500, percentage: 46.9 },
-            { variety: "SPK004", quantity: 1000, percentage: 31.2 },
-            { variety: "Kabode", quantity: 700, percentage: 21.9 },
-          ],
-        },
-        {
-          centerId: "C003",
-          centerName: "Matungulu Main Aggregation Center",
-          totalCapacity: 9000,
-          currentStock: 4100,
-          utilization: 45.6,
-          availableSpace: 4900,
-          status: "moderate",
-          varietyBreakdown: [
-            { variety: "Kenya", quantity: 2000, percentage: 48.8 },
-            { variety: "SPK004", quantity: 1500, percentage: 36.6 },
-            { variety: "Kabode", quantity: 600, percentage: 14.6 },
-          ],
-        },
-        {
-          centerId: "C004",
-          centerName: "Yatta Main Aggregation Center",
-          totalCapacity: 7000,
-          currentStock: 2800,
-          utilization: 40,
-          availableSpace: 4200,
-          status: "moderate",
-          varietyBreakdown: [
-            { variety: "Kenya", quantity: 1200, percentage: 42.9 },
-            { variety: "SPK004", quantity: 1000, percentage: 35.7 },
-            { variety: "Kabode", quantity: 600, percentage: 21.4 },
-          ],
-        },
-      ];
-      setCapacityData(sampleData);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    fetchCenters();
+    fetchInventory();
+  }, [fetchCenters, fetchInventory]);
+
+  // Calculate capacity data from centers and inventory
+  const capacityData = centers.map((center) => {
+    const centerInventory = inventory.filter((item) => item.centerId === center.id);
+    const currentStock = centerInventory.reduce((sum, item) => sum + item.quantity, 0);
+    const totalCapacity = center.capacity || 0;
+    const utilization = totalCapacity > 0 ? (currentStock / totalCapacity) * 100 : 0;
+    const availableSpace = totalCapacity - currentStock;
+    
+    // Determine status
+    let status: "low" | "moderate" | "high" | "full";
+    if (utilization >= 95) status = "full";
+    else if (utilization >= 70) status = "high";
+    else if (utilization >= 40) status = "moderate";
+    else status = "low";
+
+    // Calculate variety breakdown
+    const varietyMap = new Map<string, number>();
+    centerInventory.forEach((item) => {
+      const existing = varietyMap.get(item.variety) || 0;
+      varietyMap.set(item.variety, existing + item.quantity);
+    });
+
+    const varietyBreakdown = Array.from(varietyMap.entries()).map(([variety, quantity]) => ({
+      variety,
+      quantity,
+      percentage: currentStock > 0 ? (quantity / currentStock) * 100 : 0,
+    }));
+
+    return {
+      centerId: center.id,
+      centerName: center.name,
+      totalCapacity,
+      currentStock,
+      utilization,
+      availableSpace,
+      status,
+      varietyBreakdown,
+    };
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -136,7 +102,7 @@ export function CapacityManagement() {
             Monitor aggregation center capacity and utilization
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => { fetchCenters(); fetchInventory(); }}>
           <IconRefresh className="mr-2 h-4 w-4" />
           Refresh
         </Button>

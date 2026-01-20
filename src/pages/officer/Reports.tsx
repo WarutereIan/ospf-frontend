@@ -13,6 +13,8 @@ import {
 } from "@tabler/icons-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useAggregation } from "@/contexts/AggregationContext";
 
 export function Reports() {
   const [reportType, setReportType] = useState<string>("");

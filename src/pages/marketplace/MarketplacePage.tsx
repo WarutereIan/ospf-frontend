@@ -34,6 +34,7 @@ import {
   IconQrcode,
 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { NegotiationDialog } from "@/components/messaging/NegotiationDialog";
 import { SmartMatching } from "@/components/marketplace/SmartMatching";
 import { BulkOrderCart } from "./BulkOrderCart";
@@ -44,28 +45,7 @@ import {
   StarRating,
 } from "@/components/visualizations";
 import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
-
-interface ProduceListing {
-  id: string;
-  farmerId: string;
-  farmerName: string;
-  farmerRating: number;
-  variety: string;
-  quantity: number;
-  availableQuantity: number;
-  qualityGrade: "A" | "B" | "C";
-  pricePerKg: number;
-  location: string;
-  subCounty: string;
-  description?: string;
-  photos?: string[];
-  createdAt: string;
-  status: "active" | "sold" | "inactive";
-  responseTime?: number; // minutes
-  distance?: number; // km
-  batchId: string; // Batch ID for traceability (required)
-  qrCode?: string; // QR code for traceability
-}
+import type { ProduceListing, OFSPVariety } from "@/types/marketplace";
 
 const ofspVarieties = [
   { value: "all", label: "All Varieties" },
@@ -99,8 +79,9 @@ const sortOptions = [
 ];
 
 export function MarketplacePage() {
-  const { role } = useAuth();
-  const [listings, setListings] = useState<ProduceListing[]>([]);
+  const { role, user } = useAuth();
+  const { listings, fetchListings, createOrder, createSourcingRequest, isLoading, listingFilters, setListingFilters } = useMarketplace();
+  
   const [filteredListings, setFilteredListings] = useState<ProduceListing[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedVariety, setSelectedVariety] = useState("all");
@@ -119,131 +100,50 @@ export function MarketplacePage() {
   const [showSmartMatching, setShowSmartMatching] = useState(false);
   const [orderQuantity, setOrderQuantity] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [advanceOrderOpen, setAdvanceOrderOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
 
-  const handleAdvanceOrder = (orderData: AdvanceOrderData) => {
-    // TODO: Replace with actual API call
-    console.log("Placing advance order:", orderData);
-    setAdvanceOrderOpen(false);
-    alert("Advance order placed successfully! You will be notified when produce is available.");
+  // Fetch listings on mount and when filters change
+  useEffect(() => {
+    const filters: any = {
+      status: "active",
+      variety: selectedVariety !== "all" ? selectedVariety : undefined,
+      qualityGrade: selectedGrade !== "all" ? selectedGrade : undefined,
+      subCounty: selectedLocation !== "all" ? selectedLocation : undefined,
+      searchQuery: searchTerm || undefined,
+      minPrice: minPrice ? parseFloat(minPrice) : undefined,
+      maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+      minQuantity: minQuantity ? parseFloat(minQuantity) : undefined,
+    };
+    fetchListings(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVariety, selectedGrade, selectedLocation, searchTerm, minPrice, maxPrice, minQuantity]);
+
+  const handleAdvanceOrder = async (orderData: AdvanceOrderData) => {
+    try {
+      // Create sourcing request for advance order
+      await createSourcingRequest({
+        variety: orderData.variety as any,
+        quantity: orderData.quantity,
+        qualityGrade: orderData.qualityGrade as any,
+        deliveryLocation: orderData.deliveryLocation,
+        nextDeliveryDate: orderData.deliveryDate,
+        notes: orderData.notes,
+      });
+      setAdvanceOrderOpen(false);
+      alert("Advance order placed successfully! You will be notified when produce is available.");
+    } catch (error) {
+      console.error("Failed to place advance order:", error);
+      alert("Failed to place advance order. Please try again.");
+    }
   };
 
-  useEffect(() => {
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      const sampleListings: ProduceListing[] = [
-        {
-          id: "LST-001",
-          farmerId: "F001",
-          farmerName: "James Mutua",
-          farmerRating: 4.8,
-          variety: "Kenya",
-          quantity: 1000,
-          availableQuantity: 500,
-          qualityGrade: "A",
-          pricePerKg: 150,
-          location: "Kangundo",
-          subCounty: "kangundo",
-          description: "Fresh Grade A Kenya variety, high dry matter content. Sorted and cleaned, ready for transport.",
-          status: "active",
-          responseTime: 15,
-          distance: 5.2,
-          createdAt: new Date().toISOString(),
-          batchId: "BATCH-2023-001",
-          qrCode: "QR-BATCH-2023-001",
-        },
-        {
-          id: "LST-002",
-          farmerId: "F002",
-          farmerName: "Mary Wanjiku",
-          farmerRating: 4.9,
-          variety: "SPK004",
-          quantity: 800,
-          availableQuantity: 300,
-          qualityGrade: "A",
-          pricePerKg: 120,
-          location: "Kathiani",
-          subCounty: "kathiani",
-          description: "Premium SPK004 variety, exceptionally high beta-carotene content. Ideal for puree processing.",
-          status: "active",
-          responseTime: 8,
-          distance: 12.5,
-          createdAt: new Date().toISOString(),
-          batchId: "BATCH-2023-002",
-          qrCode: "QR-BATCH-2023-002",
-        },
-        {
-          id: "LST-003",
-          farmerId: "F003",
-          farmerName: "Peter Kamau",
-          farmerRating: 4.5,
-          variety: "Kabode",
-          quantity: 600,
-          availableQuantity: 200,
-          qualityGrade: "B",
-          pricePerKg: 100,
-          location: "Masinga",
-          subCounty: "masinga",
-          description: "Good quality Kabode variety. Size variation present but excellent taste. Suitable for flour.",
-          status: "active",
-          responseTime: 30,
-          distance: 18.3,
-          createdAt: new Date().toISOString(),
-          batchId: "BATCH-2023-003",
-          qrCode: "QR-BATCH-2023-003",
-        },
-      ];
-      setListings(sampleListings);
-      setFilteredListings(sampleListings);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
-
+  // Apply client-side sorting (filters are handled by context)
   useEffect(() => {
     let filtered = [...listings];
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (listing) =>
-          listing.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          listing.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          listing.location.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Variety filter
-    if (selectedVariety !== "all") {
-      filtered = filtered.filter((listing) => listing.variety.toLowerCase() === selectedVariety);
-    }
-
-    // Grade filter
-    if (selectedGrade !== "all") {
-      filtered = filtered.filter((listing) => listing.qualityGrade === selectedGrade);
-    }
-
-    // Location filter
-    if (selectedLocation !== "all") {
-      filtered = filtered.filter((listing) => listing.subCounty === selectedLocation);
-    }
-
-    // Price filter
-    if (minPrice) {
-      filtered = filtered.filter((listing) => listing.pricePerKg >= parseFloat(minPrice));
-    }
-    if (maxPrice) {
-      filtered = filtered.filter((listing) => listing.pricePerKg <= parseFloat(maxPrice));
-    }
-
-    // Quantity filter
-    if (minQuantity) {
-      filtered = filtered.filter((listing) => listing.availableQuantity >= parseFloat(minQuantity));
-    }
 
     // Sort
     filtered.sort((a, b) => {
@@ -253,9 +153,9 @@ export function MarketplacePage() {
         case "price_desc":
           return b.pricePerKg - a.pricePerKg;
         case "quantity_desc":
-          return b.availableQuantity - a.availableQuantity;
+          return (b.availableQuantity || 0) - (a.availableQuantity || 0);
         case "rating_desc":
-          return b.farmerRating - a.farmerRating;
+          return (b.farmerRating || 0) - (a.farmerRating || 0);
         case "date_desc":
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         case "distance_asc":
@@ -265,11 +165,11 @@ export function MarketplacePage() {
       }
     });
 
-    setFilteredListings(filtered);
-  }, [listings, searchTerm, selectedVariety, selectedGrade, selectedLocation, sortBy, minPrice, maxPrice, minQuantity]);
+    setFilteredListings(filtered as ProduceListing[]);
+  }, [listings, sortBy]);
 
-  const handlePlaceOrder = () => {
-    if (!selectedListing || !orderQuantity || !deliveryLocation) return;
+  const handlePlaceOrder = async () => {
+    if (!selectedListing || !orderQuantity || !deliveryLocation || !user?.id) return;
 
     const quantity = parseFloat(orderQuantity);
     if (quantity > selectedListing.availableQuantity) {
@@ -277,19 +177,30 @@ export function MarketplacePage() {
       return;
     }
 
-    // TODO: Replace with actual API call
-    console.log("Placing order:", {
-      listingId: selectedListing.id,
-      quantity,
-      deliveryLocation,
-      totalAmount: quantity * selectedListing.pricePerKg,
-    });
+    try {
+      await createOrder({
+        listingId: selectedListing.id,
+        farmerId: selectedListing.farmerId,
+        buyerId: user.id,
+        variety: selectedListing.variety,
+        quantity,
+        qualityGrade: selectedListing.qualityGrade,
+        pricePerKg: selectedListing.pricePerKg,
+        totalAmount: quantity * selectedListing.pricePerKg,
+        deliveryLocation,
+        status: "order_placed",
+      });
 
-    // Close dialog and reset
-    setOrderDialogOpen(false);
-    setOrderQuantity("");
-    setDeliveryLocation("");
-    setSelectedListing(null);
+      // Close dialog and reset
+      setOrderDialogOpen(false);
+      setOrderQuantity("");
+      setDeliveryLocation("");
+      setSelectedListing(null);
+      alert("Order placed successfully!");
+    } catch (error) {
+      console.error("Failed to place order:", error);
+      alert("Failed to place order. Please try again.");
+    }
   };
 
   const handleRequestQuote = () => {
@@ -334,11 +245,34 @@ export function MarketplacePage() {
     );
   };
 
-  const handleBulkCheckout = (items: any[], deliveryLocation: string) => {
-    // TODO: Replace with actual API call
-    console.log("Bulk checkout:", { items, deliveryLocation });
-    setCartItems([]);
-    setBulkCartOpen(false);
+  const handleBulkCheckout = async (items: any[], deliveryLocation: string) => {
+    if (!user?.id) return;
+
+    try {
+      // Create orders for each item in bulk
+      const orderPromises = items.map((item) =>
+        createOrder({
+          listingId: item.listingId,
+          farmerId: item.farmerId || "",
+          buyerId: user.id,
+          variety: item.variety,
+          quantity: item.quantity,
+          qualityGrade: item.qualityGrade,
+          pricePerKg: item.pricePerKg,
+          totalAmount: item.quantity * item.pricePerKg,
+          deliveryLocation,
+          status: "order_placed",
+        })
+      );
+
+      await Promise.all(orderPromises);
+      setCartItems([]);
+      setBulkCartOpen(false);
+      alert("Bulk order placed successfully!");
+    } catch (error) {
+      console.error("Failed to place bulk order:", error);
+      alert("Failed to place bulk order. Please try again.");
+    }
   };
 
   const getGradeColor = (grade: string) => {
@@ -387,7 +321,7 @@ export function MarketplacePage() {
             // Find and select the matched farmer's listing
             const matchedListing = listings.find((l) => l.farmerId === farmerId);
             if (matchedListing) {
-              setSelectedListing(matchedListing);
+              setSelectedListing(matchedListing as ProduceListing);
               setOrderDialogOpen(true);
             }
             setShowSmartMatching(false);

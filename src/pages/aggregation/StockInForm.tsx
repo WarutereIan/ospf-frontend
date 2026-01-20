@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,9 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface StockInEntry {
   farmerId: string;
@@ -41,6 +44,10 @@ const qualityGrades = [
 ];
 
 export function StockInForm() {
+  const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
+  const { profiles, fetchProfiles, filteredProfiles } = useProfile();
+  const { user } = useAuth();
+  
   const [formData, setFormData] = useState<Partial<StockInEntry>>({
     farmerId: "",
     farmerName: "",
@@ -59,14 +66,14 @@ export function StockInForm() {
   const [generatedBatchId, setGeneratedBatchId] = useState<string>("");
   const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
 
-  // Sample farmers for search - TODO: Replace with API
-  const sampleFarmers = [
-    { id: "F001", name: "James Mutua", phone: "+254712345678" },
-    { id: "F002", name: "Mary Wanjiku", phone: "+254723456789" },
-    { id: "F003", name: "Peter Kamau", phone: "+254734567890" },
-  ];
+  // Fetch centers and farmers on mount
+  useEffect(() => {
+    fetchCenters();
+    fetchProfiles({ role: "farmer" });
+  }, [fetchCenters, fetchProfiles]);
 
-  const filteredFarmers = sampleFarmers.filter(
+  // Filter farmers based on search term
+  const filteredFarmers = filteredProfiles.filter(
     (farmer) =>
       farmer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       farmer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -113,11 +120,37 @@ export function StockInForm() {
       return;
     }
 
+    if (!selectedCenter && centers.length > 0) {
+      // Auto-select first center if none selected
+      // In production, this would come from user's assigned center
+    }
+
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
+    
+    try {
       const batchId = generateBatchId();
       const qrCode = generateQRCode(batchId);
+      
+      // Prepare stock transaction data
+      const stockTransaction = {
+        centerId: selectedCenter?.id || centers[0]?.id || "",
+        centerName: selectedCenter?.name || centers[0]?.name || "",
+        type: "stock_in" as const,
+        farmerId: formData.farmerId,
+        farmerName: formData.farmerName || "",
+        orderId: formData.orderId,
+        variety: formData.variety,
+        quantity: formData.quantity || 0,
+        qualityGrade: formData.qualityGrade as "A" | "B" | "C",
+        photos: formData.photos || [],
+        notes: formData.notes,
+        batchId,
+        qrCode,
+        createdBy: user?.id || "",
+      };
+
+      // Record stock in via context
+      await recordStockIn(stockTransaction);
       
       setGeneratedBatchId(batchId);
       setGeneratedQRCode(qrCode);
@@ -131,13 +164,12 @@ export function StockInForm() {
         variety: formData.variety,
         quantity: formData.quantity,
         qualityGrade: formData.qualityGrade,
-        location: "Kangundo Main Aggregation Center", // TODO: Get from context
+        location: selectedCenter?.name || centers[0]?.name || "Aggregation Center",
         transactionId: batchId,
         qrCode: qrCode,
       };
 
       setGeneratedReceipt(receiptData);
-      setIsSubmitting(false);
       setReceiptOpen(true);
 
       // Reset form after showing receipt
@@ -152,7 +184,12 @@ export function StockInForm() {
         notes: "",
       });
       setSearchTerm("");
-    }, 2000);
+    } catch (error) {
+      console.error("Failed to record stock in:", error);
+      // Error handling is done by context
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const selectedGrade = qualityGrades.find((g) => g.value === formData.qualityGrade);
@@ -204,6 +241,7 @@ export function StockInForm() {
                           <div className="font-medium">{farmer.name}</div>
                           <div className="text-sm text-muted-foreground">
                             {farmer.id} • {farmer.phone}
+                            {farmer.location && ` • ${farmer.location}`}
                           </div>
                         </button>
                       ))}
@@ -448,7 +486,9 @@ export function StockInForm() {
                       !formData.variety ||
                       !formData.quantity ||
                       !formData.qualityGrade ||
-                      isSubmitting
+                      isSubmitting ||
+                      aggregationLoading ||
+                      centers.length === 0
                     }
                   >
                     {isSubmitting ? (

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input as InputComponent } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,6 +19,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { IconSeeding, IconShoppingCart, IconSearch, IconFilter, IconStar, IconTruck } from "@tabler/icons-react";
+import { useInput } from "@/contexts/InputContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Input } from "@/types/input";
 
 interface InputItem {
   id: string;
@@ -36,91 +39,42 @@ interface InputItem {
 }
 
 export default function InputMarketplace() {
+  const { inputs, fetchInputs, isLoading } = useInput();
+  const { user } = useAuth();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("relevance");
-  const [selectedInput, setSelectedInput] = useState<InputItem | null>(null);
+  const [selectedInput, setSelectedInput] = useState<Input | null>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [quantity, setQuantity] = useState("1");
   const [needsTransport, setNeedsTransport] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  const [inputs] = useState<InputItem[]>([
-    {
-      id: "1",
-      name: "OFSP Vines (Kenya)",
-      provider: "AgriInputs Co.",
-      category: "Planting Material",
-      description: "High-quality Kenya variety OFSP vines, disease-resistant and high-yielding",
-      price: 30,
-      unit: "cutting",
-      stock: 500,
-      rating: 4.8,
-      reviews: 45,
-      location: "Machakos",
-      image: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=400&h=300&fit=crop",
-    },
-    {
-      id: "2",
-      name: "OFSP Vines (SPK004)",
-      provider: "FarmSupplies Ltd",
-      category: "Planting Material",
-      description: "SPK004 variety vines with excellent vitamin A content",
-      price: 35,
-      unit: "cutting",
-      stock: 300,
-      rating: 4.9,
-      reviews: 38,
-      location: "Kangundo",
-      image: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=400&h=300&fit=crop",
-    },
-    {
-      id: "3",
-      name: "NPK Fertilizer (17-17-17)",
-      provider: "AgriInputs Co.",
-      category: "Fertilizer",
-      description: "Balanced NPK fertilizer for optimal OFSP growth",
-      price: 150,
-      unit: "kg",
-      stock: 200,
-      rating: 4.7,
-      reviews: 89,
-      location: "Machakos",
-      image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=300&fit=crop",
-    },
-    {
-      id: "4",
-      name: "Organic Compost",
-      provider: "EcoFarm Supplies",
-      category: "Soil Amendment",
-      description: "Rich organic compost from decomposed farm waste",
-      price: 80,
-      unit: "kg",
-      stock: 500,
-      rating: 4.6,
-      reviews: 67,
-      location: "Kathiani",
-      image: "https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?w=400&h=300&fit=crop",
-    },
-    {
-      id: "5",
-      name: "Farm Training Manual",
-      provider: "Knowledge Hub",
-      category: "Training Materials",
-      description: "Comprehensive guide to OFSP farming best practices",
-      price: 500,
-      unit: "book",
-      stock: 50,
-      rating: 4.9,
-      reviews: 124,
-      location: "Nairobi",
-      image: "https://images.unsplash.com/photo-1543002588-bfa74002ed7e?w=400&h=300&fit=crop",
-    },
-  ]);
+  // Fetch inputs on mount
+  useEffect(() => {
+    fetchInputs();
+  }, [fetchInputs]);
+
+  // Convert inputs to InputItem format
+  const inputItems: InputItem[] = inputs.map((input) => ({
+    id: input.id,
+    name: input.name,
+    provider: input.providerName || "Input Provider",
+    category: input.category,
+    description: input.description || "",
+    price: input.price,
+    unit: input.unit,
+    stock: input.stock,
+    rating: input.rating || 4.5,
+    reviews: input.reviews || 0,
+    location: input.location || "Machakos",
+    image: input.images?.[0],
+  }));
 
   const categories = ["all", "Planting Material", "Fertilizer", "Soil Amendment", "Tools & Equipment", "Training Materials"];
 
-  const filteredInputs = inputs.filter((input) => {
+  const filteredInputs = inputItems.filter((input) => {
     const matchesSearch = input.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       input.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === "all" || input.category === categoryFilter;
@@ -141,7 +95,9 @@ export default function InputMarketplace() {
   });
 
   const handleOrderInput = (input: InputItem) => {
-    setSelectedInput(input);
+    // Find the actual Input from inputs array
+    const actualInput = inputs.find(i => i.id === input.id);
+    setSelectedInput(actualInput || null);
     setQuantity("1");
     setNeedsTransport(false);
     setOrderDialogOpen(true);
@@ -178,7 +134,7 @@ export default function InputMarketplace() {
               <Label htmlFor="search" className="text-sm font-medium whitespace-nowrap">Search</Label>
               <div className="relative flex-1">
                 <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
+                <InputComponent
                   id="search"
                   placeholder="Search inputs..."
                   value={searchQuery}
@@ -308,7 +264,7 @@ export default function InputMarketplace() {
             <div className="p-4 border rounded-lg bg-accent/50">
               <div className="font-medium">{selectedInput?.name}</div>
               <div className="text-sm text-muted-foreground">
-                Provider: {selectedInput?.provider}
+                Provider: {selectedInput?.providerName || "Input Provider"}
               </div>
               <div className="text-sm font-medium mt-2">
                 KES {selectedInput?.price}/{selectedInput?.unit}
@@ -317,7 +273,7 @@ export default function InputMarketplace() {
 
             <div className="space-y-2">
               <Label htmlFor="quantity">Quantity</Label>
-              <Input
+              <InputComponent
                 id="quantity"
                 type="number"
                 min="1"

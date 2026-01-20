@@ -3,93 +3,120 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { IconTruck, IconMapPin, IconClock, IconCurrency, IconChecklist, IconTrendingUp } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import {
   StatCard,
   SimpleBarChart,
   StarRating,
 } from "@/components/visualizations";
+import { useTransport } from "@/contexts/TransportContext";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function TransportProviderDashboard() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    activeDeliveries: 5,
-    pendingRequests: 12,
-    completedToday: 8,
-    totalEarnings: 4850,
-    weeklyEarnings: 185000,
-    rating: 4.8,
-    reviews: 156,
-  });
-  const [weeklyEarnings, setWeeklyEarnings] = useState([
-    { day: "Mon", amount: 4200 },
-    { day: "Tue", amount: 3800 },
-    { day: "Wed", amount: 4500 },
-    { day: "Thu", amount: 4100 },
-    { day: "Fri", amount: 4850 },
-  ]);
+  const { user } = useAuth();
+  const { 
+    requests,
+    activeDeliveries: transportActiveDeliveries,
+    stats: transportStats,
+    fetchRequests,
+    fetchActiveDeliveries,
+    fetchStats,
+    isLoading: transportLoading 
+  } = useTransport();
+  
+  const { 
+    trends,
+    fetchTrends,
+    isLoading: analyticsLoading 
+  } = useAnalytics();
 
+  // Fetch data on mount
   useEffect(() => {
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    if (user?.id) {
+      fetchRequests();
+      fetchActiveDeliveries();
+      fetchStats();
+      fetchTrends({ timeRange: "week" });
+    }
+  }, [user?.id, fetchRequests, fetchActiveDeliveries, fetchStats, fetchTrends]);
 
-  const activeDeliveries = [
-    {
-      id: "1",
-      type: "Produce Delivery",
-      from: "John Kamau (Farmer)",
-      to: "Kangundo Aggregation Centre",
-      distance: "12 km",
-      status: "in_transit",
-      eta: "25 min",
-      amount: "KES 800",
-    },
-    {
-      id: "2",
-      type: "Input Delivery",
-      from: "AgriInputs Co.",
-      to: "Mary Wanjiku (Farmer)",
-      distance: "8 km",
-      status: "pickup",
-      eta: "10 min",
-      amount: "KES 500",
-    },
-    {
-      id: "3",
-      type: "Market Delivery",
-      from: "Yatta Aggregation Centre",
-      to: "Nairobi Wholesale Market",
-      distance: "45 km",
-      status: "in_transit",
-      eta: "1 hr 15 min",
-      amount: "KES 3,500",
-    },
-  ];
+  const isLoading = transportLoading || analyticsLoading;
 
-  const pendingRequests = [
-    {
-      id: "1",
-      type: "Produce Pickup",
-      from: "Peter Mwangi",
-      to: "Kathiani Centre",
-      distance: "15 km",
-      scheduledTime: "Today, 2:00 PM",
-      amount: "KES 1,000",
-      weight: "250 kg",
-    },
-    {
-      id: "2",
-      type: "Input Delivery",
-      from: "FarmSupplies Ltd",
-      to: "Grace Njeri",
-      distance: "6 km",
-      scheduledTime: "Today, 3:30 PM",
-      amount: "KES 450",
-      weight: "30 kg",
-    },
-  ];
+  // Calculate stats from context data
+  const stats = useMemo(() => {
+    const pendingRequests = requests.filter(r => r.status === "pending");
+    const today = new Date().toISOString().split("T")[0];
+    const completedToday = requests.filter(r => 
+      (r.status === "delivered" || r.status === "completed") && 
+      r.createdAt.startsWith(today)
+    ).length;
+
+    // Calculate earnings from completed requests
+    const completedRequests = requests.filter(r => r.status === "delivered" || r.status === "completed");
+    const totalEarnings = completedRequests.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+    
+    // Weekly earnings
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeklyEarnings = completedRequests
+      .filter(r => new Date(r.createdAt) >= weekAgo)
+      .reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+
+    return {
+      activeDeliveries: transportActiveDeliveries.length,
+      pendingRequests: pendingRequests.length,
+      completedToday,
+      totalEarnings: Math.round(totalEarnings),
+      weeklyEarnings: Math.round(weeklyEarnings),
+      rating: 4.8, // TODO: Get from profile/ratings
+      reviews: 156, // TODO: Get from profile/ratings
+    };
+  }, [requests, transportActiveDeliveries]);
+
+  // Weekly earnings from trends
+  const weeklyEarnings = useMemo(() => {
+    if (trends.length === 0) return [];
+    return trends.slice(-5).map(t => ({
+      day: new Date(t.date).toLocaleDateString("en-US", { weekday: "short" }),
+      amount: t.revenue || 0,
+    }));
+  }, [trends]);
+
+  // Active deliveries from context
+  const activeDeliveries = useMemo(() => {
+    return transportActiveDeliveries.slice(0, 3).map(delivery => ({
+      id: delivery.id,
+      type: delivery.type === "produce_delivery" ? "Produce Delivery" : 
+            delivery.type === "input_delivery" ? "Input Delivery" : "Produce Pickup",
+      from: delivery.pickupLocation || "Unknown",
+      to: delivery.deliveryLocation || "Unknown",
+      distance: `${delivery.distance || 0} km`,
+      status: delivery.status === "in_transit" ? "in_transit" : 
+              delivery.status === "delivered" ? "delivered" : "in_transit",
+      eta: delivery.estimatedArrival || "N/A",
+      amount: `KES ${(delivery.estimatedCost || 0).toLocaleString()}`,
+    }));
+  }, [transportActiveDeliveries]);
+
+  // Pending requests from context
+  const pendingRequests = useMemo(() => {
+    return requests
+      .filter(r => r.status === "pending")
+      .slice(0, 2)
+      .map(request => ({
+        id: request.id,
+        type: request.type === "produce_pickup" ? "Produce Pickup" : 
+              request.type === "input_delivery" ? "Input Delivery" : "Produce Delivery",
+        from: request.pickupLocation || "Unknown",
+        to: request.deliveryLocation || "Unknown",
+        distance: `${request.distance || 0} km`,
+        scheduledTime: request.scheduledPickupTime ? 
+          new Date(request.scheduledPickupTime).toLocaleString() : "N/A",
+        amount: `KES ${(request.estimatedCost || 0).toLocaleString()}`,
+        weight: `${request.weight || 0} kg`,
+      }));
+  }, [requests]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

@@ -16,6 +16,9 @@ import {
   IconArrowLeft,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { useAggregation } from "@/contexts/AggregationContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { QualityCheck } from "@/types/aggregation";
 
 interface QualityCheckForm {
   stockId: string;
@@ -44,6 +47,9 @@ const sizeOptions = [
 
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
+  const { recordQualityCheck, qualityChecks, fetchQualityChecks, inventory, fetchInventory, isLoading: aggregationLoading } = useAggregation();
+  const { user } = useAuth();
+  
   const isNew = !id || id === "new";
   const [formData, setFormData] = useState<QualityCheckForm>({
     stockId: "",
@@ -61,28 +67,36 @@ export function QualityCheck() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(!isNew);
 
+  // Fetch inventory on mount
+  useEffect(() => {
+    fetchInventory();
+  }, [fetchInventory]);
+
   useEffect(() => {
     if (!isNew && id) {
-      // TODO: Load existing quality check data from API
       setIsLoading(true);
-      setTimeout(() => {
-        // Sample data for existing check
+      // Find existing quality check
+      const existingCheck = qualityChecks.find((qc) => qc.id === id);
+      if (existingCheck) {
         setFormData({
-          stockId: "INV-002",
-          variety: "SPK004",
-          quantity: 300,
-          qualityGrade: null,
-          size: null,
-          colorScore: 5,
-          damagePercentage: 0,
-          photos: [],
-          notes: "",
-          approved: null,
+          stockId: existingCheck.transactionId || "",
+          variety: existingCheck.variety,
+          quantity: existingCheck.quantity,
+          qualityGrade: existingCheck.qualityGrade,
+          size: null, // Not in type
+          colorScore: existingCheck.colorScore || 5,
+          damagePercentage: existingCheck.damageScore ? (100 - existingCheck.damageScore * 10) : 0,
+          photos: existingCheck.photos || [],
+          notes: existingCheck.notes || "",
+          approved: existingCheck.qualityScore ? (existingCheck.qualityScore >= 70 ? true : false) : null,
         });
-        setIsLoading(false);
-      }, 1000);
+      }
+      setIsLoading(false);
+    } else {
+      // Fetch quality checks to ensure we have latest data
+      fetchQualityChecks();
     }
-  }, [id, isNew]);
+  }, [id, isNew, qualityChecks, fetchQualityChecks]);
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -113,12 +127,42 @@ export function QualityCheck() {
       return;
     }
 
+    if (!formData.stockId) {
+      alert("Please select stock item");
+      return;
+    }
+
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      console.log("Quality check:", { ...formData, approved });
-      setIsSubmitting(false);
+    
+    try {
+      // Find the inventory item to get transaction ID
+      const inventoryItem = inventory.find((item) => item.id === formData.stockId);
+      
+      // Calculate quality score
+      const qualityScore = Math.max(0, Math.min(100, 
+        (formData.colorScore * 10) - (formData.damagePercentage)
+      ));
+
+      const qualityCheckData: Partial<QualityCheck> = {
+        centerId: inventoryItem?.centerId || "",
+        transactionId: inventoryItem?.id || formData.stockId,
+        farmerId: inventoryItem?.farmerId || "",
+        farmerName: inventoryItem?.farmerName || "",
+        variety: formData.variety,
+        quantity: formData.quantity,
+        qualityGrade: formData.qualityGrade,
+        qualityScore,
+        colorScore: formData.colorScore,
+        damageScore: formData.damagePercentage / 10, // Convert to 0-10 scale
+        photos: formData.photos,
+        notes: formData.notes,
+        checkedBy: user?.id || "",
+      };
+
+      await recordQualityCheck(qualityCheckData);
+      
       alert(`Quality check ${approved ? "approved" : "rejected"} successfully!`);
+      
       // Reset form
       setFormData({
         stockId: "",
@@ -132,7 +176,12 @@ export function QualityCheck() {
         notes: "",
         approved: null,
       });
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to record quality check:", error);
+      alert("Failed to record quality check. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

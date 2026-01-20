@@ -36,46 +36,10 @@ import {
   IconRepeat,
   IconQrcode,
 } from "@tabler/icons-react";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
+import type { SourcingRequest, SupplierOffer, SourcingRequestFilters } from "@/types/marketplace";
 
-interface SourcingRequest {
-  id: string;
-  requestId: string;
-  title: string;
-  productType: "fresh_roots" | "process_grade" | "planting_vines";
-  status: "open" | "urgent" | "draft" | "closed";
-  fulfilled: number;
-  total: number;
-  unit: "tons" | "kg" | "units";
-  priceRange?: { min: number; max: number };
-  pricePerUnit?: number;
-  priceUnit: "kg" | "unit";
-  deadline: string;
-  suppliers: Supplier[];
-  isPastDue?: boolean;
-  isRecurring?: boolean;
-  recurringFrequency?: "weekly" | "biweekly" | "monthly" | "quarterly" | "custom";
-  recurringEndDate?: string;
-  nextDeliveryDate?: string;
-}
-
-interface Supplier {
-  id: string;
-  initials: string;
-  color: string;
-}
-
-interface SupplierOffer {
-  id: string;
-  supplierName: string;
-  rating?: number;
-  isNewSupplier?: boolean;
-  quantity: number;
-  quantityUnit: "kg" | "tons" | "units";
-  pricePerKg: number;
-  grade: "A" | "B" | "C";
-  batchId?: string; // Batch ID for traceability
-  qrCode?: string; // QR code for traceability
-}
+// Types imported from marketplace.ts
 
 type TabType = "active" | "drafts" | "history";
 type ViewType = "list" | "create" | "manage";
@@ -97,10 +61,19 @@ interface CreateRequestForm {
 
 export function SourcingRequests() {
   const navigate = useNavigate();
+  const { 
+    sourcingRequests, 
+    fetchSourcingRequests, 
+    createSourcingRequest: createRequest,
+    updateSourcingRequest: updateRequest,
+    acceptSupplierOffer,
+    isLoading,
+    sourcingRequestFilters,
+    setSourcingRequestFilters,
+  } = useMarketplace();
+  
   const [view, setView] = useState<ViewType>("list");
   const [activeTab, setActiveTab] = useState<TabType>("active");
-  const [requests, setRequests] = useState<SourcingRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<SourcingRequest | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<SupplierOffer | null>(null);
@@ -124,80 +97,19 @@ export function SourcingRequests() {
     recurringEndDate: "",
   });
 
+  // Fetch sourcing requests on mount and when tab changes
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setRequests([
-        {
-          id: "1",
-          requestId: "REQ-2023-09",
-          title: "Fresh OFSP Roots",
-          productType: "fresh_roots",
-          status: "open",
-          fulfilled: 3.2,
-          total: 5.0,
-          unit: "tons",
-          priceRange: { min: 35, max: 40 },
-          priceUnit: "kg",
-          deadline: "Nov 30, 2023",
-          suppliers: [
-            { id: "1", initials: "JD", color: "bg-stone-200" },
-            { id: "2", initials: "GV", color: "bg-blue-100" },
-            { id: "3", initials: "+3", color: "bg-stone-50" },
-          ],
-        },
-        {
-          id: "2",
-          requestId: "REQ-2023-11",
-          title: "Process Grade",
-          productType: "process_grade",
-          status: "urgent",
-          fulfilled: 200,
-          total: 2000,
-          unit: "kg",
-          priceRange: { min: 28, max: 32 },
-          priceUnit: "kg",
-          deadline: "Nov 22, 2023",
-          suppliers: [],
-          isPastDue: true,
-        },
-        {
-          id: "3",
-          requestId: "REQ-2023-14",
-          title: "Planting Vines",
-          productType: "planting_vines",
-          status: "open",
-          fulfilled: 15000,
-          total: 20000,
-          unit: "units",
-          pricePerUnit: 1.5,
-          priceUnit: "unit",
-          deadline: "Dec 10, 2023",
-          suppliers: [
-            { id: "1", initials: "MK", color: "bg-purple-100" },
-            { id: "2", initials: "AG", color: "bg-yellow-100" },
-          ],
-        },
-        {
-          id: "4",
-          requestId: "REQ-2023-15",
-          title: "Fresh OFSP Roots",
-          productType: "fresh_roots",
-          status: "open",
-          fulfilled: 1.8,
-          total: 3.0,
-          unit: "tons",
-          priceRange: { min: 36, max: 42 },
-          priceUnit: "kg",
-          deadline: "Dec 15, 2023",
-          suppliers: [
-            { id: "1", initials: "JM", color: "bg-green-100" },
-          ],
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+    const filters: SourcingRequestFilters = {};
+    if (activeTab === "drafts") {
+      filters.status = "draft";
+    } else if (activeTab === "history") {
+      filters.status = "closed";
+    } else {
+      filters.status = "open";
+    }
+    fetchSourcingRequests(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const getProductIcon = (type: SourcingRequest["productType"]) => {
     switch (type) {
@@ -285,22 +197,12 @@ export function SourcingRequests() {
     return `${value} ${unit}`;
   };
 
-  const filteredRequests = requests.filter((req) => {
-    switch (activeTab) {
-      case "active":
-        return req.status === "open" || req.status === "urgent";
-      case "drafts":
-        return req.status === "draft";
-      case "history":
-        return req.status === "closed";
-      default:
-        return true;
-    }
-  });
+  // Filter requests based on active tab (already filtered by context)
+  const filteredRequests = sourcingRequests;
 
-  const activeCount = requests.filter((r) => r.status === "open" || r.status === "urgent").length;
-  const draftsCount = requests.filter((r) => r.status === "draft").length;
-  const historyCount = requests.filter((r) => r.status === "closed").length;
+  const activeCount = sourcingRequests.filter((r) => r.status === "open" || r.status === "urgent").length;
+  const draftsCount = sourcingRequests.filter((r) => r.status === "draft").length;
+  const historyCount = sourcingRequests.filter((r) => r.status === "closed").length;
 
   const handleCreateRequest = () => {
     setView("create");
@@ -333,12 +235,8 @@ export function SourcingRequests() {
 
   const handleSaveDraft = async () => {
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      // Create draft request
-      const newRequest: SourcingRequest = {
-        id: `draft-${Date.now()}`,
-        requestId: `REQ-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`,
+    try {
+      const newRequest: Partial<SourcingRequest> = {
         title: formData.productType || "Draft Request",
         productType: formData.productType === "Fresh OFSP Roots" ? "fresh_roots" : formData.productType === "OFSP Flour" ? "process_grade" : "planting_vines",
         status: "draft",
@@ -354,22 +252,21 @@ export function SourcingRequests() {
         recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
         nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
       };
-      setRequests((prev) => [...prev, newRequest]);
+      await createRequest(newRequest);
       setIsSubmitting(false);
       setView("list");
       setActiveTab("drafts");
-    }, 1000);
+    } catch (error) {
+      console.error("Failed to save draft:", error);
+      setIsSubmitting(false);
+    }
   };
 
   const handlePublishRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      // Create active request
-      const newRequest: SourcingRequest = {
-        id: `req-${Date.now()}`,
-        requestId: `REQ-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`,
+    try {
+      const newRequest: Partial<SourcingRequest> = {
         title: formData.productType || "New Request",
         productType: formData.productType === "Fresh OFSP Roots" ? "fresh_roots" : formData.productType === "OFSP Flour" ? "process_grade" : "planting_vines",
         status: "open",
@@ -385,12 +282,15 @@ export function SourcingRequests() {
         recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
         nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
       };
-      setRequests((prev) => [...prev, newRequest]);
+      await createRequest(newRequest);
       setIsSubmitting(false);
       setView("list");
       setActiveTab("active");
       handleCancel();
-    }, 1000);
+    } catch (error) {
+      console.error("Failed to publish request:", error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleReviewOffer = (offer: SupplierOffer) => {
@@ -400,30 +300,19 @@ export function SourcingRequests() {
 
   const handleAcceptOffer = async (offer: SupplierOffer) => {
     setIsAcceptingOffer(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
-      // Update request fulfillment
-      setRequests((prev) =>
-        prev.map((req) =>
-          req.id === selectedRequest?.id
-            ? {
-                ...req,
-                fulfilled: req.fulfilled + (offer.quantityUnit === "tons" ? offer.quantity : offer.quantity / 1000),
-              }
-            : req
-        )
-      );
-      if (selectedRequest) {
-        setSelectedRequest({
-          ...selectedRequest,
-          fulfilled:
-            selectedRequest.fulfilled + (offer.quantityUnit === "tons" ? offer.quantity : offer.quantity / 1000),
-        });
+    try {
+      if (offer.id && selectedRequest) {
+        await acceptSupplierOffer(offer.id);
+        // Refresh sourcing requests
+        await fetchSourcingRequests(sourcingRequestFilters);
+        setIsAcceptingOffer(false);
+        setReviewDialogOpen(false);
+        setSelectedOffer(null);
       }
+    } catch (error) {
+      console.error("Failed to accept offer:", error);
       setIsAcceptingOffer(false);
-      setReviewDialogOpen(false);
-      setSelectedOffer(null);
-    }, 1000);
+    }
   };
 
   const handleRejectOffer = async (offer: SupplierOffer) => {
@@ -455,8 +344,7 @@ export function SourcingRequests() {
 
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
-    // TODO: Replace with actual API call
-    setTimeout(() => {
+    try {
       if (selectedRequest) {
         const unit: "kg" | "tons" | "units" =
           formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg";
@@ -474,14 +362,15 @@ export function SourcingRequests() {
           recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
           nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
         };
-        setRequests((prev) =>
-          prev.map((req) => (req.id === selectedRequest.id ? updatedRequest : req))
-        );
-        setSelectedRequest(updatedRequest);
+        await updateRequest(selectedRequest.id, updatedRequest);
+        await fetchSourcingRequests(sourcingRequestFilters);
       }
-      setIsSubmitting(false);
       setEditDialogOpen(false);
-    }, 1000);
+    } catch (error) {
+      console.error("Failed to update sourcing request:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Show manage request view
@@ -490,6 +379,8 @@ export function SourcingRequests() {
     const supplierOffers: SupplierOffer[] = [
       {
         id: "1",
+        sourcingRequestId: selectedRequest.id,
+        farmerId: "farmer-1",
         supplierName: "Green Valley Coop",
         rating: 4.8,
         quantity: 1200,
@@ -498,9 +389,12 @@ export function SourcingRequests() {
         grade: "A",
         batchId: "BATCH-2023-004",
         qrCode: "QR-BATCH-2023-004",
+        createdAt: new Date().toISOString(),
       },
       {
         id: "2",
+        sourcingRequestId: selectedRequest.id,
+        farmerId: "farmer-2",
         supplierName: "James Mutua",
         isNewSupplier: true,
         quantity: 500,
@@ -509,9 +403,12 @@ export function SourcingRequests() {
         grade: "B",
         batchId: "BATCH-2023-005",
         qrCode: "QR-BATCH-2023-005",
+        createdAt: new Date().toISOString(),
       },
       {
         id: "3",
+        sourcingRequestId: selectedRequest.id,
+        farmerId: "farmer-3",
         supplierName: "Mary Wanjiku",
         rating: 4.5,
         quantity: 800,
@@ -520,9 +417,12 @@ export function SourcingRequests() {
         grade: "A",
         batchId: "BATCH-2023-006",
         qrCode: "QR-BATCH-2023-006",
+        createdAt: new Date().toISOString(),
       },
       {
         id: "4",
+        sourcingRequestId: selectedRequest.id,
+        farmerId: "farmer-4",
         supplierName: "Peter Kamau",
         rating: 4.2,
         quantity: 600,
@@ -531,9 +431,12 @@ export function SourcingRequests() {
         grade: "A",
         batchId: "BATCH-2023-007",
         qrCode: "QR-BATCH-2023-007",
+        createdAt: new Date().toISOString(),
       },
       {
         id: "5",
+        sourcingRequestId: selectedRequest.id,
+        farmerId: "farmer-5",
         supplierName: "Jane Wambui",
         rating: 4.9,
         quantity: 100,
@@ -542,6 +445,7 @@ export function SourcingRequests() {
         grade: "A",
         batchId: "BATCH-2023-008",
         qrCode: "QR-BATCH-2023-008",
+        createdAt: new Date().toISOString(),
       },
     ];
 

@@ -22,86 +22,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface Farmer {
-  id: string;
-  name: string;
-  phone: string;
-  subCounty: string;
-  ward: string;
-  totalSales: number;
-  orderCount: number;
-  lastActivity: string;
-  status: "active" | "inactive";
-  registrationDate: string;
-}
+import { useProfile } from "@/contexts/ProfileContext";
+import type { FarmerProfile } from "@/types/profile";
 
 export function Farmers() {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const { profiles, fetchProfiles, isLoading } = useProfile();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [subCountyFilter, setSubCountyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [farmerGroupFilter, setFarmerGroupFilter] = useState<string>("all");
-  const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
+  const [selectedFarmer, setSelectedFarmer] = useState<FarmerProfile | null>(null);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalFarmers: 0,
-    activeFarmers: 0,
-    inactiveFarmers: 0,
-    newRegistrations: 0,
-  });
 
+  // Fetch farmers on mount
   useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setFarmers([
-        {
-          id: "F001",
-          name: "John Mutua",
-          phone: "+254712345678",
-          subCounty: "Kangundo",
-          ward: "Kangundo North",
-          totalSales: 125000,
-          orderCount: 45,
-          lastActivity: "2024-01-15",
-          status: "active",
-          registrationDate: "2023-06-01",
-        },
-        {
-          id: "F002",
-          name: "Mary Wanjiku",
-          phone: "+254723456789",
-          subCounty: "Kathiani",
-          ward: "Kathiani Central",
-          totalSales: 98000,
-          orderCount: 32,
-          lastActivity: "2024-01-14",
-          status: "active",
-          registrationDate: "2023-07-15",
-        },
-        {
-          id: "F003",
-          name: "Peter Kariuki",
-          phone: "+254734567890",
-          subCounty: "Kangundo",
-          ward: "Kangundo South",
-          totalSales: 45000,
-          orderCount: 12,
-          lastActivity: "2024-01-10",
-          status: "inactive",
-          registrationDate: "2023-08-20",
-        },
-      ]);
-      setIsLoading(false);
-      setStats({
-        totalFarmers: 3,
-        activeFarmers: 2,
-        inactiveFarmers: 1,
-        newRegistrations: 0,
-      });
-    }, 1000);
-  }, []);
+    fetchProfiles({ role: "farmer" });
+  }, [fetchProfiles]);
+
+  // Filter profiles to get only farmers
+  const farmers = profiles.filter(p => p.role === "farmer") as FarmerProfile[];
+
+  // Calculate stats
+  const stats = {
+    totalFarmers: farmers.length,
+    activeFarmers: farmers.filter(f => f.status === "active").length,
+    inactiveFarmers: farmers.filter(f => f.status === "inactive").length,
+    newRegistrations: farmers.filter(f => {
+      const regDate = new Date(f.createdAt);
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      return regDate >= monthAgo;
+    }).length,
+  };
 
   const subCounties = Array.from(new Set(farmers.map((f) => f.subCounty)));
 
@@ -374,15 +327,10 @@ export function Farmers() {
               <div className="flex gap-2 pt-4 border-t">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // TODO: Implement deactivate
-                    setFarmers(
-                      farmers.map((f) =>
-                        f.id === selectedFarmer.id
-                          ? { ...f, status: f.status === "active" ? "inactive" : "active" }
-                          : f
-                      )
-                    );
+                  onClick={async () => {
+                    // TODO: Implement deactivate through context
+                    // For now, just close the dialog
+                    // The actual update should be done through ProfileContext
                     setIsProfileDialogOpen(false);
                   }}
                 >

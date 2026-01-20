@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,68 +12,26 @@ import {
 } from "@/components/ui/dialog";
 import { IconTruck, IconMapPin, IconPhoto, IconCheck } from "@tabler/icons-react";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
-
-interface Delivery {
-  id: string;
-  type: string;
-  from: string;
-  to: string;
-  fromCoordinates?: [number, number]; // [lat, lng]
-  toCoordinates?: [number, number]; // [lat, lng]
-  currentCoordinates?: [number, number]; // [lat, lng]
-  distance: number;
-  status: "pickup" | "in_transit" | "delivered";
-  progress: number;
-  eta: string;
-  amount: number;
-  requester: string;
-  weight: number;
-  description: string;
-  currentLocation?: string;
-}
+import { useTransport } from "@/contexts/TransportContext";
+import { useAuth } from "@/contexts/AuthContext";
+import type { Delivery } from "@/types/transport";
 
 export default function ActiveDeliveries() {
-  const [deliveries, setDeliveries] = useState<Delivery[]>([
-    {
-      id: "1",
-      type: "Produce Pickup",
-      from: "John Kamau Farm",
-      to: "Kangundo Centre",
-      fromCoordinates: [-1.2833, 37.3500], // Kangundo area coordinates
-      toCoordinates: [-1.2833, 37.3667], // Kangundo Centre
-      currentCoordinates: [-1.2900, 37.3600], // Current location (in transit)
-      distance: 12,
-      status: "in_transit",
-      progress: 65,
-      eta: "15 min",
-      amount: 1000,
-      requester: "John Kamau",
-      weight: 250,
-      description: "250kg OFSP Grade A",
-      currentLocation: "7.8km from destination",
-    },
-    {
-      id: "2",
-      type: "Input Delivery",
-      from: "AgriInputs Warehouse",
-      to: "Mary Wanjiku Farm",
-      fromCoordinates: [-1.3000, 37.3400], // AgriInputs Warehouse
-      toCoordinates: [-1.3100, 37.3300], // Mary Wanjiku Farm
-      distance: 8,
-      status: "pickup",
-      progress: 10,
-      eta: "5 min",
-      amount: 500,
-      requester: "AgriInputs Co.",
-      weight: 50,
-      description: "50kg NPK Fertilizer",
-      currentLocation: "At pickup location",
-    },
-  ]);
-
+  const { activeDeliveries, fetchActiveDeliveries, updateRequestStatus, isLoading } = useTransport();
+  const { user } = useAuth();
+  
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+
+  // Fetch active deliveries on mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchActiveDeliveries();
+    }
+  }, [user?.id, fetchActiveDeliveries]);
+
+  const deliveries = activeDeliveries;
 
   const handleViewDetails = (delivery: Delivery) => {
     setSelectedDelivery(delivery);
@@ -85,12 +43,17 @@ export default function ActiveDeliveries() {
     setPhotoDialogOpen(true);
   };
 
-  const handleCompleteDelivery = (id: string) => {
-    setDeliveries(deliveries.map(d =>
-      d.id === id ? { ...d, status: "delivered" as const, progress: 100 } : d
-    ));
-    alert("Delivery marked as complete!");
-    setDetailsDialogOpen(false);
+  const handleCompleteDelivery = async (id: string) => {
+    try {
+      await updateRequestStatus(id, "delivered");
+      alert("Delivery marked as complete!");
+      setDetailsDialogOpen(false);
+      // Refresh active deliveries
+      await fetchActiveDeliveries();
+    } catch (error) {
+      console.error("Failed to complete delivery:", error);
+      alert("Failed to complete delivery. Please try again.");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -156,12 +119,12 @@ export default function ActiveDeliveries() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{delivery.progress}%</span>
+                  <span className="font-medium">{delivery.progress || 0}%</span>
                 </div>
-                <Progress value={delivery.progress} className="h-2" />
+                <Progress value={delivery.progress || 0} className="h-2" />
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>📍 {delivery.currentLocation}</span>
-                  <span>⏱️ ETA: {delivery.eta}</span>
+                  <span>📍 {delivery.currentLocation || "Unknown"}</span>
+                  <span>⏱️ ETA: {delivery.eta || delivery.estimatedArrival || "N/A"}</span>
                 </div>
               </div>
 
@@ -249,16 +212,18 @@ export default function ActiveDeliveries() {
                         }
                       : undefined
                   }
-                  status={selectedDelivery.status}
+                  status={selectedDelivery.status === "in_transit" || selectedDelivery.status === "delivered" 
+                    ? selectedDelivery.status 
+                    : "in_transit"}
                   distance={selectedDelivery.distance}
-                  eta={selectedDelivery.eta}
+                  eta={selectedDelivery.eta || selectedDelivery.estimatedArrival}
                 />
               )}
 
               <div className="space-y-3">
                 <div>
                   <div className="text-sm text-muted-foreground">Requester</div>
-                  <div className="font-medium">{selectedDelivery.requester}</div>
+                  <div className="font-medium">{selectedDelivery.requesterName || selectedDelivery.requester}</div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -289,16 +254,16 @@ export default function ActiveDeliveries() {
 
                 <div>
                   <div className="text-sm text-muted-foreground mb-2">Delivery Progress</div>
-                  <Progress value={selectedDelivery.progress} className="h-3" />
+                  <Progress value={selectedDelivery.progress || 0} className="h-3" />
                   <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>{selectedDelivery.progress}% Complete</span>
-                    <span>ETA: {selectedDelivery.eta}</span>
+                    <span>{selectedDelivery.progress || 0}% Complete</span>
+                    <span>ETA: {selectedDelivery.eta || selectedDelivery.estimatedArrival || "N/A"}</span>
                   </div>
                 </div>
 
                 <div>
                   <div className="text-sm text-muted-foreground">Current Location</div>
-                  <div className="font-medium">{selectedDelivery.currentLocation}</div>
+                  <div className="font-medium">{selectedDelivery.currentLocation || "Unknown"}</div>
                 </div>
 
                 <div>
@@ -309,7 +274,7 @@ export default function ActiveDeliveries() {
                 </div>
               </div>
 
-              {selectedDelivery.status === "in_transit" && selectedDelivery.progress > 90 && (
+              {selectedDelivery.status === "in_transit" && (selectedDelivery.progress || 0) > 90 && (
                 <Button
                   onClick={() => handleCompleteDelivery(selectedDelivery.id)}
                   className="w-full"

@@ -26,7 +26,10 @@ import {
   IconCheck,
   IconX,
 } from "@tabler/icons-react";
+import { useProfile } from "@/contexts/ProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
+import type { Profile, ProfileStatus } from "@/types/profile";
 
 interface Permission {
   id: string;
@@ -35,31 +38,35 @@ interface Permission {
   category: "read" | "write" | "delete" | "admin";
 }
 
-interface User {
-  id: string;
-  name: string;
-  email?: string;
-  phone: string;
-  role: UserRole;
-  status: "active" | "inactive" | "suspended";
-  createdAt: string;
-  lastLogin?: string;
-  permissions?: string[];
-}
-
 export function Users() {
-  const [users, setUsers] = useState<User[]>([]);
+  const { profiles, fetchProfiles, isLoading } = useProfile();
+  const { user: currentUser } = useAuth();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
     role: "farmer" as UserRole,
+  });
+
+  // Fetch users on mount
+  useEffect(() => {
+    fetchProfiles();
+  }, [fetchProfiles]);
+
+  // Filter users based on search and filters
+  const users = profiles.filter((profile) => {
+    const matchesSearch =
+      profile.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (profile.email && profile.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      profile.phone.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = roleFilter === "all" || profile.role === roleFilter;
+    return matchesSearch && matchesRole;
   });
 
   const availablePermissions: Permission[] = [
@@ -75,66 +82,16 @@ export function Users() {
     { id: "data.export", name: "Export Data", description: "Export system data", category: "write" },
   ];
 
-  useEffect(() => {
-    // TODO: Replace with actual API calls
-    setTimeout(() => {
-      setUsers([
-        {
-          id: "U001",
-          name: "John Mutua",
-          email: "john@example.com",
-          phone: "+254712345678",
-          role: "farmer",
-          status: "active",
-          createdAt: "2023-06-01",
-          lastLogin: "2024-01-15",
-          permissions: ["transactions.view"],
-        },
-        {
-          id: "U002",
-          name: "Sarah Mwangi",
-          email: "sarah@example.com",
-          phone: "+254723456789",
-          role: "buyer",
-          status: "active",
-          createdAt: "2023-07-15",
-          lastLogin: "2024-01-14",
-        },
-        {
-          id: "U003",
-          name: "David Kimani",
-          phone: "+254734567890",
-          role: "officer",
-          status: "active",
-          createdAt: "2023-05-10",
-          lastLogin: "2024-01-15",
-        },
-        {
-          id: "U004",
-          name: "Mary Wanjiku",
-          email: "mary@example.com",
-          phone: "+254745678901",
-          role: "staff",
-          status: "active",
-          createdAt: "2023-04-20",
-          lastLogin: "2024-01-15",
-          permissions: [
-            "users.read",
-            "users.write",
-            "reports.read",
-            "reports.export",
-            "analytics.view",
-            "settings.manage",
-            "roles.manage",
-            "data.export",
-          ],
-        },
-      ]);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
+  // Local state for user updates (since profiles come from context)
+  const [userUpdates, setUserUpdates] = useState<Record<string, Partial<Profile>>>({});
 
-  const filteredUsers = users.filter((user) => {
+  // Merge profiles with local updates
+  const usersWithUpdates = users.map(user => ({
+    ...user,
+    ...userUpdates[user.id],
+  }));
+
+  const filteredUsers = usersWithUpdates.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.phone.includes(searchQuery) ||
@@ -144,17 +101,8 @@ export function Users() {
   });
 
   const handleCreateUser = () => {
-    // TODO: Implement user creation
-    const newUser: User = {
-      id: `U${String(users.length + 1).padStart(3, "0")}`,
-      name: formData.name,
-      email: formData.email || undefined,
-      phone: formData.phone,
-      role: formData.role,
-      status: "active",
-      createdAt: new Date().toISOString().split("T")[0],
-    };
-    setUsers([...users, newUser]);
+    // TODO: Implement user creation through ProfileContext
+    alert("User creation should be implemented through ProfileContext");
     setIsDialogOpen(false);
     setFormData({ name: "", email: "", phone: "", role: "farmer" });
   };
@@ -165,17 +113,24 @@ export function Users() {
   };
 
   const handleDeactivate = (userId: string) => {
-    // TODO: Implement deactivation
-    setUsers(users.map((u) => (u.id === userId ? { ...u, status: "inactive" } : u)));
+    // TODO: Implement deactivation through ProfileContext
+    setUserUpdates(prev => ({
+      ...prev,
+      [userId]: { ...prev[userId], status: "inactive" as ProfileStatus },
+    }));
   };
 
-  const handleManagePermissions = (user: User) => {
+  const handleManagePermissions = (user: Profile) => {
     setSelectedUser(user);
     setIsPermissionsDialogOpen(true);
   };
 
   const handleSavePermissions = (userId: string, permissions: string[]) => {
-    setUsers(users.map((u) => (u.id === userId ? { ...u, permissions } : u)));
+    // TODO: Implement permissions update through ProfileContext
+    setUserUpdates(prev => ({
+      ...prev,
+      [userId]: { ...prev[userId], permissions },
+    }));
     setIsPermissionsDialogOpen(false);
     setSelectedUser(null);
   };
@@ -306,13 +261,13 @@ export function Users() {
                       </Badge>
                     </TableCell>
                     <TableCell>{user.createdAt}</TableCell>
-                    <TableCell>{user.lastLogin || "Never"}</TableCell>
+                    <TableCell>N/A</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleManagePermissions(user)}
+                          onClick={() => handleManagePermissions(user as Profile)}
                           title="Manage Permissions"
                         >
                           <IconKey className="h-4 w-4" />
