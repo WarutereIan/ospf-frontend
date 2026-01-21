@@ -22,6 +22,7 @@ import {
   IconShoppingCart,
   IconTruckDelivery,
   IconRefresh,
+  IconMessageCircle,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,24 +37,27 @@ interface MenuItem {
 
 // Farmer menu items
 const farmerMenuItems: MenuItem[] = [
-  { name: "My Dashboard", path: "/dashboard/farmer", icon: IconChartBar },
-  { name: "Marketplace", path: "/marketplace", icon: IconShoppingBag },
+  { name: "Buyer Requests", path: "/farmer/marketplace", icon: IconShoppingBag },
+  { name: "My RFQs", path: "/dashboard/farmer/rfqs", icon: IconFileText },
   { name: "Inputs", path: "/marketplace/inputs", icon: IconSeeding },
   { name: "My Produce", path: "/dashboard/produce", icon: IconPackage },
   { name: "Orders", path: "/dashboard/orders", icon: IconPackage },
-  { name: "Leaderboard", path: "/dashboard/leaderboard", icon: IconTrophy },
-  { name: "Market Info", path: "/dashboard/market-info", icon: IconInfoCircle },
+  { name: "Negotiations", path: "/dashboard/farmer/negotiations", icon: IconMessageCircle },
+  { name: "Analytics", path: "/dashboard/farmer/analytics", icon: IconChartBar },
 ];
 
 // Buyer menu items
 const buyerMenuItems: MenuItem[] = [
-  { name: "My Dashboard", path: "/dashboard/buyer", icon: IconChartBar },
+ 
   { name: "Marketplace", path: "/dashboard/buyer/marketplace", icon: IconShoppingBag },
   { name: "My Orders", path: "/dashboard/buyer/orders", icon: IconPackage },
   { name: "Sourcing Requests", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
+  { name: "RFQs", path: "/dashboard/buyer/rfqs", icon: IconFileText },
+  { name: "Negotiations", path: "/dashboard/buyer/negotiations", icon: IconMessageCircle },
   { name: "Deliveries", path: "/dashboard/buyer/deliveries", icon: IconTruck },
   { name: "Collection", path: "/dashboard/buyer/collection", icon: IconTruckDelivery },
   { name: "Rate Farmers", path: "/dashboard/buyer/ratings", icon: IconStar },
+  { name: "Analytics", path: "/dashboard/buyer", icon: IconChartBar }
 ];
 
 // Officer menu items

@@ -24,6 +24,13 @@ import type {
   SourcingRequest,
   SupplierOffer,
   RecurringOrder,
+  Negotiation,
+  NegotiationMessage,
+  NegotiationFilters,
+  RFQ,
+  RFQResponse,
+  RFQFilters,
+  RFQResponseFilters,
   MarketplaceFilters,
   MarketplaceOrderFilters,
   SourcingRequestFilters,
@@ -152,5 +159,262 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
     totalSourcingRequests: 0,
     activeSourcingRequests: 0,
     totalRecurringOrders: 0,
+    totalNegotiations: 0,
+    activeNegotiations: 0,
+    totalRFQs: 0,
+    activeRFQs: 0,
+  };
+}
+
+// ==================== Negotiation Functions ====================
+
+/**
+ * Get negotiations
+ * GET /api/marketplace/negotiations
+ */
+export async function getNegotiations(filters?: NegotiationFilters): Promise<Negotiation[]> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return [];
+}
+
+/**
+ * Get negotiation by ID
+ * GET /api/marketplace/negotiations/:id
+ */
+export async function getNegotiationById(id: string): Promise<Negotiation | null> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return null;
+}
+
+/**
+ * Initiate negotiation
+ * POST /api/marketplace/negotiations
+ */
+export async function initiateNegotiation(
+  listingId: string,
+  message: Partial<NegotiationMessage>
+): Promise<ApiResponse<Negotiation>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as Negotiation, 
+    message: "Negotiation initiated successfully" 
+  };
+}
+
+/**
+ * Send negotiation message (counter offer)
+ * POST /api/marketplace/negotiations/:id/messages
+ */
+export async function sendNegotiationMessage(
+  negotiationId: string,
+  message: Partial<NegotiationMessage>
+): Promise<ApiResponse<Negotiation>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as Negotiation, 
+    message: "Message sent successfully" 
+  };
+}
+
+/**
+ * Accept negotiation terms
+ * POST /api/marketplace/negotiations/:id/accept
+ */
+export async function acceptNegotiation(negotiationId: string): Promise<ApiResponse<Negotiation>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as Negotiation, 
+    message: "Negotiation accepted" 
+  };
+}
+
+/**
+ * Reject negotiation
+ * POST /api/marketplace/negotiations/:id/reject
+ */
+export async function rejectNegotiation(negotiationId: string): Promise<ApiResponse<Negotiation>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as Negotiation, 
+    message: "Negotiation rejected" 
+  };
+}
+
+/**
+ * Convert negotiation to order
+ * POST /api/marketplace/negotiations/:id/convert-to-order
+ */
+export async function convertNegotiationToOrder(
+  negotiationId: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as MarketplaceOrder, 
+    message: "Order created from negotiation" 
+  };
+}
+
+// ==================== RFQ Functions ====================
+
+/**
+ * Get RFQs
+ * GET /api/marketplace/rfqs
+ */
+export async function getRFQs(filters?: RFQFilters): Promise<RFQ[]> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return [];
+}
+
+/**
+ * Get RFQ by ID
+ * GET /api/marketplace/rfqs/:id
+ */
+export async function getRFQById(id: string): Promise<RFQ | null> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return null;
+}
+
+/**
+ * Create RFQ
+ * POST /api/marketplace/rfqs
+ */
+export async function createRFQ(rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: rfq as RFQ, 
+    message: "RFQ created successfully" 
+  };
+}
+
+/**
+ * Update RFQ
+ * PUT /api/marketplace/rfqs/:id
+ */
+export async function updateRFQ(id: string, rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: rfq as RFQ, 
+    message: "RFQ updated successfully" 
+  };
+}
+
+/**
+ * Publish RFQ
+ * POST /api/marketplace/rfqs/:id/publish
+ */
+export async function publishRFQ(id: string): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as RFQ, 
+    message: "RFQ published successfully" 
+  };
+}
+
+/**
+ * Close RFQ
+ * POST /api/marketplace/rfqs/:id/close
+ */
+export async function closeRFQ(id: string): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as RFQ, 
+    message: "RFQ closed successfully" 
+  };
+}
+
+/**
+ * Cancel RFQ
+ * POST /api/marketplace/rfqs/:id/cancel
+ */
+export async function cancelRFQ(id: string): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as RFQ, 
+    message: "RFQ cancelled successfully" 
+  };
+}
+
+/**
+ * Get RFQ responses
+ * GET /api/marketplace/rfqs/:id/responses
+ */
+export async function getRFQResponses(
+  rfqId: string,
+  filters?: RFQResponseFilters
+): Promise<RFQResponse[]> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return [];
+}
+
+/**
+ * Submit RFQ response (quote)
+ * POST /api/marketplace/rfqs/:id/responses
+ */
+export async function submitRFQResponse(
+  rfqId: string,
+  response: Partial<RFQResponse>
+): Promise<ApiResponse<RFQResponse>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: response as RFQResponse, 
+    message: "Quote submitted successfully" 
+  };
+}
+
+/**
+ * Get RFQ response by ID
+ * GET /api/marketplace/rfqs/:rfqId/responses/:responseId
+ */
+export async function getRFQResponseById(
+  rfqId: string,
+  responseId: string
+): Promise<RFQResponse | null> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return null;
+}
+
+/**
+ * Update RFQ response status (shortlist, reject, award)
+ * PUT /api/marketplace/rfqs/:rfqId/responses/:responseId/status
+ */
+export async function updateRFQResponseStatus(
+  rfqId: string,
+  responseId: string,
+  status: RFQResponse["status"]
+): Promise<ApiResponse<RFQResponse>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as RFQResponse, 
+    message: "Response status updated" 
+  };
+}
+
+/**
+ * Award RFQ to supplier(s)
+ * POST /api/marketplace/rfqs/:id/award
+ */
+export async function awardRFQ(
+  rfqId: string,
+  responseIds: string[]
+): Promise<ApiResponse<RFQ>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as RFQ, 
+    message: "RFQ awarded successfully" 
+  };
+}
+
+/**
+ * Convert RFQ response to order
+ * POST /api/marketplace/rfqs/:rfqId/responses/:responseId/convert-to-order
+ */
+export async function convertRFQResponseToOrder(
+  rfqId: string,
+  responseId: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
+  return { 
+    data: {} as MarketplaceOrder, 
+    message: "Order created from RFQ response" 
   };
 }

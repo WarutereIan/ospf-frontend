@@ -35,7 +35,8 @@ import {
 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
-import { NegotiationDialog } from "@/components/messaging/NegotiationDialog";
+import { NegotiationDialog } from "@/components/marketplace/NegotiationDialog";
+import { InitiateNegotiationButton } from "@/components/marketplace/InitiateNegotiationButton";
 import { SmartMatching } from "@/components/marketplace/SmartMatching";
 import { BulkOrderCart } from "./BulkOrderCart";
 import { AdvanceOrderForm, type AdvanceOrderData } from "@/components/buyer/AdvanceOrderForm";
@@ -94,7 +95,6 @@ export function MarketplacePage() {
   const [selectedListing, setSelectedListing] = useState<ProduceListing | null>(null);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [rfqDialogOpen, setRfqDialogOpen] = useState(false);
-  const [negotiationDialogOpen, setNegotiationDialogOpen] = useState(false);
   const [bulkCartOpen, setBulkCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [showSmartMatching, setShowSmartMatching] = useState(false);
@@ -640,18 +640,12 @@ export function MarketplacePage() {
                         <IconShoppingCart className="h-4 w-4" />
                         Order Now
                       </Button>
-                      <Button
+                      <InitiateNegotiationButton
+                        listing={listing}
                         variant="outline"
                         size="icon"
-                          className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
-                        onClick={() => {
-                          setSelectedListing(listing);
-                          setNegotiationDialogOpen(true);
-                        }}
-                        title="Message Farmer"
-                      >
-                        <IconMessageCircle className="h-[18px] w-[18px]" />
-                      </Button>
+                        className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
+                      />
                       <Button
                         variant="outline"
                           className="px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors"
@@ -834,18 +828,7 @@ export function MarketplacePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Negotiation Dialog */}
-      {selectedListing && (
-        <NegotiationDialog
-          open={negotiationDialogOpen}
-          onOpenChange={setNegotiationDialogOpen}
-          listingId={selectedListing.id}
-          farmerName={selectedListing.farmerName}
-          buyerName="Current Buyer" // TODO: Get from context
-          currentPrice={selectedListing.pricePerKg}
-          currentQuantity={selectedListing.availableQuantity}
-        />
-      )}
+      {/* Negotiation Dialog - Now handled by InitiateNegotiationButton */}
 
       {/* Bulk Order Cart */}
       <BulkOrderCart

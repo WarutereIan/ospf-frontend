@@ -7,7 +7,7 @@ export function DashboardPage() {
   // Redirect to role-specific dashboard
   switch (role) {
     case "farmer":
-      return <Navigate to="/dashboard/farmer" replace />;
+      return <Navigate to="/farmer/marketplace" replace />;
     case "buyer":
       return <Navigate to="/dashboard/buyer" replace />;
     case "officer":

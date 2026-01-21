@@ -13,6 +13,13 @@ import type {
   SourcingRequest,
   SupplierOffer,
   RecurringOrder,
+  Negotiation,
+  NegotiationMessage,
+  NegotiationFilters,
+  RFQ,
+  RFQResponse,
+  RFQFilters,
+  RFQResponseFilters,
   MarketplaceFilters,
   MarketplaceOrderFilters,
   SourcingRequestFilters,
@@ -38,6 +45,26 @@ import {
   createRecurringOrder,
   updateRecurringOrder,
   cancelRecurringOrder,
+  getNegotiations,
+  getNegotiationById,
+  initiateNegotiation,
+  sendNegotiationMessage,
+  acceptNegotiation,
+  rejectNegotiation,
+  convertNegotiationToOrder,
+  getRFQs,
+  getRFQById,
+  createRFQ,
+  updateRFQ,
+  publishRFQ,
+  closeRFQ,
+  cancelRFQ,
+  getRFQResponses,
+  submitRFQResponse,
+  getRFQResponseById,
+  updateRFQResponseStatus,
+  awardRFQ,
+  convertRFQResponseToOrder,
   getMarketplaceStats,
 } from "@/services/marketplaceService";
 
@@ -60,6 +87,16 @@ interface MarketplaceContextType {
   
   // Recurring Orders State
   recurringOrders: RecurringOrder[];
+  
+  // Negotiations State
+  negotiations: Negotiation[];
+  selectedNegotiation: Negotiation | null;
+  negotiationFilters: NegotiationFilters;
+  
+  // RFQs State
+  rfqs: RFQ[];
+  selectedRFQ: RFQ | null;
+  rfqFilters: RFQFilters;
   
   // Statistics
   stats: MarketplaceStats | null;
@@ -102,6 +139,34 @@ interface MarketplaceContextType {
   updateRecurringOrder: (id: string, order: Partial<RecurringOrder>) => Promise<void>;
   cancelRecurringOrder: (id: string) => Promise<void>;
   
+  // Negotiation Actions
+  fetchNegotiations: (filters?: NegotiationFilters) => Promise<void>;
+  fetchNegotiationById: (id: string) => Promise<void>;
+  initiateNegotiation: (listingId: string, message: Partial<NegotiationMessage>) => Promise<Negotiation | null>;
+  sendNegotiationMessage: (negotiationId: string, message: Partial<NegotiationMessage>) => Promise<void>;
+  acceptNegotiation: (negotiationId: string) => Promise<void>;
+  rejectNegotiation: (negotiationId: string) => Promise<void>;
+  convertNegotiationToOrder: (negotiationId: string) => Promise<MarketplaceOrder | null>;
+  setNegotiationFilters: (filters: NegotiationFilters) => void;
+  clearSelectedNegotiation: () => void;
+  
+  // RFQ Actions
+  fetchRFQs: (filters?: RFQFilters) => Promise<void>;
+  fetchRFQById: (id: string) => Promise<void>;
+  createRFQ: (rfq: Partial<RFQ>) => Promise<void>;
+  updateRFQ: (id: string, rfq: Partial<RFQ>) => Promise<void>;
+  publishRFQ: (id: string) => Promise<void>;
+  closeRFQ: (id: string) => Promise<void>;
+  cancelRFQ: (id: string) => Promise<void>;
+  fetchRFQResponses: (rfqId: string, filters?: RFQResponseFilters) => Promise<RFQResponse[]>;
+  submitRFQResponse: (rfqId: string, response: Partial<RFQResponse>) => Promise<void>;
+  fetchRFQResponseById: (rfqId: string, responseId: string) => Promise<void>;
+  updateRFQResponseStatus: (rfqId: string, responseId: string, status: RFQResponse["status"]) => Promise<void>;
+  awardRFQ: (rfqId: string, responseIds: string[]) => Promise<void>;
+  convertRFQResponseToOrder: (rfqId: string, responseId: string) => Promise<MarketplaceOrder | null>;
+  setRFQFilters: (filters: RFQFilters) => void;
+  clearSelectedRFQ: () => void;
+  
   // Stats Actions
   fetchStats: () => Promise<void>;
   
@@ -126,6 +191,14 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [sourcingRequestFilters, setSourcingRequestFiltersState] = useState<SourcingRequestFilters>({});
   
   const [recurringOrders, setRecurringOrders] = useState<RecurringOrder[]>([]);
+  
+  const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
+  const [selectedNegotiation, setSelectedNegotiation] = useState<Negotiation | null>(null);
+  const [negotiationFilters, setNegotiationFiltersState] = useState<NegotiationFilters>({});
+  
+  const [rfqs, setRFQs] = useState<RFQ[]>([]);
+  const [selectedRFQ, setSelectedRFQ] = useState<RFQ | null>(null);
+  const [rfqFilters, setRFQFiltersState] = useState<RFQFilters>({});
   
   const [stats, setStats] = useState<MarketplaceStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -460,6 +533,367 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Negotiation Actions
+  const fetchNegotiations = useCallback(async (newFilters?: NegotiationFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const appliedFilters = newFilters || negotiationFilters;
+      const data = await getNegotiations(appliedFilters);
+      setNegotiations(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch negotiations");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [negotiationFilters]);
+
+  const fetchNegotiationById = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const negotiation = await getNegotiationById(id);
+      setSelectedNegotiation(negotiation);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch negotiation");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const initiateNegotiationAction = useCallback(async (listingId: string, message: Partial<NegotiationMessage>): Promise<Negotiation | null> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await initiateNegotiation(listingId, message);
+      // Refresh negotiations - call service function directly
+      const data = await getNegotiations(negotiationFilters);
+      setNegotiations(data);
+      return result.data || null;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to initiate negotiation");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [negotiationFilters]);
+
+  const sendNegotiationMessageAction = useCallback(async (negotiationId: string, message: Partial<NegotiationMessage>) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await sendNegotiationMessage(negotiationId, message);
+      // Refresh negotiation - call service function directly
+      const negotiation = await getNegotiationById(negotiationId);
+      setSelectedNegotiation(negotiation);
+      const data = await getNegotiations(negotiationFilters);
+      setNegotiations(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [negotiationFilters]);
+
+  const acceptNegotiationAction = useCallback(async (negotiationId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await acceptNegotiation(negotiationId);
+      // Refresh negotiations - call service function directly
+      const data = await getNegotiations(negotiationFilters);
+      setNegotiations(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to accept negotiation");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [negotiationFilters]);
+
+  const rejectNegotiationAction = useCallback(async (negotiationId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await rejectNegotiation(negotiationId);
+      // Refresh negotiations - call service function directly
+      const data = await getNegotiations(negotiationFilters);
+      setNegotiations(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reject negotiation");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [negotiationFilters]);
+
+  const convertNegotiationToOrderAction = useCallback(async (negotiationId: string): Promise<MarketplaceOrder | null> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await convertNegotiationToOrder(negotiationId);
+      // Refresh orders and negotiations - call service functions directly
+      const ordersData = await getMarketplaceOrders(orderFilters);
+      setOrders(ordersData);
+      const negotiationsData = await getNegotiations(negotiationFilters);
+      setNegotiations(negotiationsData);
+      return result.data || null;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to convert negotiation to order");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderFilters, negotiationFilters]);
+
+  const setNegotiationFilters = useCallback((newFilters: NegotiationFilters) => {
+    setNegotiationFiltersState(newFilters);
+    // Call service function directly to avoid circular dependency
+    void (async () => {
+      try {
+        const data = await getNegotiations(newFilters);
+        setNegotiations(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch negotiations");
+      }
+    })();
+  }, []);
+
+  const clearSelectedNegotiation = useCallback(() => {
+    setSelectedNegotiation(null);
+  }, []);
+
+  // RFQ Actions
+  const fetchRFQs = useCallback(async (newFilters?: RFQFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const appliedFilters = newFilters || rfqFilters;
+      const data = await getRFQs(appliedFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch RFQs");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const fetchRFQById = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const rfq = await getRFQById(id);
+      setSelectedRFQ(rfq);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const createRFQAction = useCallback(async (rfq: Partial<RFQ>) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await createRFQ(rfq);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const updateRFQAction = useCallback(async (id: string, rfq: Partial<RFQ>) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await updateRFQ(id, rfq);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const publishRFQAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await publishRFQ(id);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to publish RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const closeRFQAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await closeRFQ(id);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to close RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const cancelRFQAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await cancelRFQ(id);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to cancel RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const fetchRFQResponses = useCallback(async (rfqId: string, filters?: RFQResponseFilters): Promise<RFQResponse[]> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getRFQResponses(rfqId, filters);
+      // Update selected RFQ with responses
+      if (selectedRFQ?.id === rfqId) {
+        setSelectedRFQ({ ...selectedRFQ, responses: data });
+      }
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch RFQ responses");
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedRFQ]);
+
+  const submitRFQResponseAction = useCallback(async (rfqId: string, response: Partial<RFQResponse>) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await submitRFQResponse(rfqId, response);
+      // Refresh RFQ responses - call service function directly
+      const data = await getRFQResponses(rfqId);
+      if (selectedRFQ?.id === rfqId) {
+        setSelectedRFQ({ ...selectedRFQ, responses: data });
+      }
+      // Refresh RFQs list
+      const rfqsData = await getRFQs(rfqFilters);
+      setRFQs(rfqsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit RFQ response");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedRFQ, rfqFilters]);
+
+  const fetchRFQResponseById = useCallback(async (rfqId: string, responseId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await getRFQResponseById(rfqId, responseId);
+      // Update selected RFQ with the response
+      if (selectedRFQ?.id === rfqId && response) {
+        const updatedResponses = selectedRFQ.responses?.map(r => 
+          r.id === responseId ? response : r
+        ) || [response];
+        setSelectedRFQ({ ...selectedRFQ, responses: updatedResponses });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch RFQ response");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedRFQ]);
+
+  const updateRFQResponseStatusAction = useCallback(async (rfqId: string, responseId: string, status: RFQResponse["status"]) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await updateRFQResponseStatus(rfqId, responseId, status);
+      // Refresh RFQ responses - call service function directly
+      const data = await getRFQResponses(rfqId);
+      if (selectedRFQ?.id === rfqId) {
+        setSelectedRFQ({ ...selectedRFQ, responses: data });
+      }
+      // Refresh RFQs list
+      const rfqsData = await getRFQs(rfqFilters);
+      setRFQs(rfqsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update RFQ response status");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedRFQ, rfqFilters]);
+
+  const awardRFQAction = useCallback(async (rfqId: string, responseIds: string[]) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await awardRFQ(rfqId, responseIds);
+      // Refresh RFQs - call service function directly
+      const data = await getRFQs(rfqFilters);
+      setRFQs(data);
+      const rfq = await getRFQById(rfqId);
+      setSelectedRFQ(rfq);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to award RFQ");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rfqFilters]);
+
+  const convertRFQResponseToOrderAction = useCallback(async (rfqId: string, responseId: string): Promise<MarketplaceOrder | null> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await convertRFQResponseToOrder(rfqId, responseId);
+      // Refresh orders and RFQs - call service functions directly
+      const ordersData = await getMarketplaceOrders(orderFilters);
+      setOrders(ordersData);
+      const rfqsData = await getRFQs(rfqFilters);
+      setRFQs(rfqsData);
+      return result.data || null;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to convert RFQ response to order");
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderFilters, rfqFilters]);
+
+  const setRFQFilters = useCallback((newFilters: RFQFilters) => {
+    setRFQFiltersState(newFilters);
+    // Call service function directly to avoid circular dependency
+    void (async () => {
+      try {
+        const data = await getRFQs(newFilters);
+        setRFQs(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch RFQs");
+      }
+    })();
+  }, []);
+
+  const clearSelectedRFQ = useCallback(() => {
+    setSelectedRFQ(null);
+  }, []);
+
   // Stats Actions
   const fetchStats = useCallback(async () => {
     setIsLoading(true);
@@ -483,6 +917,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     fetchOrders();
     fetchSourcingRequests();
     fetchRecurringOrders();
+    fetchNegotiations();
+    fetchRFQs();
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -500,6 +936,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     selectedSourcingRequest,
     sourcingRequestFilters,
     recurringOrders,
+    negotiations,
+    selectedNegotiation,
+    negotiationFilters,
+    rfqs,
+    selectedRFQ,
+    rfqFilters,
     stats,
     isLoading,
     error,
@@ -528,6 +970,30 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     createRecurringOrder: createRecurringOrderAction,
     updateRecurringOrder: updateRecurringOrderAction,
     cancelRecurringOrder: cancelRecurringOrderAction,
+    fetchNegotiations,
+    fetchNegotiationById,
+    initiateNegotiation: initiateNegotiationAction,
+    sendNegotiationMessage: sendNegotiationMessageAction,
+    acceptNegotiation: acceptNegotiationAction,
+    rejectNegotiation: rejectNegotiationAction,
+    convertNegotiationToOrder: convertNegotiationToOrderAction,
+    setNegotiationFilters,
+    clearSelectedNegotiation,
+    fetchRFQs,
+    fetchRFQById,
+    createRFQ: createRFQAction,
+    updateRFQ: updateRFQAction,
+    publishRFQ: publishRFQAction,
+    closeRFQ: closeRFQAction,
+    cancelRFQ: cancelRFQAction,
+    fetchRFQResponses,
+    submitRFQResponse: submitRFQResponseAction,
+    fetchRFQResponseById,
+    updateRFQResponseStatus: updateRFQResponseStatusAction,
+    awardRFQ: awardRFQAction,
+    convertRFQResponseToOrder: convertRFQResponseToOrderAction,
+    setRFQFilters,
+    clearSelectedRFQ,
     fetchStats,
     filteredListings,
     filteredOrders,

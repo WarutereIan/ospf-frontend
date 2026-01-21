@@ -26,6 +26,7 @@ import { ProduceManagement } from "@/pages/farmer/ProduceManagement";
 import { FarmerOrders } from "@/pages/farmer/FarmerOrders";
 import { PeerLeaderboard } from "@/pages/farmer/PeerLeaderboard";
 import { MarketInfo } from "@/pages/farmer/MarketInfo";
+import { Analytics as FarmerAnalytics } from "@/pages/farmer/Analytics";
 import { Farmers } from "@/pages/officer/Farmers";
 import { Reports } from "@/pages/officer/Reports";
 import { Centers } from "@/pages/officer/Centers";
@@ -50,6 +51,10 @@ import { Ratings } from "@/pages/buyer/Ratings";
 import { CollectionReceiving } from "@/pages/buyer/CollectionReceiving";
 import { LogisticsDeliveries } from "@/pages/buyer/LogisticsDeliveries";
 import { SourcingRequests } from "@/pages/buyer/SourcingRequests";
+import { RFQManagement } from "@/pages/buyer/RFQManagement";
+import { NegotiationList } from "@/components/marketplace/NegotiationList";
+import { RFQList } from "@/pages/farmer/RFQList";
+import { BuyerRequests } from "@/pages/farmer/BuyerRequests";
 import InputManagement from "@/pages/inputs/InputManagement";
 import InputOrders from "@/pages/inputs/InputOrders";
 import InputCustomers from "@/pages/inputs/InputCustomers";
@@ -91,14 +96,30 @@ export function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/marketplace" element={<MarketplacePage />} />
+            <Route path="/farmer/marketplace" element={<BuyerRequests />} />
             <Route path="/dashboard/buyer/marketplace" element={<MarketplacePage />} />
             
             {/* General Dashboard - redirects based on role */}
             <Route path="/dashboard" element={<DashboardPage />} />
             
-            {/* Role-based Dashboards */}
-            <Route path="/dashboard/farmer" element={<FarmerDashboard />} />
+            {/* Farmer Routes - More specific routes first */}
+            <Route path="/dashboard/farmer/rfqs" element={<RFQList />} />
+            <Route path="/dashboard/farmer/negotiations" element={<NegotiationList />} />
+            <Route path="/dashboard/farmer/analytics" element={<FarmerAnalytics />} />
+            <Route path="/dashboard/farmer" element={<BuyerRequests />} />
+            
+            {/* Buyer Routes - More specific routes first */}
+            <Route path="/dashboard/buyer/rfqs" element={<RFQManagement />} />
+            <Route path="/dashboard/buyer/negotiations" element={<NegotiationList />} />
+            <Route path="/dashboard/buyer/orders/:id" element={<BuyerOrderDetails />} />
+            <Route path="/dashboard/buyer/orders" element={<BuyerOrders />} />
+            <Route path="/dashboard/buyer/ratings" element={<Ratings />} />
+            <Route path="/dashboard/buyer/rate/:orderId" element={<RateFarmerPage />} />
+            <Route path="/dashboard/buyer/collection" element={<CollectionReceiving />} />
+            <Route path="/dashboard/buyer/deliveries" element={<LogisticsDeliveries />} />
             <Route path="/dashboard/buyer" element={<BuyerDashboard />} />
+            
+            {/* Other Role-based Dashboards */}
             <Route path="/dashboard/county-officer" element={<OfficerDashboard />} />
             <Route path="/dashboard/staff" element={<StaffDashboard />} />
             <Route path="/dashboard/aggregation" element={<AggregationManagerDashboard />} />
@@ -110,16 +131,6 @@ export function App() {
             <Route path="/dashboard/produce/new" element={<ProduceManagement />} />
             <Route path="/dashboard/orders" element={<FarmerOrders />} />
             <Route path="/dashboard/orders/:id" element={<FarmerOrders />} />
-            <Route path="/dashboard/leaderboard" element={<PeerLeaderboard />} />
-            <Route path="/dashboard/market-info" element={<MarketInfo />} />
-            
-            {/* Buyer Routes */}
-            <Route path="/dashboard/buyer/orders" element={<BuyerOrders />} />
-            <Route path="/dashboard/buyer/orders/:id" element={<BuyerOrderDetails />} />
-            <Route path="/dashboard/buyer/ratings" element={<Ratings />} />
-            <Route path="/dashboard/buyer/rate/:orderId" element={<RateFarmerPage />} />
-            <Route path="/dashboard/buyer/collection" element={<CollectionReceiving />} />
-            <Route path="/dashboard/buyer/deliveries" element={<LogisticsDeliveries />} />
             
             {/* Aggregation Manager Routes */}
             <Route path="/dashboard/aggregation/stock-in" element={<StockInForm />} />

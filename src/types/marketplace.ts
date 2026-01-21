@@ -293,6 +293,198 @@ export interface SourcingRequestFilters {
 }
 
 /**
+ * Negotiation Status
+ */
+export type NegotiationStatus = 
+  | "pending"      // Initial offer sent, waiting for response
+  | "counter_offer" // Counter offer made
+  | "accepted"     // Terms agreed upon
+  | "rejected"     // Negotiation rejected
+  | "expired"      // Negotiation expired
+  | "converted";   // Converted to order
+
+/**
+ * Negotiation Message
+ * Represents a message/offer in a negotiation thread
+ */
+export interface NegotiationMessage {
+  id: string; // UUID
+  negotiationId: string;
+  senderId: string; // Buyer or Farmer ID
+  senderName: string;
+  senderType: "buyer" | "farmer";
+  message?: string; // Optional text message
+  pricePerKg?: number; // Proposed price per kg
+  quantity?: number; // Proposed quantity (kg)
+  totalAmount?: number; // Calculated total
+  isCounterOffer: boolean; // Whether this is a counter offer
+  createdAt: string; // ISO 8601
+  readAt?: string; // ISO 8601
+}
+
+/**
+ * Negotiation
+ * Represents a negotiation between buyer and farmer for a listing
+ */
+export interface Negotiation {
+  id: string; // UUID
+  negotiationNumber: string; // Human-readable negotiation number
+  listingId: string; // Reference to produce listing
+  listing?: ProduceListing; // Denormalized listing data
+  farmerId: string;
+  farmerName: string;
+  farmerPhone?: string;
+  buyerId: string;
+  buyerName: string;
+  buyerPhone?: string;
+  status: NegotiationStatus;
+  // Original listing details
+  originalPricePerKg: number;
+  originalQuantity: number;
+  // Current negotiated terms
+  negotiatedPricePerKg?: number;
+  negotiatedQuantity?: number;
+  negotiatedTotalAmount?: number;
+  // Messages/offers in the negotiation
+  messages: NegotiationMessage[];
+  // Expiration
+  expiresAt?: string; // ISO 8601
+  // Conversion to order
+  orderId?: string; // If converted to order
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+  lastMessageAt?: string; // ISO 8601 - Last message timestamp
+}
+
+/**
+ * Negotiation Filters
+ */
+export interface NegotiationFilters {
+  status?: NegotiationStatus | "all";
+  farmerId?: string;
+  buyerId?: string;
+  listingId?: string;
+  dateRange?: {
+    start: string; // ISO 8601
+    end: string; // ISO 8601
+  };
+  searchQuery?: string;
+}
+
+/**
+ * RFQ Status
+ * Request for Quotation status
+ */
+export type RFQStatus = 
+  | "draft"       // RFQ being created
+  | "published"   // RFQ published, accepting quotes
+  | "closed"      // RFQ closed, no more quotes accepted
+  | "evaluating"  // Buyer evaluating quotes
+  | "awarded"     // RFQ awarded to supplier(s)
+  | "cancelled";  // RFQ cancelled
+
+/**
+ * RFQ Response Status
+ * Status of a supplier's response to an RFQ
+ */
+export type RFQResponseStatus = 
+  | "draft"       // Response being prepared
+  | "submitted"  // Response submitted
+  | "under_review" // Under buyer review
+  | "shortlisted" // Shortlisted by buyer
+  | "awarded"    // Awarded/selected
+  | "rejected"   // Rejected by buyer
+  | "withdrawn"; // Withdrawn by supplier
+
+/**
+ * RFQ (Request for Quotation)
+ * Enhanced sourcing request with RFQ workflow
+ */
+export interface RFQ extends SourcingRequest {
+  // RFQ-specific fields
+  rfqNumber: string; // Human-readable RFQ number
+  rfqStatus: RFQStatus;
+  // Quote submission details
+  quoteDeadline: string; // ISO 8601 - Deadline for quote submission
+  evaluationDeadline?: string; // ISO 8601 - Deadline for evaluation
+  // Response management
+  responses?: RFQResponse[]; // Supplier responses/quotes
+  totalResponses?: number; // Number of responses received
+  // Award details
+  awardedTo?: string[]; // IDs of awarded suppliers
+  awardedAt?: string; // ISO 8601
+  // Terms and conditions
+  termsAndConditions?: string;
+  evaluationCriteria?: string; // How quotes will be evaluated
+  // Attachments
+  attachments?: string[]; // RFQ document attachments
+}
+
+/**
+ * RFQ Response
+ * Supplier's quote/response to an RFQ
+ */
+export interface RFQResponse {
+  id: string; // UUID
+  rfqId: string; // Reference to RFQ
+  supplierId: string; // Farmer/Supplier ID
+  supplierName: string;
+  supplierRating?: number;
+  status: RFQResponseStatus;
+  // Quote details
+  quantity: number; // Quantity offered
+  quantityUnit: "kg" | "tons" | "units";
+  pricePerUnit: number; // Price per unit
+  priceUnit: "kg" | "unit";
+  totalAmount: number; // Total quote amount
+  // Product details
+  variety?: OFSPVariety;
+  qualityGrade: QualityGrade;
+  batchId?: string; // Batch ID for traceability
+  qrCode?: string; // QR code
+  // Delivery terms
+  deliveryTime?: string; // Estimated delivery time
+  deliveryLocation?: string;
+  paymentTerms?: string; // Payment terms offered
+  // Additional information
+  notes?: string; // Additional notes from supplier
+  attachments?: string[]; // Response attachments
+  // Timeline
+  submittedAt?: string; // ISO 8601
+  evaluatedAt?: string; // ISO 8601
+  awardedAt?: string; // ISO 8601
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601
+}
+
+/**
+ * RFQ Filters
+ */
+export interface RFQFilters {
+  status?: RFQStatus | "all";
+  productType?: SourcingProductType | "all";
+  buyerId?: string;
+  dateRange?: {
+    start: string; // ISO 8601
+    end: string; // ISO 8601
+  };
+  searchQuery?: string;
+}
+
+/**
+ * RFQ Response Filters
+ */
+export interface RFQResponseFilters {
+  rfqId?: string;
+  supplierId?: string;
+  status?: RFQResponseStatus | "all";
+  dateRange?: {
+    start: string; // ISO 8601
+    end: string; // ISO 8601
+  };
+}
+
+/**
  * Marketplace statistics
  */
 export interface MarketplaceStats {
@@ -308,4 +500,8 @@ export interface MarketplaceStats {
   totalSourcingRequests?: number;
   activeSourcingRequests?: number;
   totalRecurringOrders?: number;
+  totalNegotiations?: number;
+  activeNegotiations?: number;
+  totalRFQs?: number;
+  activeRFQs?: number;
 }
