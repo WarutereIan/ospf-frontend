@@ -41,6 +41,7 @@ const farmerMenuItems: MenuItem[] = [
   { name: "My RFQs", path: "/dashboard/farmer/rfqs", icon: IconFileText },
   { name: "Inputs", path: "/marketplace/inputs", icon: IconSeeding },
   { name: "My Produce", path: "/dashboard/produce", icon: IconPackage },
+  { name: "Pickup Schedules", path: "/dashboard/farmer/pickup-schedules", icon: IconTruck },
   { name: "Orders", path: "/dashboard/orders", icon: IconPackage },
   { name: "Negotiations", path: "/dashboard/farmer/negotiations", icon: IconMessageCircle },
   { name: "Analytics", path: "/dashboard/farmer/analytics", icon: IconChartBar },
@@ -109,6 +110,7 @@ const inputProviderMenuItems: MenuItem[] = [
 // Transport Provider menu items
 const transportProviderMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/transport-provider", icon: IconChartBar },
+  { name: "Pickup Schedules", path: "/dashboard/transport-provider/pickup-schedules", icon: IconTruck },
   { name: "Requests", path: "/dashboard/transport-requests", icon: IconTruck },
   { name: "Collection", path: "/dashboard/collection", icon: IconPackage },
   { name: "Active Deliveries", path: "/dashboard/deliveries", icon: IconTrendingUp },

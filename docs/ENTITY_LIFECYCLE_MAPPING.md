@@ -9,14 +9,19 @@
 
 1. [User Roles & Permissions](#user-roles--permissions)
 2. [Marketplace Order Lifecycle](#marketplace-order-lifecycle)
-3. [Input Order Lifecycle](#input-order-lifecycle)
-4. [Storage Batch Lifecycle](#storage-batch-lifecycle)
-5. [Transport Request Lifecycle](#transport-request-lifecycle)
-6. [Payment & Escrow Lifecycle](#payment--escrow-lifecycle)
-7. [Quality Check Lifecycle](#quality-check-lifecycle)
-8. [Notification System](#notification-system)
-9. [Data Points & Outputs](#data-points--outputs)
-10. [Improvement Opportunities](#improvement-opportunities)
+3. [Negotiation Lifecycle](#negotiation-lifecycle)
+4. [RFQ (Request for Quotation) Lifecycle](#rfq-request-for-quotation-lifecycle)
+5. [Sourcing Request Lifecycle](#sourcing-request-lifecycle)
+6. [Buyer Requests Workflow](#buyer-requests-workflow)
+7. [Farm Pickup Schedule Lifecycle](#farm-pickup-schedule-lifecycle)
+8. [Input Order Lifecycle](#input-order-lifecycle)
+9. [Storage Batch Lifecycle](#storage-batch-lifecycle)
+10. [Transport Request Lifecycle](#transport-request-lifecycle)
+11. [Payment & Escrow Lifecycle](#payment--escrow-lifecycle)
+12. [Quality Check Lifecycle](#quality-check-lifecycle)
+13. [Notification System](#notification-system)
+14. [Data Points & Outputs](#data-points--outputs)
+15. [Improvement Opportunities](#improvement-opportunities)
 
 ---
 
@@ -42,7 +47,13 @@
 │             │          │          │ Provider │ Provider │         │          │          │
 ├─────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┼──────────┤
 │ Farmer      │ Peer     │ Sell     │ Buy      │ Request  │ Deliver │ Report   │ -        │
+│             │          │ Negotiate│          │          │         │          │          │
+│             │          │ Respond  │          │          │         │          │          │
+│             │          │ to RFQ   │          │          │         │          │          │
 │ Buyer       │ Buy      │ -        │ -        │ Request  │ Receive │ Report   │ -        │
+│             │ Negotiate│          │          │          │         │          │          │
+│             │ Create   │          │          │          │         │          │          │
+│             │ RFQ      │          │          │          │         │          │          │
 │ Input Prov  │ Sell     │ -        │ -        │ Request  │ -       │ Report   │ -        │
 │ Transport   │ Service  │ Service  │ Service  │ -        │ Service │ Report   │ -        │
 │ Aggr Mgr    │ Receive  │ Deliver  │ -        │ Service  │ -       │ Report   │ -        │
@@ -50,6 +61,13 @@
 │ Staff       │ Manage   │ Manage   │ Manage   │ Manage   │ Manage  │ Manage   │ -        │
 └─────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┴──────────┘
 ```
+
+**Key Interactions:**
+- **Buyer ↔ Farmer:** Direct orders, Negotiations, RFQ responses, Sourcing requests
+- **Buyer → RFQ:** Create, publish, manage, award RFQs
+- **Farmer → RFQ:** Browse, respond, track responses
+- **Buyer → Negotiation:** Initiate, counter-offer, accept/reject
+- **Farmer → Negotiation:** Respond, counter-offer, accept/reject
 
 ---
 
@@ -67,26 +85,36 @@ delivered → completed
 - `order_placed` → `rejected` (farmer rejects)
 - `order_placed` → `cancelled` (buyer cancels)
 - Any status → `disputed` (dispute raised)
+- **Via Negotiation:** `negotiation_accepted` → `order_placed` (order created from accepted negotiation)
+- **Via RFQ:** `rfq_response_awarded` → `order_placed` (order created from awarded RFQ response)
 
 ### Detailed Lifecycle Stages
 
 #### 1. **Order Placed** (`order_placed`)
-**Trigger:** Buyer places order from listing or sourcing request
+**Trigger:** Buyer places order from listing, sourcing request, accepted negotiation, or awarded RFQ response
 
 **Actors:**
 - **Buyer:** Initiates order
 - **Farmer:** Receives notification
 
 **Actions:**
-- Buyer selects produce listing
-- Buyer specifies quantity, delivery location
+- Buyer selects produce listing, OR
+- Buyer accepts negotiation terms, OR
+- Buyer awards RFQ response, OR
+- Buyer responds to sourcing request
+- Buyer specifies quantity, delivery location (if not pre-determined)
 - System calculates total amount
 - Order created with unique order number
 - Batch ID generated for traceability
+- If from negotiation: Negotiation status updated to "converted"
+- If from RFQ: RFQ response status updated to "awarded"
 
 **Data Points:**
 - Order ID, Order Number
 - Listing ID (if from listing)
+- Negotiation ID (if from negotiation)
+- RFQ ID, RFQ Response ID (if from RFQ)
+- Sourcing Request ID (if from sourcing request)
 - Farmer ID, Buyer ID
 - Variety, Quantity, Quality Grade
 - Price per Kg, Total Amount
@@ -100,6 +128,8 @@ delivered → completed
 
 **Outputs:**
 - MarketplaceOrder record
+- Updated Negotiation (if applicable)
+- Updated RFQ Response (if applicable)
 - Activity log entry
 - Notification records (2)
 
@@ -421,6 +451,9 @@ delivered → completed
 
 **Related Entities:**
 - `ProduceListing` (source listing)
+- `Negotiation` (if from negotiation)
+- `RFQ`, `RFQResponse` (if from RFQ)
+- `SourcingRequest`, `SupplierOffer` (if from sourcing request)
 - `Payment` (payment record)
 - `EscrowTransaction` (escrow details)
 - `TransportRequest` (2x: pickup + delivery)
@@ -434,6 +467,985 @@ delivered → completed
 - `batchId`: Links to farmer's batch
 - `qrCode`: QR code for traceability
 - `orderNumber`: Human-readable identifier
+
+---
+
+## Negotiation Lifecycle
+
+### Overview
+
+Negotiations enable buyers and farmers to negotiate price, quantity, and terms before placing a direct order. This provides flexibility for both parties to reach mutually agreeable terms.
+
+### Status Flow
+
+```
+pending → counter_offer → accepted/rejected/expired → converted (if accepted)
+```
+
+**Alternative paths:**
+- `pending` → `rejected` (farmer rejects initial offer)
+- `pending` → `accepted` (farmer accepts initial offer)
+- `counter_offer` → `accepted` (buyer/farmer accepts counter)
+- `counter_offer` → `rejected` (buyer/farmer rejects counter)
+- `counter_offer` → `counter_offer` (another counter offer)
+- `accepted` → `converted` (order created from negotiation)
+- Any status → `expired` (negotiation expires)
+
+### Detailed Lifecycle Stages
+
+#### 1. **Negotiation Initiated** (`pending`)
+**Trigger:** Buyer initiates negotiation from a produce listing
+
+**Actors:**
+- **Buyer:** Initiates negotiation
+- **Farmer:** Receives notification
+
+**Actions:**
+- Buyer clicks "Negotiate" on listing
+- Buyer enters initial offer (price, quantity, optional message)
+- Negotiation created with status "pending"
+- Original listing details preserved
+- Negotiation thread started
+
+**Data Points:**
+- Negotiation ID
+- Listing ID
+- Buyer ID, Farmer ID
+- Initial Offer: Price per Kg, Quantity, Total Amount
+- Initial Message (optional)
+- Original Listing Price (for reference)
+- Status: "pending"
+- Created Timestamp
+- Expiration Date (if applicable)
+
+**Notifications:**
+- **To Farmer:** "New negotiation request from [Buyer Name] for [Listing Title]"
+- **To Buyer:** "Negotiation initiated. Waiting for farmer response"
+
+**Outputs:**
+- Negotiation record
+- NegotiationMessage record (initial offer)
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 2. **Counter Offer** (`counter_offer`)
+**Trigger:** Farmer or buyer sends a counter offer
+
+**Actors:**
+- **Farmer/Buyer:** Sends counter offer
+- **Counterparty:** Receives notification
+
+**Actions:**
+- Party reviews current offer
+- Party enters counter offer (price, quantity, message)
+- New message added to negotiation thread
+- Negotiation status updated to "counter_offer"
+- Previous offer terms preserved for reference
+
+**Data Points:**
+- Negotiation Message ID
+- Sender Type: "buyer" | "farmer"
+- Counter Offer: Price per Kg, Quantity, Total Amount
+- Message Text
+- Is Counter Offer: true
+- Previous Offer Terms (for comparison)
+- Sent Timestamp
+
+**Notifications:**
+- **To Counterparty:** "New counter offer received for negotiation #XXX"
+- **To Sender:** "Counter offer sent. Waiting for response"
+
+**Outputs:**
+- NegotiationMessage record
+- Updated Negotiation
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 3. **Negotiation Accepted** (`accepted`)
+**Trigger:** Farmer or buyer accepts the current offer terms
+
+**Actors:**
+- **Acceptor:** Accepts terms (Farmer or Buyer)
+- **Counterparty:** Receives confirmation
+
+**Actions:**
+- Party reviews final offer
+- Party accepts terms
+- Negotiation status updated to "accepted"
+- Terms locked (price, quantity, total amount)
+- Option to convert to order becomes available
+
+**Data Points:**
+- Accepted At Timestamp
+- Final Terms: Price per Kg, Quantity, Total Amount
+- Accepted By: Buyer ID or Farmer ID
+- Status: "accepted"
+
+**Notifications:**
+- **To Counterparty:** "Your negotiation #XXX has been accepted"
+- **To Acceptor:** "Negotiation accepted. You can now convert to order"
+
+**Outputs:**
+- Updated Negotiation
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 4. **Negotiation Rejected** (`rejected`)
+**Trigger:** Farmer or buyer rejects the current offer
+
+**Actors:**
+- **Rejector:** Rejects offer (Farmer or Buyer)
+- **Counterparty:** Receives notification
+
+**Actions:**
+- Party rejects current offer
+- Negotiation status updated to "rejected"
+- Negotiation closed (no further actions possible)
+- Option to start new negotiation remains
+
+**Data Points:**
+- Rejected At Timestamp
+- Rejected By: Buyer ID or Farmer ID
+- Rejection Reason (optional)
+- Status: "rejected"
+
+**Notifications:**
+- **To Counterparty:** "Negotiation #XXX has been rejected"
+- **To Rejector:** "Negotiation rejected"
+
+**Outputs:**
+- Updated Negotiation
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 5. **Negotiation Converted to Order** (`converted`)
+**Trigger:** Buyer converts accepted negotiation to marketplace order
+
+**Actors:**
+- **Buyer:** Converts to order
+- **Farmer:** Receives order notification
+
+**Actions:**
+- Buyer clicks "Convert to Order" on accepted negotiation
+- Marketplace order created with negotiated terms
+- Negotiation status updated to "converted"
+- Order proceeds through normal marketplace order lifecycle
+- Negotiation linked to order for traceability
+
+**Data Points:**
+- Order ID (newly created)
+- Negotiation ID (linked)
+- Negotiated Terms: Price per Kg, Quantity, Total Amount
+- Converted At Timestamp
+- Status: "converted"
+
+**Notifications:**
+- **To Farmer:** "Negotiation #XXX converted to order #YYY"
+- **To Buyer:** "Order #YYY created from negotiation #XXX"
+
+**Outputs:**
+- MarketplaceOrder record
+- Updated Negotiation
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 6. **Negotiation Expired** (`expired`)
+**Trigger:** Negotiation expires (time-based or deadline-based)
+
+**Actors:**
+- **System:** Auto-expires negotiation
+- **Buyer/Farmer:** Receive notification
+
+**Actions:**
+- System checks expiration date
+- Negotiation status updated to "expired"
+- Negotiation closed
+- Option to start new negotiation remains
+
+**Data Points:**
+- Expired At Timestamp
+- Expiration Reason
+- Status: "expired"
+
+**Notifications:**
+- **To Buyer:** "Negotiation #XXX has expired"
+- **To Farmer:** "Negotiation #XXX has expired"
+
+**Outputs:**
+- Updated Negotiation
+- Activity log entry
+- Notification records (2)
+
+---
+
+### Negotiation Data Model
+
+**Core Entity:** `Negotiation`
+
+**Related Entities:**
+- `ProduceListing` (source listing)
+- `MarketplaceOrder` (if converted)
+- `NegotiationMessage[]` (message thread)
+- `Notification[]` (multiple)
+
+**Key Fields:**
+- `id`: Unique negotiation ID
+- `listingId`: Source listing
+- `buyerId`, `farmerId`: Parties involved
+- `status`: Current status
+- `messages`: Array of negotiation messages
+- `currentPricePerKg`: Current negotiated price
+- `currentQuantity`: Current negotiated quantity
+- `expiresAt`: Expiration timestamp
+
+---
+
+## RFQ (Request for Quotation) Lifecycle
+
+### Overview
+
+RFQs (Requests for Quotation) enable buyers to publish structured sourcing requests that suppliers can respond to with quotes. This provides a competitive bidding process for bulk purchases.
+
+### Status Flow
+
+```
+draft → published → closed/evaluating → awarded/cancelled
+```
+
+**RFQ Response Status Flow:**
+```
+draft → submitted → under_review → shortlisted/awarded/rejected/withdrawn
+```
+
+**Alternative paths:**
+- `draft` → `cancelled` (buyer cancels before publishing)
+- `published` → `closed` (buyer closes without awarding)
+- `published` → `evaluating` (buyer reviewing responses)
+- `evaluating` → `awarded` (buyer awards to supplier(s))
+- `evaluating` → `closed` (buyer closes without awarding)
+- `awarded` → `converted` (order(s) created from awarded response(s))
+
+### Detailed Lifecycle Stages
+
+#### 1. **RFQ Created** (`draft`)
+**Trigger:** Buyer creates new RFQ
+
+**Actors:**
+- **Buyer:** Creates RFQ
+- **System:** Stores draft
+
+**Actions:**
+- Buyer navigates to RFQ Management
+- Buyer fills RFQ form (title, product type, quantity, price range, deadlines, etc.)
+- RFQ saved as draft
+- RFQ not visible to suppliers
+
+**Data Points:**
+- RFQ ID, RFQ Number
+- Buyer ID
+- Title, Product Type
+- Quantity, Unit
+- Price Range (min, max)
+- Quality Grade (optional)
+- Delivery Deadline
+- Quote Submission Deadline
+- Evaluation Deadline (optional)
+- Delivery Region
+- Additional Requirements
+- Terms and Conditions
+- Evaluation Criteria
+- Is Recurring flag
+- Recurring Frequency (if recurring)
+- Status: "draft"
+- Created Timestamp
+
+**Notifications:**
+- **To Buyer:** "RFQ draft saved"
+
+**Outputs:**
+- RFQ record
+- Activity log entry
+- Notification record (1)
+
+---
+
+#### 2. **RFQ Published** (`published`)
+**Trigger:** Buyer publishes RFQ
+
+**Actors:**
+- **Buyer:** Publishes RFQ
+- **Suppliers/Farmers:** Receive notification
+
+**Actions:**
+- Buyer reviews draft
+- Buyer clicks "Publish"
+- RFQ status updated to "published"
+- RFQ becomes visible to all suppliers
+- RFQ appears in supplier's "Buyer Requests" and "RFQ List" views
+- Notifications sent to relevant suppliers
+
+**Data Points:**
+- Published At Timestamp
+- Status: "published"
+- Visibility: "public"
+- Total Responses: 0 (initial)
+
+**Notifications:**
+- **To Suppliers:** "New RFQ published: [RFQ Title]"
+- **To Buyer:** "RFQ #XXX published successfully"
+
+**Outputs:**
+- Updated RFQ
+- Activity log entry
+- Notification records (multiple to suppliers + 1 to buyer)
+
+---
+
+#### 3. **RFQ Response Submitted** (`submitted`)
+**Trigger:** Supplier submits quote/response to RFQ
+
+**Actors:**
+- **Supplier/Farmer:** Submits quote
+- **Buyer:** Receives notification
+
+**Actions:**
+- Supplier browses published RFQs
+- Supplier views RFQ details
+- Supplier fills response form (quantity, price, quality grade, delivery time, etc.)
+- Supplier submits quote
+- RFQ Response created with status "submitted"
+- RFQ total responses count incremented
+
+**Data Points:**
+- RFQ Response ID
+- RFQ ID
+- Supplier ID, Supplier Name
+- Quantity Offered
+- Quantity Unit
+- Price Per Unit
+- Total Amount
+- Quality Grade
+- Delivery Time Estimate
+- Payment Terms
+- Batch ID (if available)
+- Notes
+- Status: "submitted"
+- Submitted At Timestamp
+
+**Notifications:**
+- **To Buyer:** "New quote received for RFQ #XXX from [Supplier Name]"
+- **To Supplier:** "Quote submitted successfully for RFQ #XXX"
+
+**Outputs:**
+- RFQResponse record
+- Updated RFQ (totalResponses incremented)
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 4. **RFQ Response Under Review** (`under_review`)
+**Trigger:** Buyer starts reviewing response
+
+**Actors:**
+- **Buyer:** Reviews response
+- **Supplier:** Status updated
+
+**Actions:**
+- Buyer views RFQ responses
+- Buyer opens response details
+- Response status updated to "under_review"
+- Buyer compares with other responses
+
+**Data Points:**
+- Reviewed At Timestamp
+- Status: "under_review"
+
+**Outputs:**
+- Updated RFQResponse
+- Activity log entry
+
+---
+
+#### 5. **RFQ Response Shortlisted** (`shortlisted`)
+**Trigger:** Buyer shortlists promising response
+
+**Actors:**
+- **Buyer:** Shortlists response
+- **Supplier:** Receives notification
+
+**Actions:**
+- Buyer identifies promising quotes
+- Buyer shortlists response(s)
+- Response status updated to "shortlisted"
+- Supplier notified of shortlisting
+
+**Data Points:**
+- Shortlisted At Timestamp
+- Status: "shortlisted"
+
+**Notifications:**
+- **To Supplier:** "Your quote for RFQ #XXX has been shortlisted"
+- **To Buyer:** "Response shortlisted"
+
+**Outputs:**
+- Updated RFQResponse
+- Activity log entry
+- Notification record (1)
+
+---
+
+#### 6. **RFQ Response Awarded** (`awarded`)
+**Trigger:** Buyer awards RFQ to supplier(s)
+
+**Actors:**
+- **Buyer:** Awards response
+- **Supplier:** Receives notification
+
+**Actions:**
+- Buyer selects winning response(s)
+- Buyer clicks "Award"
+- Response status updated to "awarded"
+- RFQ status updated to "awarded"
+- Option to convert to order becomes available
+- Other responses may be rejected
+
+**Data Points:**
+- Awarded At Timestamp
+- Awarded By: Buyer ID
+- Status: "awarded"
+- RFQ Status: "awarded"
+
+**Notifications:**
+- **To Supplier:** "Congratulations! Your quote for RFQ #XXX has been awarded"
+- **To Buyer:** "RFQ #XXX awarded to [Supplier Name]"
+- **To Other Suppliers:** "RFQ #XXX has been awarded to another supplier"
+
+**Outputs:**
+- Updated RFQResponse
+- Updated RFQ
+- Activity log entry
+- Notification records (multiple)
+
+---
+
+#### 7. **RFQ Response Converted to Order** (`converted`)
+**Trigger:** Buyer converts awarded response to marketplace order
+
+**Actors:**
+- **Buyer:** Converts to order
+- **Supplier:** Receives order notification
+
+**Actions:**
+- Buyer clicks "Convert to Order" on awarded response
+- Marketplace order created with RFQ response terms
+- RFQ Response status updated (if tracking conversion)
+- Order proceeds through normal marketplace order lifecycle
+- RFQ and RFQ Response linked to order for traceability
+
+**Data Points:**
+- Order ID (newly created)
+- RFQ ID, RFQ Response ID (linked)
+- Awarded Terms: Price Per Unit, Quantity, Total Amount
+- Converted At Timestamp
+
+**Notifications:**
+- **To Supplier:** "RFQ #XXX converted to order #YYY"
+- **To Buyer:** "Order #YYY created from RFQ #XXX"
+
+**Outputs:**
+- MarketplaceOrder record
+- Updated RFQResponse
+- Updated RFQ
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 8. **RFQ Closed** (`closed`)
+**Trigger:** Buyer closes RFQ (deadline reached or manually closed)
+
+**Actors:**
+- **Buyer:** Closes RFQ
+- **Suppliers:** Receive notification
+
+**Actions:**
+- Buyer closes RFQ (manually or auto-closed at deadline)
+- RFQ status updated to "closed"
+- No new responses accepted
+- Existing responses remain for review
+
+**Data Points:**
+- Closed At Timestamp
+- Closed By: Buyer ID (if manual)
+- Status: "closed"
+
+**Notifications:**
+- **To Suppliers:** "RFQ #XXX has been closed"
+- **To Buyer:** "RFQ #XXX closed"
+
+**Outputs:**
+- Updated RFQ
+- Activity log entry
+- Notification records (multiple)
+
+---
+
+#### 9. **RFQ Cancelled** (`cancelled`)
+**Trigger:** Buyer cancels RFQ
+
+**Actors:**
+- **Buyer:** Cancels RFQ
+- **Suppliers:** Receive notification
+
+**Actions:**
+- Buyer cancels RFQ
+- RFQ status updated to "cancelled"
+- All responses marked as cancelled/withdrawn
+- RFQ removed from active listings
+
+**Data Points:**
+- Cancelled At Timestamp
+- Cancelled By: Buyer ID
+- Cancellation Reason (optional)
+- Status: "cancelled"
+
+**Notifications:**
+- **To Suppliers:** "RFQ #XXX has been cancelled"
+- **To Buyer:** "RFQ #XXX cancelled"
+
+**Outputs:**
+- Updated RFQ
+- Updated RFQResponse records (all responses)
+- Activity log entry
+- Notification records (multiple)
+
+---
+
+### RFQ Data Model
+
+**Core Entity:** `RFQ` (extends `SourcingRequest`)
+
+**Related Entities:**
+- `RFQResponse[]` (supplier quotes)
+- `MarketplaceOrder[]` (if converted)
+- `Notification[]` (multiple)
+
+**Key Fields:**
+- `id`: Unique RFQ ID
+- `rfqNumber`: Human-readable RFQ number
+- `buyerId`: Buyer who created RFQ
+- `rfqStatus`: Current RFQ status
+- `quoteDeadline`: Deadline for quote submission
+- `evaluationDeadline`: Deadline for evaluation
+- `totalResponses`: Number of responses received
+- `awardedTo`: IDs of awarded suppliers
+
+---
+
+## Buyer Requests Workflow
+
+### Overview
+
+The Buyer Requests workflow provides farmers with a unified view of all buyer opportunities, including RFQs and Sourcing Requests. This streamlines the farmer's experience by consolidating buyer needs into a single marketplace-like interface.
+
+### Workflow Stages
+
+#### 1. **Farmer Views Buyer Requests**
+**Trigger:** Farmer navigates to Buyer Requests page
+
+**Actors:**
+- **Farmer:** Views opportunities
+- **System:** Aggregates RFQs and Sourcing Requests
+
+**Actions:**
+- Farmer navigates to `/farmer/marketplace` (Buyer Requests)
+- System fetches published RFQs and open Sourcing Requests
+- Requests displayed in unified card grid
+- Filters available (type, product, status, search)
+
+**Data Points:**
+- Request Type: "rfq" | "sourcing"
+- Request ID
+- Title, Product Type
+- Quantity, Unit
+- Price Range
+- Deadline
+- Buyer Name
+- Location
+- Response Count
+- Status
+
+**Outputs:**
+- Unified request cards display
+- Filtered and sorted results
+
+---
+
+#### 2. **Farmer Views Request Details**
+**Trigger:** Farmer clicks "View Details" on a request
+
+**Actors:**
+- **Farmer:** Views details
+- **System:** Displays full request information
+
+**Actions:**
+- Farmer clicks on request card
+- Details dialog opens
+- Full request information displayed
+- For RFQs: Shows RFQDetails component
+- For Sourcing Requests: Shows sourcing request details
+
+**Data Points:**
+- All request fields
+- Buyer information
+- Requirements
+- Terms and conditions
+- Evaluation criteria (for RFQs)
+
+**Outputs:**
+- Details dialog display
+
+---
+
+#### 3. **Farmer Submits Response**
+**Trigger:** Farmer submits quote (RFQ) or offer (Sourcing Request)
+
+**Actors:**
+- **Farmer:** Submits response
+- **Buyer:** Receives notification
+
+**Actions:**
+- **For RFQ:**
+  - Farmer clicks "Submit Quote"
+  - RFQResponseForm opens
+  - Farmer enters quote details
+  - Quote submitted
+  - RFQ Response created
+  
+- **For Sourcing Request:**
+  - Farmer clicks "Submit Offer"
+  - SupplierOfferForm opens
+  - Farmer enters offer details
+  - Offer submitted
+  - Supplier Offer created
+
+**Data Points:**
+- Response/Offer ID
+- Quantity Offered
+- Price Per Unit
+- Quality Grade
+- Delivery Time
+- Payment Terms
+- Batch ID (if available)
+- Notes
+
+**Notifications:**
+- **To Buyer:** "New quote/offer received for [Request Title]"
+- **To Farmer:** "Quote/offer submitted successfully"
+
+**Outputs:**
+- RFQResponse or SupplierOffer record
+- Updated Request (response count incremented)
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 4. **Farmer Tracks Responses**
+**Trigger:** Farmer views their submitted responses
+
+**Actors:**
+- **Farmer:** Views response status
+- **System:** Displays response tracking
+
+**Actions:**
+- Farmer navigates to "My RFQs" page
+- Farmer switches to "My Responses" tab
+- System filters RFQs where farmer has responded
+- Response status displayed (submitted, shortlisted, awarded, rejected)
+- Farmer can view response details and status updates
+
+**Data Points:**
+- Response Status
+- Response Details
+- Buyer Actions (if any)
+- Award Status (if awarded)
+
+**Outputs:**
+- Filtered RFQ list
+- Response status indicators
+
+---
+
+### Buyer Requests Data Model
+
+**Unified View:** Combines `RFQ[]` and `SourcingRequest[]`
+
+**Key Features:**
+- Single interface for all buyer opportunities
+- Unified filtering and search
+- Type indicators (RFQ vs Sourcing)
+- Status badges
+- Urgency indicators (deadline countdown)
+- Response tracking
+
+---
+
+## Sourcing Request Lifecycle
+
+### Overview
+
+Sourcing Requests enable buyers to post their procurement needs, allowing farmers to submit offers. This is a simpler alternative to RFQs, suitable for less structured procurement needs.
+
+### Status Flow
+
+```
+draft → open → closed/fulfilled
+```
+
+**Supplier Offer Status Flow:**
+```
+pending → accepted/rejected
+```
+
+**Alternative paths:**
+- `draft` → `cancelled` (buyer cancels before publishing)
+- `open` → `urgent` (deadline approaching)
+- `open` → `closed` (buyer closes)
+- `open` → `fulfilled` (order created from accepted offer)
+- `pending` (offer) → `accepted` → `converted` (order created)
+
+### Detailed Lifecycle Stages
+
+#### 1. **Sourcing Request Created** (`draft`)
+**Trigger:** Buyer creates sourcing request
+
+**Actors:**
+- **Buyer:** Creates request
+- **System:** Stores draft
+
+**Actions:**
+- Buyer navigates to Sourcing Requests
+- Buyer fills request form (product type, quantity, price range, deadline, etc.)
+- Request saved as draft
+- Request not visible to suppliers
+
+**Data Points:**
+- Request ID, Request Number
+- Buyer ID
+- Title, Product Type
+- Quantity, Unit
+- Price Range (optional)
+- Quality Grade (optional)
+- Deadline
+- Delivery Region
+- Additional Requirements
+- Is Recurring flag
+- Status: "draft"
+- Created Timestamp
+
+**Notifications:**
+- **To Buyer:** "Sourcing request draft saved"
+
+**Outputs:**
+- SourcingRequest record
+- Activity log entry
+- Notification record (1)
+
+---
+
+#### 2. **Sourcing Request Published** (`open`)
+**Trigger:** Buyer publishes sourcing request
+
+**Actors:**
+- **Buyer:** Publishes request
+- **Suppliers/Farmers:** Receive notification
+
+**Actions:**
+- Buyer reviews draft
+- Buyer clicks "Publish"
+- Request status updated to "open"
+- Request becomes visible to suppliers
+- Request appears in supplier's "Buyer Requests" view
+- Notifications sent to relevant suppliers
+
+**Data Points:**
+- Published At Timestamp
+- Status: "open"
+- Visibility: "public"
+- Supplier Count: 0 (initial)
+
+**Notifications:**
+- **To Suppliers:** "New sourcing request: [Request Title]"
+- **To Buyer:** "Sourcing request #XXX published successfully"
+
+**Outputs:**
+- Updated SourcingRequest
+- Activity log entry
+- Notification records (multiple to suppliers + 1 to buyer)
+
+---
+
+#### 3. **Supplier Offer Submitted** (`pending`)
+**Trigger:** Supplier submits offer to sourcing request
+
+**Actors:**
+- **Supplier/Farmer:** Submits offer
+- **Buyer:** Receives notification
+
+**Actions:**
+- Supplier browses open sourcing requests
+- Supplier views request details
+- Supplier fills offer form (quantity, price, quality grade, batch ID, etc.)
+- Supplier submits offer
+- Supplier Offer created with status "pending"
+- Request supplier count incremented
+
+**Data Points:**
+- Supplier Offer ID
+- Sourcing Request ID
+- Supplier ID, Supplier Name
+- Quantity Offered
+- Quantity Unit
+- Price Per Kg
+- Quality Grade
+- Batch ID (if available)
+- QR Code (if available)
+- Status: "pending"
+- Submitted At Timestamp
+
+**Notifications:**
+- **To Buyer:** "New offer received for sourcing request #XXX from [Supplier Name]"
+- **To Supplier:** "Offer submitted successfully for sourcing request #XXX"
+
+**Outputs:**
+- SupplierOffer record
+- Updated SourcingRequest (suppliers array updated)
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 4. **Supplier Offer Accepted** (`accepted`)
+**Trigger:** Buyer accepts supplier offer
+
+**Actors:**
+- **Buyer:** Accepts offer
+- **Supplier:** Receives notification
+
+**Actions:**
+- Buyer reviews offers
+- Buyer accepts offer
+- Offer status updated to "accepted"
+- Option to convert to order becomes available
+- Other offers may be rejected or remain pending
+
+**Data Points:**
+- Accepted At Timestamp
+- Accepted By: Buyer ID
+- Status: "accepted"
+
+**Notifications:**
+- **To Supplier:** "Your offer for sourcing request #XXX has been accepted"
+- **To Buyer:** "Offer accepted. You can now convert to order"
+
+**Outputs:**
+- Updated SupplierOffer
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 5. **Supplier Offer Converted to Order** (`converted`)
+**Trigger:** Buyer converts accepted offer to marketplace order
+
+**Actors:**
+- **Buyer:** Converts to order
+- **Supplier:** Receives order notification
+
+**Actions:**
+- Buyer clicks "Convert to Order" on accepted offer
+- Marketplace order created with offer terms
+- Sourcing Request status updated to "fulfilled" (if fully met)
+- Order proceeds through normal marketplace order lifecycle
+- Sourcing Request and Supplier Offer linked to order for traceability
+
+**Data Points:**
+- Order ID (newly created)
+- Sourcing Request ID, Supplier Offer ID (linked)
+- Offer Terms: Price Per Kg, Quantity, Total Amount
+- Converted At Timestamp
+
+**Notifications:**
+- **To Supplier:** "Sourcing request #XXX converted to order #YYY"
+- **To Buyer:** "Order #YYY created from sourcing request #XXX"
+
+**Outputs:**
+- MarketplaceOrder record
+- Updated SupplierOffer
+- Updated SourcingRequest
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 6. **Sourcing Request Closed** (`closed`)
+**Trigger:** Buyer closes request (deadline reached or manually closed)
+
+**Actors:**
+- **Buyer:** Closes request
+- **Suppliers:** Receive notification
+
+**Actions:**
+- Buyer closes request (manually or auto-closed at deadline)
+- Request status updated to "closed"
+- No new offers accepted
+- Existing offers remain for review
+
+**Data Points:**
+- Closed At Timestamp
+- Closed By: Buyer ID (if manual)
+- Status: "closed"
+
+**Notifications:**
+- **To Suppliers:** "Sourcing request #XXX has been closed"
+- **To Buyer:** "Sourcing request #XXX closed"
+
+**Outputs:**
+- Updated SourcingRequest
+- Activity log entry
+- Notification records (multiple)
+
+---
+
+### Sourcing Request Data Model
+
+**Core Entity:** `SourcingRequest`
+
+**Related Entities:**
+- `SupplierOffer[]` (supplier offers)
+- `MarketplaceOrder[]` (if converted)
+- `Notification[]` (multiple)
+
+**Key Fields:**
+- `id`: Unique request ID
+- `requestId`: Human-readable request number
+- `buyerId`: Buyer who created request
+- `status`: Current request status
+- `deadline`: Deadline for offers
+- `suppliers`: Array of supplier references who have responded
+- `fulfilled`: Quantity fulfilled
 
 ---
 
@@ -884,6 +1896,352 @@ pending → accepted → processing → ready_for_pickup → in_transit → deli
 
 ---
 
+## Farm Pickup Schedule Lifecycle
+
+### Overview
+
+Farm Pickup Schedules enable transport providers to create scheduled pickup routes from farms to aggregation centers. Farmers can browse available schedules and book slots, with capacity tracking for both transport and aggregation center storage. This system supports bulk deliveries to centers for fulfillment on behalf of farmers.
+
+### Status Flow
+
+```
+draft → published → active → completed/cancelled
+```
+
+**Alternative paths:**
+- `draft` → `cancelled` (provider cancels before publishing)
+- `published` → `cancelled` (provider cancels, all bookings cancelled)
+- `published` → `active` (schedule date arrives)
+- `active` → `completed` (pickup completed)
+
+### Detailed Lifecycle Stages
+
+#### 1. **Schedule Created** (`draft`)
+**Trigger:** Transport provider creates pickup schedule
+
+**Actors:**
+- **Transport Provider:** Creates schedule
+- **System:** Stores draft
+
+**Actions:**
+- Provider navigates to Pickup Schedule Management
+- Provider fills schedule form:
+  - Aggregation center destination
+  - Route name
+  - Scheduled date and time
+  - Total transport capacity
+  - Vehicle type
+  - Pricing (per kg or fixed)
+  - Pickup locations on route
+- Schedule saved as draft
+- Schedule not visible to farmers
+
+**Data Points:**
+- Schedule ID, Schedule Number
+- Provider ID, Provider Name
+- Aggregation Center ID, Center Name
+- Route Name
+- Scheduled Date, Scheduled Time
+- Estimated Arrival Time
+- Total Capacity (kg)
+- Used Capacity: 0 (initial)
+- Available Capacity: Total Capacity (initial)
+- Vehicle Type
+- Price Per Kg or Fixed Price
+- Pickup Locations Array
+- Status: "draft"
+- Created Timestamp
+
+**Notifications:**
+- **To Provider:** "Pickup schedule draft saved"
+
+**Outputs:**
+- FarmPickupSchedule record
+- Activity log entry
+- Notification record (1)
+
+---
+
+#### 2. **Schedule Published** (`published`)
+**Trigger:** Transport provider publishes schedule
+
+**Actors:**
+- **Transport Provider:** Publishes schedule
+- **Farmers:** Receive notification (if subscribed to route/center)
+- **System:** Syncs with aggregation center capacity
+
+**Actions:**
+- Provider reviews draft
+- Provider clicks "Publish"
+- Schedule status updated to "published"
+- Schedule becomes visible to farmers
+- System fetches aggregation center capacity
+- Capacity information displayed to farmers
+- Schedule appears in farmer's "Pickup Schedules" view
+
+**Data Points:**
+- Published At Timestamp
+- Status: "published"
+- Visibility: "public"
+- Center Available Capacity (synced)
+- Center Total Capacity (synced)
+
+**Notifications:**
+- **To Farmers:** "New pickup schedule available: [Route] to [Center]"
+- **To Provider:** "Schedule published successfully"
+
+**Outputs:**
+- Updated FarmPickupSchedule
+- AggregationCenterCapacity (synced)
+- Activity log entry
+- Notification records (multiple to farmers + 1 to provider)
+
+---
+
+#### 3. **Slot Booked** (`booked`)
+**Trigger:** Farmer books a slot in the schedule
+
+**Actors:**
+- **Farmer:** Books slot
+- **Transport Provider:** Receives booking
+- **System:** Updates capacity
+
+**Actions:**
+- Farmer browses available schedules
+- Farmer views schedule details (capacity, center capacity, route, pricing)
+- Farmer clicks "Book Pickup Slot"
+- Farmer enters booking details:
+  - Quantity (kg)
+  - Pickup location
+  - Notes (optional)
+- System validates:
+  - Quantity <= available transport capacity
+  - Quantity <= center available capacity
+- Booking created
+- Schedule capacity updated (usedCapacity incremented, availableCapacity decremented)
+- Transport request created (linked to schedule)
+
+**Data Points:**
+- PickupSlotBooking ID
+- Schedule ID, Slot ID
+- Farmer ID, Farmer Name
+- Quantity (kg)
+- Pickup Location
+- Contact Phone
+- Notes
+- Status: "confirmed"
+- Booked At Timestamp
+
+**Notifications:**
+- **To Provider:** "New booking on schedule [Route]: [Quantity] kg from [Farmer Name]"
+- **To Farmer:** "Slot booked successfully for [Route] on [Date]"
+
+**Outputs:**
+- PickupSlotBooking record
+- Updated FarmPickupSchedule (capacity updated)
+- TransportRequest record (linked to schedule)
+- Activity log entry
+- Notification records (2)
+
+---
+
+#### 4. **Pickup Confirmed & Batch Created** (`picked_up`)
+**Trigger:** Farmer confirms pickup when transport provider collects produce
+
+**Actors:**
+- **Farmer:** Confirms pickup and creates batch
+- **Transport Provider:** Collects produce
+- **System:** Generates batch ID, QR code, and receipt
+
+**Actions:**
+- Transport provider arrives at farmer's location
+- Provider collects produce
+- Farmer navigates to "My Pickup Bookings"
+- Farmer clicks "Confirm Pickup" on booking
+- Farmer enters batch information:
+  - Batch ID (auto-generated or manual)
+  - Produce variety
+  - Quality grade (A, B, or C)
+  - Photos (optional)
+  - Notes (optional)
+- System validates batch ID format
+- System generates QR code for batch traceability
+- Pickup receipt generated with:
+  - Receipt number
+  - Batch ID and QR code
+  - Pickup details (date, time, location)
+  - Quantity, variety, quality grade
+  - Farmer and provider information
+  - Destination aggregation center
+- Booking status updated to "picked_up"
+- Batch traceability lifecycle begins
+- Receipt stored and linked to booking
+
+**Data Points:**
+- Pickup Confirmed: true
+- Pickup Confirmed At Timestamp
+- Pickup Confirmed By: Farmer ID
+- Batch ID (created)
+- QR Code (generated)
+- Variety
+- Quality Grade
+- Photos (if provided)
+- Notes
+- Pickup Receipt ID
+- Status: "picked_up"
+
+**Notifications:**
+- **To Farmer:** "Pickup confirmed! Receipt generated. Batch ID: [BATCH-ID]"
+- **To Provider:** "Pickup confirmed by [Farmer Name]. Batch ID: [BATCH-ID]"
+- **To Aggregation Center:** "Incoming delivery with batch [BATCH-ID] from [Route]"
+
+**Outputs:**
+- Updated PickupSlotBooking (batch ID, confirmation data)
+- PickupReceipt record
+- Batch traceability record (first entry)
+- QR Code generated
+- Activity log entry
+- Notification records (3)
+
+**Key Features:**
+- **Batch Traceability Starts:** Batch ID is now traceable throughout the supply chain
+- **Receipt Generation:** Digital receipt with all pickup details
+- **QR Code:** Generated for easy batch scanning and tracking
+- **Lifecycle Continuity:** Batch continues through aggregation center, storage, quality checks, and delivery
+
+---
+
+#### 5. **Schedule Active** (`active`)
+**Trigger:** Schedule date arrives
+
+**Actors:**
+- **System:** Auto-activates schedule
+- **Transport Provider:** Executes pickup
+- **Farmers:** Track pickup
+
+**Actions:**
+- System checks scheduled date
+- Schedule status updated to "active"
+- Provider proceeds with pickup route
+- Provider collects from booked farmers
+- Collection status tracked per farmer
+
+**Data Points:**
+- Activated At Timestamp
+- Status: "active"
+- Collection Status per booking
+
+**Outputs:**
+- Updated FarmPickupSchedule
+- Updated PickupSlotBooking records
+- Activity log entry
+
+---
+
+#### 6. **Pickup Completed** (`completed`)
+**Trigger:** Produce delivered to aggregation center
+
+**Actors:**
+- **Transport Provider:** Delivers to center
+- **Aggregation Manager:** Receives stock
+- **Farmers:** Receive confirmation
+
+**Actions:**
+- Provider arrives at aggregation center
+- Stock in transaction created (linked to batch ID from pickup receipt)
+- Inventory updated (with batch ID for traceability)
+- Schedule status updated to "completed"
+- All bookings marked as "completed"
+- Transport request status updated to "delivered"
+- Batch traceability updated (new entry: "At Aggregation Center")
+
+**Data Points:**
+- Completed At Timestamp
+- Status: "completed"
+- Stock Transaction ID (linked to batch ID)
+- Inventory Item ID (linked to batch ID)
+- Total Quantity Delivered
+- Batch ID (from pickup receipt, now in inventory)
+
+**Notifications:**
+- **To Aggregation Manager:** "Stock received from [Route] schedule. Batch IDs: [list]"
+- **To Farmers:** "Your produce (Batch [BATCH-ID]) has been delivered to [Center]"
+- **To Provider:** "Schedule completed successfully"
+
+**Outputs:**
+- Updated FarmPickupSchedule
+- StockTransaction record (with batch ID)
+- InventoryItem record (with batch ID)
+- Updated PickupSlotBooking records (all marked completed)
+- Updated TransportRequest
+- Batch traceability record (new entry)
+- Activity log entry
+- Notification records (multiple)
+
+**Traceability Continuity:**
+- Batch ID from pickup receipt is now in aggregation center inventory
+- Batch can be traced from pickup → center → storage → quality check → delivery
+
+---
+
+#### 7. **Schedule Cancelled** (`cancelled`)
+**Trigger:** Provider cancels schedule
+
+**Actors:**
+- **Transport Provider:** Cancels schedule
+- **Farmers:** Receive notification
+
+**Actions:**
+- Provider cancels schedule
+- Schedule status updated to "cancelled"
+- All bookings cancelled
+- Farmers notified
+- Option to create new schedule
+
+**Data Points:**
+- Cancelled At Timestamp
+- Cancelled By: Provider ID
+- Cancellation Reason (optional)
+- Status: "cancelled"
+
+**Notifications:**
+- **To Farmers:** "Pickup schedule [Route] has been cancelled"
+- **To Provider:** "Schedule cancelled. All bookings cancelled"
+
+**Outputs:**
+- Updated FarmPickupSchedule
+- Updated PickupSlotBooking records (all cancelled)
+- Activity log entry
+- Notification records (multiple)
+
+---
+
+### Farm Pickup Schedule Data Model
+
+**Core Entity:** `FarmPickupSchedule`
+
+**Related Entities:**
+- `PickupSlot[]` (time slots within schedule)
+- `PickupSlotBooking[]` (farmer bookings)
+- `PickupReceipt[]` (pickup receipts with batch IDs)
+- `TransportRequest[]` (linked transport requests)
+- `AggregationCenterCapacity` (synced capacity)
+- `StockTransaction` (when delivered, linked to batch ID)
+- `InventoryItem` (with batch ID for traceability)
+- `Notification[]` (multiple)
+
+**Key Features:**
+- Capacity tracking (transport + center storage)
+- Route-based pickup locations
+- Slot-based booking system
+- Real-time capacity sync with aggregation centers
+- Pricing options (per kg or fixed)
+- **Batch traceability from pickup confirmation**
+- **Pickup receipt generation with QR codes**
+- **Lifecycle continuity from pickup to delivery**
+
+---
+
 ## Transport Request Lifecycle
 
 ### Status Flow
@@ -896,13 +2254,15 @@ pending → accepted → in_transit → delivered → completed
 - `pending` → `rejected` (provider rejects)
 - `pending` → `cancelled` (requester cancels)
 - Any status → `cancelled` (requester cancels)
+- **Via Schedule:** `booked` → `accepted` (automatic when booked from schedule)
 
 ### Transport Request Types
 
 1. **Produce Pickup** (`produce_pickup`)
    - Farm → Aggregation Center
-   - Triggered by: Farmer or Aggregation Manager
-   - Related to: MarketplaceOrder
+   - Triggered by: Farmer, Aggregation Manager, OR booked from Pickup Schedule
+   - Related to: MarketplaceOrder OR FarmPickupSchedule
+   - **New:** Can be standalone request OR linked to pickup schedule booking
 
 2. **Produce Delivery** (`produce_delivery`)
    - Aggregation Center → Buyer/Market
@@ -917,16 +2277,24 @@ pending → accepted → in_transit → delivered → completed
 ### Detailed Lifecycle Stages
 
 #### 1. **Pending** (`pending`)
-**Trigger:** Transport request created
+**Trigger:** Transport request created (standalone) OR slot booked from schedule
 
 **Actors:**
-- **Requester:** Creates request (Farmer, Buyer, Aggregation Manager, Input Provider)
-- **Transport Providers:** Receive notification
+- **Requester:** Creates request (Farmer, Buyer, Aggregation Manager, Input Provider) OR
+- **System:** Auto-creates from schedule booking
+- **Transport Providers:** Receive notification (if standalone) OR already assigned (if from schedule)
 
 **Actions:**
-- Request created with details
-- Providers notified
-- Request visible to providers
+- **If Standalone:**
+  - Request created with details
+  - Providers notified
+  - Request visible to providers
+  
+- **If From Schedule:**
+  - Request auto-created when farmer books slot
+  - Provider already assigned (schedule owner)
+  - Request linked to schedule and slot booking
+  - Status may be "accepted" immediately (if schedule provider auto-accepts)
 
 **Data Points:**
 - Request ID
@@ -1617,6 +2985,69 @@ pending → secured → released
 
 ---
 
+#### Negotiation Outputs
+
+1. **Negotiation** (1 record)
+2. **NegotiationMessage[]** (2-10+ messages, depending on counter-offers)
+3. **MarketplaceOrder** (0-1 record, if converted)
+4. **Notification** (4-12 records, depending on message count)
+5. **ActivityLog** (4-12 records)
+
+**Total: ~11-35 records per negotiation**
+
+---
+
+#### RFQ Outputs
+
+1. **RFQ** (1 record)
+2. **RFQResponse[]** (0-50+ responses, depending on supplier interest)
+3. **MarketplaceOrder[]** (0-10+ orders, if responses awarded and converted)
+4. **Notification** (10-100+ records, depending on response count)
+5. **ActivityLog** (8-50+ records)
+
+**Total: ~19-200+ records per RFQ** (highly variable based on response volume)
+
+---
+
+#### Sourcing Request Outputs
+
+1. **SourcingRequest** (1 record)
+2. **SupplierOffer[]** (0-20+ offers, depending on supplier interest)
+3. **MarketplaceOrder[]** (0-5+ orders, if offers accepted and converted)
+4. **Notification** (5-50+ records, depending on offer count)
+5. **ActivityLog** (5-30+ records)
+
+**Total: ~11-100+ records per sourcing request** (variable based on offer volume)
+
+---
+
+#### Farm Pickup Schedule Outputs
+
+1. **FarmPickupSchedule** (1 record)
+2. **PickupLocation[]** (2-10+ locations on route)
+3. **PickupSlot[]** (0-20+ slots, if time-based slots used)
+4. **PickupSlotBooking[]** (0-50+ bookings, depending on capacity and farmer interest)
+5. **PickupReceipt[]** (1 per confirmed pickup, with batch ID and QR code)
+6. **TransportRequest[]** (1 per booking, or 1 for entire schedule)
+7. **StockTransaction** (1 when delivered to center, linked to batch ID)
+8. **InventoryItem** (1 when stock received, with batch ID)
+9. **BatchTraceabilityRecord[]** (multiple entries per batch, from pickup to delivery)
+10. **Notification** (15-150+ records, depending on booking count)
+11. **ActivityLog** (12-70+ records)
+
+**Total: ~35-300+ records per schedule** (highly variable based on bookings)
+
+**Batch Traceability:**
+- Each confirmed pickup creates a batch ID that is traceable through:
+  - Pickup confirmation (receipt)
+  - Aggregation center receipt (stock in)
+  - Storage monitoring
+  - Quality checks
+  - Stock out (delivery to buyer)
+  - Final delivery
+
+---
+
 ## Improvement Opportunities
 
 ### 1. **Notification Optimization**
@@ -1791,6 +3222,44 @@ This document provides a comprehensive mapping of all entity lifecycles, workflo
 
 6. **Analytics Potential:** Rich data enables advanced analytics and insights
 
+7. **Enhanced Marketplace Features:** Negotiation and RFQ workflows provide flexible buyer-farmer interactions
+
+8. **Unified Farmer Experience:** Buyer Requests workflow consolidates opportunities for streamlined farmer engagement
+
+### Recent Improvements (January 2025)
+
+#### 1. **Negotiation Feature**
+- Enables price/quantity negotiation before order placement
+- Supports counter-offers and message threads
+- Provides flexible terms agreement
+- Converts accepted negotiations to orders
+
+#### 2. **RFQ (Request for Quotation) Workflows**
+- Structured competitive bidding process
+- Multi-supplier quote collection
+- Response evaluation and shortlisting
+- Award management and order conversion
+- Recurring RFQ support
+
+#### 3. **Buyer Requests Unified View**
+- Single interface for farmers to view all buyer opportunities
+- Combines RFQs and Sourcing Requests
+- Marketplace-like browsing experience
+- Streamlined response submission
+
+#### 4. **Farm Pickup Schedule System**
+- Scheduled pickup routes from transport providers
+- Capacity-based slot booking for farmers
+- Real-time sync with aggregation center storage capacity
+- Route-based pickup locations
+- Streamlined bulk delivery to aggregation centers
+- Supports center fulfillment on behalf of farmers
+
+#### 5. **Analytics Consolidation**
+- Combined Dashboard, Leaderboard, and Market Info into single Analytics route
+- Tabbed interface for easy navigation
+- Improved user experience for farmers
+
 **Next Steps:**
 1. Prioritize improvement opportunities
 2. Design automated workflows
@@ -1798,9 +3267,13 @@ This document provides a comprehensive mapping of all entity lifecycles, workflo
 4. Enhance traceability features
 5. Develop analytics dashboards
 6. Create mobile applications
+7. Integrate negotiation and RFQ features with backend APIs
+8. Implement real-time notifications for negotiations and RFQ updates
+9. Enhance Buyer Requests filtering and recommendation algorithms
+10. Add negotiation analytics and insights
 
 ---
 
-**Document Version:** 1.0  
+**Document Version:** 2.0  
 **Last Updated:** January 2025  
 **Maintained By:** Development Team

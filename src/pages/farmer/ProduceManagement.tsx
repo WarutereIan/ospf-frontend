@@ -27,6 +27,9 @@ import {
   IconAlertTriangle,
   IconArrowLeft,
   IconPhoto,
+  IconTruck,
+  IconQrcode,
+  IconEye,
 } from "@tabler/icons-react";
 import {
   StackedBarChart,
@@ -37,7 +40,12 @@ import { OnFarmSortingGuide } from "@/components/farmer/OnFarmSortingGuide";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTransport } from "@/contexts/TransportContext";
+import { BatchTraceabilityDialog, type BatchTraceabilityInfo } from "@/components/buyer/BatchTraceabilityDialog";
+import { getFarmerPickupBookings } from "@/services/transportService";
+import { cn } from "@/lib/utils";
 import type { ProduceListing } from "@/types/marketplace";
+import type { PickupSlotBooking } from "@/types/transport";
 
 // OFSP Varieties
 const ofspVarieties = [
@@ -61,14 +69,44 @@ const subCounties = [
   { label: "Yatta", value: "yatta" },
 ];
 
+type ProduceType = "all" | "listings" | "picked_up";
+
+interface UnifiedProduce {
+  id: string;
+  type: "listing" | "picked_up";
+  variety: string;
+  quantity: number;
+  qualityGrade: "A" | "B" | "C";
+  batchId?: string;
+  qrCode?: string;
+  status: string;
+  location: string;
+  createdAt: string;
+  // Listing-specific
+  listing?: ProduceListing;
+  pricePerKg?: number;
+  availableQuantity?: number;
+  // Picked up-specific
+  booking?: PickupSlotBooking;
+  aggregationCenter?: string;
+  pickupDate?: string;
+  lifecycleStage?: string;
+}
+
 export function ProduceManagement() {
   const { listings, fetchListings, createListing, updateListing, deleteListing, isLoading, listingFilters, setListingFilters } = useMarketplace();
   const { user } = useAuth();
+  const { fetchFarmerBookings } = useTransport();
   
+  const [activeTab, setActiveTab] = useState<ProduceType>("all");
+  const [pickedUpProduce, setPickedUpProduce] = useState<PickupSlotBooking[]>([]);
+  const [isLoadingPickedUp, setIsLoadingPickedUp] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterVariety, setFilterVariety] = useState("all");
   const [newListingOpen, setNewListingOpen] = useState(false);
+  const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [newListing, setNewListing] = useState({
     variety: "",
     quantity: "",
@@ -92,13 +130,164 @@ export function ProduceManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterVariety, user?.id]);
 
-  // Apply client-side search filter
-  const filteredListings = listings.filter((listing) => {
-    const matchesSearch =
-      listing.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      listing.id.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+  // Fetch picked up produce from pickup bookings
+  useEffect(() => {
+    const loadPickedUpProduce = async () => {
+      if (user?.id) {
+        setIsLoadingPickedUp(true);
+        try {
+          const bookings = await getFarmerPickupBookings(user.id);
+          // Filter only picked up bookings with batch IDs
+          const pickedUp = bookings.filter(
+            (b) => b.pickupConfirmed && b.batchId && (b.status === "picked_up" || b.status === "completed")
+          );
+          setPickedUpProduce(pickedUp);
+        } catch (err) {
+          console.error("Failed to load picked up produce:", err);
+        } finally {
+          setIsLoadingPickedUp(false);
+        }
+      }
+    };
+    loadPickedUpProduce();
+  }, [user?.id]);
+
+  // Create unified produce list
+  const unifiedProduce: UnifiedProduce[] = [
+    // Listings
+    ...listings.map((listing) => ({
+      id: listing.id,
+      type: "listing" as const,
+      variety: listing.variety,
+      quantity: listing.quantity,
+      qualityGrade: listing.qualityGrade,
+      batchId: listing.batchId,
+      qrCode: listing.qrCode,
+      status: listing.status,
+      location: listing.location,
+      createdAt: listing.createdAt,
+      listing,
+      pricePerKg: listing.pricePerKg,
+      availableQuantity: listing.availableQuantity,
+      lifecycleStage: listing.status === "active" ? "Listed on Marketplace" : listing.status === "sold" ? "Sold" : "Inactive",
+    })),
+    // Picked up produce
+    ...pickedUpProduce.map((booking) => ({
+      id: booking.id,
+      type: "picked_up" as const,
+      variety: booking.variety || "Unknown",
+      quantity: booking.quantity,
+      qualityGrade: booking.qualityGrade || "A",
+      batchId: booking.batchId,
+      qrCode: booking.qrCode,
+      status: booking.status,
+      location: booking.location,
+      createdAt: booking.bookedAt,
+      booking,
+      lifecycleStage: booking.status === "picked_up" ? "Picked Up - In Transit" : booking.status === "completed" ? "Delivered to Aggregation Center" : "Confirmed",
+    })),
+  ];
+
+  // Filter unified produce based on active tab
+  const filteredUnifiedProduce = unifiedProduce.filter((produce) => {
+    if (activeTab === "listings" && produce.type !== "listing") return false;
+    if (activeTab === "picked_up" && produce.type !== "picked_up") return false;
+    
+    if (filterVariety !== "all" && produce.variety !== filterVariety) return false;
+    if (filterStatus !== "all" && produce.status !== filterStatus) return false;
+    
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      return (
+        produce.variety.toLowerCase().includes(search) ||
+        produce.id.toLowerCase().includes(search) ||
+        produce.batchId?.toLowerCase().includes(search) ||
+        produce.location.toLowerCase().includes(search)
+      );
+    }
+    
+    return true;
   });
+
+  const handleViewTraceability = (batchId: string) => {
+    setSelectedBatchId(batchId);
+    setTraceabilityDialogOpen(true);
+  };
+
+  const handleBatchLookup = async (batchId: string): Promise<BatchTraceabilityInfo | null> => {
+    // Find the produce item with this batch ID
+    const produce = unifiedProduce.find((p) => p.batchId === batchId);
+    if (!produce) return null;
+
+    // Mock traceability info - in real app, fetch from API
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const steps = [];
+        if (produce.type === "listing") {
+          steps.push({
+            id: "1",
+            stage: "Harvest",
+            location: produce.location,
+            timestamp: produce.createdAt,
+            actor: user?.name || "Farmer",
+            actorRole: "Farmer",
+            status: "completed" as const,
+            notes: "Produce harvested and listed on marketplace",
+          });
+        } else if (produce.booking) {
+          steps.push({
+            id: "1",
+            stage: "Harvest",
+            location: produce.location,
+            timestamp: produce.booking.bookedAt,
+            actor: user?.name || "Farmer",
+            actorRole: "Farmer",
+            status: "completed" as const,
+            notes: "Produce harvested",
+          });
+          if (produce.booking.pickupConfirmedAt) {
+            steps.push({
+              id: "2",
+              stage: "Pickup Confirmed",
+              location: produce.location,
+              timestamp: produce.booking.pickupConfirmedAt,
+              actor: user?.name || "Farmer",
+              actorRole: "Farmer",
+              status: "completed" as const,
+              notes: `Batch ${batchId} created. Quantity: ${produce.quantity} kg`,
+            });
+          }
+          if (produce.status === "completed") {
+            steps.push({
+              id: "3",
+              stage: "Delivered to Aggregation Center",
+              location: "Aggregation Center",
+              timestamp: produce.booking.pickupConfirmedAt || new Date().toISOString(),
+              actor: "Transport Provider",
+              actorRole: "Logistics",
+              status: "completed" as const,
+              notes: "Produce delivered to aggregation center",
+            });
+          }
+        }
+
+        resolve({
+          batchId,
+          qrCode: produce.qrCode,
+          variety: produce.variety,
+          quantity: produce.quantity,
+          qualityGrade: produce.qualityGrade,
+          farmerId: user?.id || "",
+          farmerName: user?.name || "",
+          farmerLocation: produce.location,
+          aggregationCenter: produce.aggregationCenter || "Not yet delivered",
+          steps,
+          currentStatus: produce.lifecycleStage || produce.status,
+          currentLocation: produce.location,
+        });
+      }, 500);
+    });
+  };
 
   const handleAddListing = async () => {
     if (
@@ -183,11 +372,11 @@ export function ProduceManagement() {
     return subCounty?.label || value;
   };
 
-  // Calculate variety breakdown
+  // Calculate variety breakdown (from all produce)
   const varietyBreakdown = ofspVarieties.map((variety) => {
-    const varietyListings = listings.filter((l) => l.variety === variety.value);
-    const totalQuantity = varietyListings.reduce((sum, l) => sum + l.quantity, 0);
-    const allQuantity = listings.reduce((sum, l) => sum + l.quantity, 0);
+    const varietyProduce = unifiedProduce.filter((p) => p.variety === variety.value);
+    const totalQuantity = varietyProduce.reduce((sum, p) => sum + p.quantity, 0);
+    const allQuantity = unifiedProduce.reduce((sum, p) => sum + p.quantity, 0);
     return {
       name: variety.label,
       quantity: totalQuantity,
@@ -213,9 +402,9 @@ export function ProduceManagement() {
               Back to Dashboard
             </Button>
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold">Manage Produce</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">My Produce</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Post and manage your OFSP produce listings
+            View and manage all your produce - listings and picked up batches with full traceability
           </p>
         </div>
         <Dialog open={newListingOpen} onOpenChange={setNewListingOpen}>
@@ -365,6 +554,51 @@ export function ProduceManagement() {
         </Dialog>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-stone-200">
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => setActiveTab("all")}
+            className={cn(
+              "rounded-none border-b-2 border-transparent -mb-px",
+              activeTab === "all"
+                ? "border-primary text-primary font-semibold"
+                : "text-stone-600 hover:text-stone-900"
+            )}
+          >
+            <IconPackage className="mr-2 h-4 w-4" />
+            All Produce ({unifiedProduce.length})
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setActiveTab("listings")}
+            className={cn(
+              "rounded-none border-b-2 border-transparent -mb-px",
+              activeTab === "listings"
+                ? "border-primary text-primary font-semibold"
+                : "text-stone-600 hover:text-stone-900"
+            )}
+          >
+            <IconPackage className="mr-2 h-4 w-4" />
+            Listings ({listings.length})
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => setActiveTab("picked_up")}
+            className={cn(
+              "rounded-none border-b-2 border-transparent -mb-px",
+              activeTab === "picked_up"
+                ? "border-primary text-primary font-semibold"
+                : "text-stone-600 hover:text-stone-900"
+            )}
+          >
+            <IconTruck className="mr-2 h-4 w-4" />
+            Picked Up ({pickedUpProduce.length})
+          </Button>
+        </div>
+      </div>
+
       {/* On-Farm Sorting Guide */}
       <Card>
         <CardHeader>
@@ -441,9 +675,15 @@ export function ProduceManagement() {
       {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Your Produce Listings</CardTitle>
+          <CardTitle>
+            {activeTab === "all" && "All Produce"}
+            {activeTab === "listings" && "Produce Listings"}
+            {activeTab === "picked_up" && "Picked Up Produce"}
+          </CardTitle>
           <CardDescription>
-            Manage your active and sold produce listings
+            {activeTab === "all" && "View all your produce - listings and picked up batches"}
+            {activeTab === "listings" && "Manage your active and sold produce listings"}
+            {activeTab === "picked_up" && "Track produce that has been picked up for delivery"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -451,7 +691,7 @@ export function ProduceManagement() {
             <div className="relative flex-1">
               <IconSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search by variety or listing ID..."
+                placeholder="Search by variety, batch ID, or location..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -476,74 +716,128 @@ export function ProduceManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="sold">Sold</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
+                {activeTab !== "picked_up" && (
+                  <>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="sold">Sold</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </>
+                )}
+                {activeTab === "picked_up" && (
+                  <>
+                    <SelectItem value="picked_up">Picked Up</SelectItem>
+                    <SelectItem value="completed">Delivered</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Listings Table */}
+          {/* Unified Produce Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Listing ID</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Batch ID</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Quantity</TableHead>
                   <TableHead>Quality Grade</TableHead>
-                  <TableHead>Price/kg</TableHead>
+                  {activeTab !== "picked_up" && <TableHead>Price/kg</TableHead>}
                   <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Lifecycle Stage</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredListings.length > 0 ? (
-                  filteredListings.map((listing) => (
-                    <TableRow key={listing.id}>
-                      <TableCell className="font-medium">{listing.id}</TableCell>
-                      <TableCell>{getVarietyName(listing.variety)}</TableCell>
-                      <TableCell>{listing.quantity} kg</TableCell>
+                {isLoading || isLoadingPickedUp ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-8">
+                      <div className="flex items-center justify-center">
+                        <IconPackage className="h-6 w-6 animate-spin text-muted-foreground mr-2" />
+                        <span className="text-muted-foreground">Loading produce...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredUnifiedProduce.length > 0 ? (
+                  filteredUnifiedProduce.map((produce) => (
+                    <TableRow key={produce.id}>
                       <TableCell>
-                        <Badge variant="outline" className={getGradeColor(listing.qualityGrade)}>
-                          Grade {listing.qualityGrade}
+                        <Badge variant="outline" className={produce.type === "listing" ? "bg-blue-50 text-blue-700" : "bg-green-50 text-green-700"}>
+                          {produce.type === "listing" ? "Listing" : "Picked Up"}
                         </Badge>
                       </TableCell>
-                      <TableCell>KES {listing.pricePerKg}/kg</TableCell>
-                      <TableCell>{getSubCountyName(listing.location)}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getStatusColor(listing.status)}>
-                          {listing.status}
+                        {produce.batchId ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs">{produce.batchId}</span>
+                            {produce.qrCode && <IconQrcode className="h-4 w-4 text-muted-foreground" />}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">No batch ID</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{getVarietyName(produce.variety)}</TableCell>
+                      <TableCell>{produce.quantity} kg</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getGradeColor(produce.qualityGrade)}>
+                          Grade {produce.qualityGrade}
+                        </Badge>
+                      </TableCell>
+                      {activeTab !== "picked_up" && (
+                        <TableCell>
+                          {produce.pricePerKg ? `KES ${produce.pricePerKg}/kg` : "-"}
+                        </TableCell>
+                      )}
+                      <TableCell>{getSubCountyName(produce.location)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getStatusColor(produce.status)}>
+                          {produce.lifecycleStage || produce.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="ghost">
-                            <IconEdit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDeleteListing(listing.id)}
-                            className="text-destructive"
-                          >
-                            <IconTrash className="h-4 w-4" />
-                          </Button>
+                          {produce.batchId && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleViewTraceability(produce.batchId!)}
+                              title="View Batch Traceability"
+                            >
+                              <IconEye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {produce.type === "listing" && (
+                            <>
+                              <Button size="sm" variant="ghost">
+                                <IconEdit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteListing(produce.id)}
+                                className="text-destructive"
+                              >
+                                <IconTrash className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       <div className="flex flex-col items-center">
                         <IconPackage className="h-10 w-10 text-muted-foreground mb-2" />
                         <p className="text-lg font-medium text-muted-foreground">
-                          No listings found
+                          No produce found
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Try adjusting your search or filters, or post a new listing
+                          {activeTab === "listings" && "Try adjusting your search or filters, or post a new listing"}
+                          {activeTab === "picked_up" && "No picked up produce found. Book a pickup schedule to get started."}
+                          {activeTab === "all" && "Try adjusting your search or filters"}
                         </p>
                       </div>
                     </TableCell>
@@ -556,28 +850,40 @@ export function ProduceManagement() {
       </Card>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Listings</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Produce</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{listings.length}</div>
+            <div className="text-2xl font-bold">{unifiedProduce.length}</div>
             <p className="text-xs text-muted-foreground">
-              {listings.filter((l) => l.status === "active").length} active
+              {listings.length} listings, {pickedUpProduce.length} picked up
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Quantity Listed</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {listings.reduce((sum, l) => sum + l.quantity, 0)} kg
+              {unifiedProduce.reduce((sum, p) => sum + p.quantity, 0)} kg
             </div>
-            <p className="text-xs text-muted-foreground">Across all listings</p>
+            <p className="text-xs text-muted-foreground">Across all produce</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">With Batch ID</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {unifiedProduce.filter((p) => p.batchId).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Traceable batches</p>
           </CardContent>
         </Card>
 
@@ -595,10 +901,18 @@ export function ProduceManagement() {
                 : 0}
               /kg
             </div>
-            <p className="text-xs text-muted-foreground">Average across all listings</p>
+            <p className="text-xs text-muted-foreground">Average listing price</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Batch Traceability Dialog */}
+      <BatchTraceabilityDialog
+        open={traceabilityDialogOpen}
+        onOpenChange={setTraceabilityDialogOpen}
+        batchId={selectedBatchId || undefined}
+        onLookup={handleBatchLookup}
+      />
     </div>
   );
 }

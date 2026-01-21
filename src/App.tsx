@@ -64,6 +64,8 @@ import TransportRequests from "@/pages/transport/TransportRequests";
 import Collection from "@/pages/transport/Collection";
 import ActiveDeliveries from "@/pages/transport/ActiveDeliveries";
 import CompletedDeliveries from "@/pages/transport/CompletedDeliveries";
+import { PickupScheduleManagement } from "@/pages/transport/PickupScheduleManagement";
+import { PickupManagement } from "@/pages/farmer/PickupManagement";
 import { Users } from "@/pages/staff/Users";
 import { Analytics } from "@/pages/staff/Analytics";
 import { Partners } from "@/pages/staff/Partners";
@@ -105,6 +107,7 @@ export function App() {
             {/* Farmer Routes - More specific routes first */}
             <Route path="/dashboard/farmer/rfqs" element={<RFQList />} />
             <Route path="/dashboard/farmer/negotiations" element={<NegotiationList />} />
+            <Route path="/dashboard/farmer/pickup-schedules" element={<PickupManagement />} />
             <Route path="/dashboard/farmer/analytics" element={<FarmerAnalytics />} />
             <Route path="/dashboard/farmer" element={<BuyerRequests />} />
             
@@ -183,6 +186,7 @@ export function App() {
             <Route path="/marketplace/inputs" element={<InputMarketplace />} />
             
             {/* Transport Provider Routes */}
+            <Route path="/dashboard/transport-provider/pickup-schedules" element={<PickupScheduleManagement />} />
             <Route path="/dashboard/transport-requests" element={<TransportRequests />} />
             <Route path="/dashboard/collection" element={<Collection />} />
             <Route path="/dashboard/deliveries" element={<ActiveDeliveries />} />
