@@ -2647,7 +2647,7 @@ pending → secured → released
 - Quality Feedback
 
 **Notifications:**
-- **To Buyer:** "Quality check approved for order #XXX"
+- **To Buyer:** "Quality check approved for order #XXX in case it is related to order"
 - **To Farmer:** "Quality check approved for your produce"
 
 **Outputs:**

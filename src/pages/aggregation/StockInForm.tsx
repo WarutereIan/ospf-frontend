@@ -27,6 +27,12 @@ interface StockInEntry {
   variety: string;
   quantity: number; // kg
   qualityGrade: "A" | "B" | "C";
+  // Grading Matrix Criteria
+  weightRange: WeightRange | "";
+  colorIntensity: number; // 1-10
+  physicalCondition: PhysicalCondition | "";
+  freshness: FreshnessLevel | "";
+  daysSinceHarvest?: number;
   photos: string[];
   notes?: string;
 }
@@ -55,6 +61,11 @@ export function StockInForm() {
     variety: "",
     quantity: 0,
     qualityGrade: undefined,
+    weightRange: "",
+    colorIntensity: 5,
+    physicalCondition: "",
+    freshness: "",
+    daysSinceHarvest: 0,
     photos: [],
     notes: "",
   });
@@ -62,6 +73,7 @@ export function StockInForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [showMatrixGuide, setShowMatrixGuide] = useState(false);
   const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
   const [generatedBatchId, setGeneratedBatchId] = useState<string>("");
   const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
@@ -541,6 +553,21 @@ export function StockInForm() {
           }}
         />
       )}
+
+      {/* Grading Matrix Guide Dialog */}
+      <Dialog open={showMatrixGuide} onOpenChange={setShowMatrixGuide}>
+        <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle>Grading Matrix Guide</DialogTitle>
+            <DialogDescription>
+              Reference guide for the four criteria used in quality grading
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-x-auto">
+            <GradingMatrixGuide />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

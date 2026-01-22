@@ -8,26 +8,46 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   IconCheck,
   IconX,
   IconPhoto,
   IconLoader2,
   IconAlertTriangle,
   IconArrowLeft,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { GradingMatrixGuide } from "@/components/quality/GradingMatrixGuide";
+import { calculateGradeFromMatrix } from "@/data/gradingMatrix";
+import {
+  weightRangeDefinitions,
+  colorIntensityDefinitions,
+  physicalConditionDefinitions,
+  freshnessDefinitions,
+} from "@/data/gradingMatrix";
 import type { QualityCheck } from "@/types/aggregation";
+import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 
 interface QualityCheckForm {
   stockId: string;
   variety: string;
   quantity: number;
   qualityGrade: "A" | "B" | "C" | null;
-  size: "small" | "medium" | "large" | null;
-  colorScore: number; // 1-10
-  damagePercentage: number; // 0-100
+  // Grading Matrix Criteria
+  weightRange: WeightRange | "";
+  colorIntensity: number; // 1-10
+  physicalCondition: PhysicalCondition | "";
+  freshness: FreshnessLevel | "";
+  daysSinceHarvest?: number;
   photos: string[];
   notes: string;
   approved: boolean | null;
@@ -39,11 +59,6 @@ const qualityGrades = [
   { value: "C", label: "Grade C - Processing", color: "bg-orange-100 text-orange-800" },
 ];
 
-const sizeOptions = [
-  { value: "small", label: "Small (< 100g)" },
-  { value: "medium", label: "Medium (100-200g)" },
-  { value: "large", label: "Large (> 200g)" },
-];
 
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
@@ -56,13 +71,16 @@ export function QualityCheck() {
     variety: "",
     quantity: 0,
     qualityGrade: null,
-    size: null,
-    colorScore: 5,
-    damagePercentage: 0,
+    weightRange: "",
+    colorIntensity: 5,
+    physicalCondition: "",
+    freshness: "",
+    daysSinceHarvest: 0,
     photos: [],
     notes: "",
     approved: null,
   });
+  const [showMatrixGuide, setShowMatrixGuide] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(!isNew);
@@ -83,9 +101,11 @@ export function QualityCheck() {
           variety: existingCheck.variety,
           quantity: existingCheck.quantity,
           qualityGrade: existingCheck.qualityGrade,
-          size: null, // Not in type
-          colorScore: existingCheck.colorScore || 5,
-          damagePercentage: existingCheck.damageScore ? (100 - existingCheck.damageScore * 10) : 0,
+          weightRange: "", // Map from existing data if available
+          colorIntensity: existingCheck.colorScore || 5,
+          physicalCondition: "", // Map from existing data if available
+          freshness: "", // Map from existing data if available
+          daysSinceHarvest: 0,
           photos: existingCheck.photos || [],
           notes: existingCheck.notes || "",
           approved: existingCheck.qualityScore ? (existingCheck.qualityScore >= 70 ? true : false) : null,
@@ -138,10 +158,20 @@ export function QualityCheck() {
       // Find the inventory item to get transaction ID
       const inventoryItem = inventory.find((item) => item.id === formData.stockId);
       
-      // Calculate quality score
-      const qualityScore = Math.max(0, Math.min(100, 
-        (formData.colorScore * 10) - (formData.damagePercentage)
-      ));
+      // Calculate quality score based on grading matrix
+      // Base score from color intensity (0-100)
+      let qualityScore = formData.colorIntensity * 10;
+      
+      // Adjust based on physical condition
+      if (formData.physicalCondition === "poor") qualityScore -= 30;
+      else if (formData.physicalCondition === "fair") qualityScore -= 15;
+      else if (formData.physicalCondition === "good") qualityScore -= 5;
+      
+      // Adjust based on freshness
+      if (formData.freshness === "aging") qualityScore -= 25;
+      else if (formData.freshness === "moderate") qualityScore -= 10;
+      
+      qualityScore = Math.max(0, Math.min(100, qualityScore));
 
       const qualityCheckData: Partial<QualityCheck> = {
         centerId: inventoryItem?.centerId || "",
@@ -152,8 +182,8 @@ export function QualityCheck() {
         quantity: formData.quantity,
         qualityGrade: formData.qualityGrade,
         qualityScore,
-        colorScore: formData.colorScore,
-        damageScore: formData.damagePercentage / 10, // Convert to 0-10 scale
+        colorScore: formData.colorIntensity,
+        damageScore: formData.physicalCondition === "poor" ? 8 : formData.physicalCondition === "fair" ? 4 : 0, // Convert to 0-10 scale
         photos: formData.photos,
         notes: formData.notes,
         checkedBy: user?.id || "",
@@ -169,9 +199,11 @@ export function QualityCheck() {
         variety: "",
         quantity: 0,
         qualityGrade: null,
-        size: null,
-        colorScore: 5,
-        damagePercentage: 0,
+        weightRange: "",
+        colorIntensity: 5,
+        physicalCondition: "",
+        freshness: "",
+        daysSinceHarvest: 0,
         photos: [],
         notes: "",
         approved: null,
@@ -301,75 +333,174 @@ export function QualityCheck() {
                 </div>
               </div>
 
-              {/* Size Assessment */}
-              <div className="space-y-2">
-                <Label>Average Size</Label>
-                <Select
-                  value={formData.size || ""}
-                  onValueChange={(value) =>
-                    setFormData((prev) => ({ ...prev, size: value as "small" | "medium" | "large" | null }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sizeOptions.map((size) => (
-                      <SelectItem key={size.value} value={size.value}>
-                        {size.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Grading Matrix Section */}
+              <div className="border-t pt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">Grading Matrix Criteria</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMatrixGuide(true)}
+                  >
+                    <IconInfoCircle className="mr-2 h-4 w-4" />
+                    View Matrix Guide
+                  </Button>
+                </div>
 
-              {/* Color Score */}
-              <div className="space-y-2">
-                <Label htmlFor="colorScore">Color Score (1-10)</Label>
+                {/* Weight Range */}
                 <div className="space-y-2">
-                  <Input
-                    id="colorScore"
-                    type="range"
-                    min={1}
-                    max={10}
-                    value={formData.colorScore}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, colorScore: parseInt(e.target.value) }))
+                  <Label>1. Weight Range *</Label>
+                  <Select
+                    value={formData.weightRange}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, weightRange: value as WeightRange }))
                     }
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Poor (1)</span>
-                    <span className="font-semibold">Current: {formData.colorScore}</span>
-                    <span>Excellent (10)</span>
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {weightRangeDefinitions.map((def) => (
+                        <SelectItem key={def.value} value={def.value}>
+                          {def.label} - {def.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Color Intensity */}
+                <div className="space-y-2">
+                  <Label htmlFor="colorIntensity">2. Color Intensity (1-10) *</Label>
+                  <div className="space-y-2">
+                    <Input
+                      id="colorIntensity"
+                      type="range"
+                      min={1}
+                      max={10}
+                      value={formData.colorIntensity}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, colorIntensity: parseInt(e.target.value) }))
+                      }
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Very Pale (1)</span>
+                      <span className="font-semibold">
+                        {colorIntensityDefinitions.find((c) => c.score === formData.colorIntensity)?.label || formData.colorIntensity}
+                      </span>
+                      <span>Premium+ (10)</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Damage Percentage */}
-              <div className="space-y-2">
-                <Label htmlFor="damage">Damage Percentage (0-100%)</Label>
+                {/* Physical Condition */}
                 <div className="space-y-2">
-                  <Input
-                    id="damage"
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={formData.damagePercentage}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        damagePercentage: parseFloat(e.target.value) || 0,
-                      }))
+                  <Label>3. Physical Condition *</Label>
+                  <Select
+                    value={formData.physicalCondition}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, physicalCondition: value as PhysicalCondition }))
                     }
-                  />
-                  {formData.damagePercentage > 20 && (
-                    <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-sm">
-                      <IconAlertTriangle className="h-4 w-4" />
-                      <span>High damage percentage may affect grade</span>
-                    </div>
-                  )}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {physicalConditionDefinitions.map((def) => (
+                        <SelectItem key={def.value} value={def.value}>
+                          {def.label} - {def.description}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {/* Freshness */}
+                <div className="space-y-2">
+                  <Label>4. Freshness *</Label>
+                  <div className="space-y-2">
+                    <Select
+                      value={formData.freshness}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, freshness: value as FreshnessLevel }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {freshnessDefinitions.map((def) => (
+                          <SelectItem key={def.value} value={def.value}>
+                            {def.label} - {def.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      placeholder="Days since harvest (optional)"
+                      min={0}
+                      value={formData.daysSinceHarvest || ""}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          daysSinceHarvest: parseInt(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Grade Recommendation */}
+                {formData.weightRange && formData.physicalCondition && formData.freshness && (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    {(() => {
+                      const recommendation = calculateGradeFromMatrix({
+                        weightRange: formData.weightRange,
+                        colorIntensity: formData.colorIntensity,
+                        physicalCondition: formData.physicalCondition,
+                        freshness: formData.freshness,
+                      });
+                      return (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-blue-900">Recommended Grade:</span>
+                            <Badge
+                              className={cn(
+                                "text-base px-3 py-1",
+                                recommendation.recommendedGrade === "A" && "bg-green-100 text-green-800",
+                                recommendation.recommendedGrade === "B" && "bg-yellow-100 text-yellow-800",
+                                recommendation.recommendedGrade === "C" && "bg-orange-100 text-orange-800"
+                              )}
+                            >
+                              Grade {recommendation.recommendedGrade}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-blue-700">
+                            Confidence: <span className="font-semibold">{recommendation.confidence}</span>
+                          </p>
+                          <p className="text-xs text-blue-600 mt-2">{recommendation.explanation}</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                qualityGrade: recommendation.recommendedGrade,
+                              }))
+                            }
+                          >
+                            Use Recommended Grade
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
@@ -529,6 +660,21 @@ export function QualityCheck() {
         </div>
       </div>
       )}
+
+      {/* Grading Matrix Guide Dialog */}
+      <Dialog open={showMatrixGuide} onOpenChange={setShowMatrixGuide}>
+        <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle>Grading Matrix Guide</DialogTitle>
+            <DialogDescription>
+              Reference guide for the four criteria used in quality grading
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-x-auto">
+            <GradingMatrixGuide />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

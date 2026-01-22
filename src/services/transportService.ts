@@ -5,18 +5,21 @@
  * - Transport requests
  * - Active deliveries
  * - Delivery tracking
+ * - Pickup schedules and slots
  * 
- * Backend API endpoints to implement:
- * - GET /api/transport/requests - List transport requests
- * - GET /api/transport/requests/:id - Get request details
- * - POST /api/transport/requests - Create transport request
- * - PUT /api/transport/requests/:id/accept - Accept request
- * - PUT /api/transport/requests/:id/reject - Reject request
- * - PUT /api/transport/requests/:id/status - Update request status
- * - GET /api/transport/deliveries - List active deliveries
- * - GET /api/transport/deliveries/:id - Get delivery details
- * - POST /api/transport/deliveries/:id/tracking - Add tracking update
- * - GET /api/transport/stats - Get transport statistics
+ * Backend API endpoints:
+ * - GET /api/v1/transport/requests - List transport requests
+ * - GET /api/v1/transport/requests/:id - Get request details
+ * - POST /api/v1/transport/requests - Create transport request
+ * - PUT /api/v1/transport/requests/:id/accept - Accept request
+ * - PUT /api/v1/transport/requests/:id/status - Update request status
+ * - GET /api/v1/transport/pickup-schedules - List pickup schedules
+ * - POST /api/v1/transport/pickup-schedules - Create pickup schedule
+ * - GET /api/v1/transport/pickup-slots - Get pickup slots
+ * - POST /api/v1/transport/pickup-slots/:id/book - Book pickup slot
+ * - GET /api/v1/transport/tracking/:requestId - Get tracking updates
+ * - POST /api/v1/transport/tracking/:requestId - Add tracking update
+ * - GET /api/v1/transport/stats - Get transport statistics
  */
 
 import type {
@@ -33,270 +36,284 @@ import type {
   PickupReceipt,
 } from "@/types/transport";
 import type { ApiResponse } from "@/types/inputCustomer";
+import { apiGet, apiPost, apiPut } from "@/lib/api-client";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
-const MOCK_DELAY = 1000;
+// ==================== Transport Requests ====================
 
-const MOCK_REQUESTS: TransportRequest[] = [];
-
+/**
+ * Get all transport requests
+ * Backend: GET /api/v1/transport/requests
+ */
 export async function getTransportRequests(filters?: TransportFilters): Promise<TransportRequest[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_REQUESTS;
+  try {
+    const params: Record<string, any> = {};
+    if (filters?.requesterId) params.requesterId = filters.requesterId;
+    if (filters?.providerId) params.providerId = filters.providerId;
+    if (filters?.status) params.status = filters.status;
+    if (filters?.type) params.type = filters.type;
+
+    return await apiGet<TransportRequest[]>('/transport/requests', params);
+  } catch (error) {
+    console.error('Error fetching transport requests:', error);
+    return [];
+  }
 }
 
+/**
+ * Get transport request by ID
+ * Backend: GET /api/v1/transport/requests/:id
+ */
 export async function getTransportRequestById(id: string): Promise<TransportRequest | null> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_REQUESTS.find(request => request.id === id) || null;
+  try {
+    return await apiGet<TransportRequest>(`/transport/requests/${id}`);
+  } catch (error) {
+    console.error('Error fetching transport request:', error);
+    return null;
+  }
 }
 
+/**
+ * Create a transport request
+ * Backend: POST /api/v1/transport/requests
+ */
 export async function createTransportRequest(request: Partial<TransportRequest>): Promise<ApiResponse<TransportRequest>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return { data: request as TransportRequest, message: "Transport request created successfully" };
+  try {
+    const created = await apiPost<TransportRequest>('/transport/requests', request);
+    return { data: created, message: "Transport request created successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to create transport request" };
+  }
 }
 
+/**
+ * Accept a transport request
+ * Backend: PUT /api/v1/transport/requests/:id/accept
+ */
 export async function acceptTransportRequest(id: string, providerId: string): Promise<ApiResponse<TransportRequest>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const request = MOCK_REQUESTS.find(r => r.id === id);
-  if (!request) {
-    return { data: request!, error: "Request not found" };
+  try {
+    const accepted = await apiPut<TransportRequest>(`/transport/requests/${id}/accept`);
+    return { data: accepted, message: "Request accepted" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to accept request" };
   }
-  return { data: { ...request, status: "accepted", providerId }, message: "Request accepted" };
 }
 
+/**
+ * Reject transport request
+ * TODO: Backend needs to implement PUT /api/v1/transport/requests/:id/reject
+ */
 export async function rejectTransportRequest(id: string): Promise<ApiResponse<TransportRequest>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const request = MOCK_REQUESTS.find(r => r.id === id);
-  if (!request) {
-    return { data: request!, error: "Request not found" };
-  }
-  return { data: { ...request, status: "rejected" }, message: "Request rejected" };
+  // Backend doesn't have reject endpoint yet - using status update as fallback
+  return updateTransportRequestStatus(id, "rejected" as TransportRequest["status"]);
 }
 
+/**
+ * Update transport request status
+ * Backend: PUT /api/v1/transport/requests/:id/status
+ */
 export async function updateTransportRequestStatus(
   id: string,
   status: TransportRequest["status"]
 ): Promise<ApiResponse<TransportRequest>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const request = MOCK_REQUESTS.find(r => r.id === id);
-  if (!request) {
-    return { data: request!, error: "Request not found" };
+  try {
+    const updated = await apiPut<TransportRequest>(`/transport/requests/${id}/status`, { status });
+    return { data: updated, message: "Request status updated" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to update request status" };
   }
-  return { data: { ...request, status }, message: "Request status updated" };
 }
 
+/**
+ * Get active deliveries
+ * TODO: Backend needs to implement GET /api/v1/transport/deliveries endpoint
+ */
 export async function getActiveDeliveries(): Promise<ActiveDelivery[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_REQUESTS.filter(r => r.status === "in_transit" || r.status === "delivered") as ActiveDelivery[];
+  // Backend doesn't have deliveries endpoint yet
+  // Filter transport requests by status as fallback
+  try {
+    const requests = await getTransportRequests({ status: "in_transit" });
+    return requests.filter(r => r.status === "in_transit" || r.status === "delivered") as ActiveDelivery[];
+  } catch (error) {
+    console.error('Error fetching active deliveries:', error);
+    return [];
+  }
 }
 
+/**
+ * Add tracking update
+ * Backend: POST /api/v1/transport/tracking/:requestId
+ */
 export async function addTrackingUpdate(
   deliveryId: string,
   update: Partial<DeliveryTrackingUpdate>
 ): Promise<ApiResponse<DeliveryTrackingUpdate>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return { data: update as DeliveryTrackingUpdate, message: "Tracking update added" };
+  try {
+    const created = await apiPost<DeliveryTrackingUpdate>(`/transport/tracking/${deliveryId}`, update);
+    return { data: created, message: "Tracking update added" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to add tracking update" };
+  }
 }
 
+/**
+ * Get tracking updates
+ * Backend: GET /api/v1/transport/tracking/:requestId
+ */
+export async function getTrackingUpdates(requestId: string): Promise<DeliveryTrackingUpdate[]> {
+  try {
+    return await apiGet<DeliveryTrackingUpdate[]>(`/transport/tracking/${requestId}`);
+  } catch (error) {
+    console.error('Error fetching tracking updates:', error);
+    return [];
+  }
+}
+
+/**
+ * Get transport statistics
+ * Backend: GET /api/v1/transport/stats
+ */
 export async function getTransportStats(): Promise<TransportStats> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return {
-    totalRequests: 0,
-    pendingRequests: 0,
-    activeDeliveries: 0,
-    completedDeliveries: 0,
-    totalRevenue: 0,
-    averageDistance: 0,
-    onTimeDeliveryRate: 0,
-  };
+  try {
+    return await apiGet<TransportStats>('/transport/stats');
+  } catch (error) {
+    console.error('Error fetching transport stats:', error);
+    return {
+      totalRequests: 0,
+      pendingRequests: 0,
+      activeDeliveries: 0,
+      completedDeliveries: 0,
+      totalRevenue: 0,
+      averageDistance: 0,
+      onTimeDeliveryRate: 0,
+    };
+  }
 }
 
-// Farm Pickup Schedule Services
-
-const MOCK_SCHEDULES: FarmPickupSchedule[] = [];
-const MOCK_SLOT_BOOKINGS: PickupSlotBooking[] = [];
+// ==================== Farm Pickup Schedule Services ====================
 
 /**
  * Get farm pickup schedules
+ * Backend: GET /api/v1/transport/pickup-schedules
  */
 export async function getPickupSchedules(filters?: PickupScheduleFilters): Promise<FarmPickupSchedule[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  let filtered = [...MOCK_SCHEDULES];
-  
-  if (filters) {
-    if (filters.providerId) {
-      filtered = filtered.filter(s => s.providerId === filters.providerId);
+  try {
+    const params: Record<string, any> = {};
+    if (filters?.providerId) params.providerId = filters.providerId;
+    if (filters?.aggregationCenterId) params.centerId = filters.aggregationCenterId;
+    if (filters?.status && filters.status !== "all") params.status = filters.status;
+    if (filters?.dateRange) {
+      params.dateFrom = filters.dateRange.start;
+      params.dateTo = filters.dateRange.end;
     }
-    if (filters.aggregationCenterId) {
-      filtered = filtered.filter(s => s.aggregationCenterId === filters.aggregationCenterId);
+
+    const schedules = await apiGet<FarmPickupSchedule[]>('/transport/pickup-schedules', params);
+    
+    // Filter by available capacity on frontend if needed
+    if (filters?.hasAvailableCapacity) {
+      return schedules.filter(s => s.availableCapacity > 0);
     }
-    if (filters.status && filters.status !== "all") {
-      filtered = filtered.filter(s => s.status === filters.status);
-    }
-    if (filters.hasAvailableCapacity) {
-      filtered = filtered.filter(s => s.availableCapacity > 0);
-    }
-    if (filters.dateRange) {
-      filtered = filtered.filter(s => {
-        const scheduleDate = new Date(s.scheduledDate);
-        const start = new Date(filters.dateRange!.start);
-        const end = new Date(filters.dateRange!.end);
-        return scheduleDate >= start && scheduleDate <= end;
-      });
-    }
+    
+    return schedules;
+  } catch (error) {
+    console.error('Error fetching pickup schedules:', error);
+    return [];
   }
-  
-  return filtered;
 }
 
 /**
  * Get pickup schedule by ID
+ * Backend: GET /api/v1/transport/pickup-schedules/:id
  */
 export async function getPickupScheduleById(id: string): Promise<FarmPickupSchedule | null> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_SCHEDULES.find(s => s.id === id) || null;
+  try {
+    return await apiGet<FarmPickupSchedule>(`/transport/pickup-schedules/${id}`);
+  } catch (error) {
+    console.error('Error fetching pickup schedule:', error);
+    return null;
+  }
 }
 
 /**
  * Create farm pickup schedule
+ * Backend: POST /api/v1/transport/pickup-schedules
  */
 export async function createPickupSchedule(schedule: Partial<FarmPickupSchedule>): Promise<ApiResponse<FarmPickupSchedule>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const newSchedule: FarmPickupSchedule = {
-    id: `schedule-${Date.now()}`,
-    scheduleNumber: `SCH-${Date.now().toString().slice(-6)}`,
-    providerId: schedule.providerId || "",
-    providerName: schedule.providerName || "",
-    aggregationCenterId: schedule.aggregationCenterId || "",
-    aggregationCenterName: schedule.aggregationCenterName || "",
-    route: schedule.route || "",
-    scheduledDate: schedule.scheduledDate || new Date().toISOString(),
-    scheduledTime: schedule.scheduledTime || "",
-    totalCapacity: schedule.totalCapacity || 0,
-    usedCapacity: 0,
-    availableCapacity: schedule.totalCapacity || 0,
-    pickupLocations: schedule.pickupLocations || [],
-    status: schedule.status || "draft",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  MOCK_SCHEDULES.push(newSchedule);
-  return { data: newSchedule, message: "Pickup schedule created successfully" };
+  try {
+    const created = await apiPost<FarmPickupSchedule>('/transport/pickup-schedules', schedule);
+    return { data: created, message: "Pickup schedule created successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to create pickup schedule" };
+  }
 }
 
 /**
  * Update pickup schedule
+ * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id
  */
 export async function updatePickupSchedule(id: string, schedule: Partial<FarmPickupSchedule>): Promise<ApiResponse<FarmPickupSchedule>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const index = MOCK_SCHEDULES.findIndex(s => s.id === id);
-  if (index === -1) {
-    return { data: null as any, error: "Schedule not found" };
-  }
-  const updated = { ...MOCK_SCHEDULES[index], ...schedule, updatedAt: new Date().toISOString() };
-  MOCK_SCHEDULES[index] = updated;
-  return { data: updated, message: "Schedule updated successfully" };
+  // Backend doesn't have update endpoint yet
+  return { data: schedule as FarmPickupSchedule, message: "Update not implemented yet" };
 }
 
 /**
  * Publish pickup schedule
+ * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id/publish
  */
 export async function publishPickupSchedule(id: string): Promise<ApiResponse<FarmPickupSchedule>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const schedule = MOCK_SCHEDULES.find(s => s.id === id);
-  if (!schedule) {
-    return { data: null as any, error: "Schedule not found" };
-  }
-  const updated = { ...schedule, status: "published" as const, publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  const index = MOCK_SCHEDULES.findIndex(s => s.id === id);
-  MOCK_SCHEDULES[index] = updated;
-  return { data: updated, message: "Schedule published successfully" };
+  // Backend doesn't have publish endpoint yet
+  return { data: null as any, error: "Publish not implemented yet" };
 }
 
 /**
  * Cancel pickup schedule
+ * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id/cancel
  */
 export async function cancelPickupSchedule(id: string): Promise<ApiResponse<FarmPickupSchedule>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const schedule = MOCK_SCHEDULES.find(s => s.id === id);
-  if (!schedule) {
-    return { data: null as any, error: "Schedule not found" };
-  }
-  const updated = { ...schedule, status: "cancelled" as const, updatedAt: new Date().toISOString() };
-  const index = MOCK_SCHEDULES.findIndex(s => s.id === id);
-  MOCK_SCHEDULES[index] = updated;
-  return { data: updated, message: "Schedule cancelled successfully" };
+  // Backend doesn't have cancel endpoint yet
+  return { data: null as any, error: "Cancel not implemented yet" };
 }
 
 /**
  * Get pickup slots for a schedule
+ * Backend: GET /api/v1/transport/pickup-slots?scheduleId=...
  */
 export async function getPickupSlots(scheduleId: string): Promise<PickupSlot[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  // Mock implementation - in real app, fetch from API
-  return [];
+  try {
+    return await apiGet<PickupSlot[]>('/transport/pickup-slots', { scheduleId });
+  } catch (error) {
+    console.error('Error fetching pickup slots:', error);
+    return [];
+  }
 }
 
 /**
  * Book pickup slot
+ * Backend: POST /api/v1/transport/pickup-slots/:id/book
  */
 export async function bookPickupSlot(scheduleId: string, slotId: string, booking: Partial<PickupSlotBooking>): Promise<ApiResponse<PickupSlotBooking>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const newBooking: PickupSlotBooking = {
-    id: `booking-${Date.now()}`,
-    slotId,
-    scheduleId,
-    farmerId: booking.farmerId || "",
-    farmerName: booking.farmerName || "",
-    quantity: booking.quantity || 0,
-    location: booking.location || "",
-    contactPhone: booking.contactPhone || "",
-    status: "confirmed",
-    bookedAt: new Date().toISOString(),
-  };
-  MOCK_SLOT_BOOKINGS.push(newBooking);
-  
-  // Update schedule capacity
-  const schedule = MOCK_SCHEDULES.find(s => s.id === scheduleId);
-  if (schedule) {
-    schedule.usedCapacity += newBooking.quantity;
-    schedule.availableCapacity = schedule.totalCapacity - schedule.usedCapacity;
-    schedule.updatedAt = new Date().toISOString();
+  try {
+    const created = await apiPost<PickupSlotBooking>(`/transport/pickup-slots/${slotId}/book`, booking);
+    return { data: created, message: "Slot booked successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to book slot" };
   }
-  
-  return { data: newBooking, message: "Slot booked successfully" };
 }
 
 /**
  * Cancel pickup slot booking
+ * TODO: Backend needs to implement DELETE /api/v1/transport/pickup-slots/:id/book or similar
  */
 export async function cancelPickupSlotBooking(bookingId: string): Promise<ApiResponse<void>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const booking = MOCK_SLOT_BOOKINGS.find(b => b.id === bookingId);
-  if (!booking) {
-    return { data: undefined, error: "Booking not found" };
-  }
-  
-  // Update schedule capacity
-  const schedule = MOCK_SCHEDULES.find(s => s.id === booking.scheduleId);
-  if (schedule) {
-    schedule.usedCapacity -= booking.quantity;
-    schedule.availableCapacity = schedule.totalCapacity - schedule.usedCapacity;
-    schedule.updatedAt = new Date().toISOString();
-  }
-  
-  // Remove booking
-  const index = MOCK_SLOT_BOOKINGS.findIndex(b => b.id === bookingId);
-  MOCK_SLOT_BOOKINGS.splice(index, 1);
-  
-  return { data: undefined, message: "Booking cancelled successfully" };
+  // Backend doesn't have cancel booking endpoint yet
+  return { data: undefined, error: "Cancel booking not implemented yet" };
 }
 
 /**
  * Get aggregation center capacity
+ * TODO: Backend needs to implement GET /api/v1/aggregation/centers/:id/capacity
  */
 export async function getAggregationCenterCapacity(centerId: string): Promise<AggregationCenterCapacity> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  // Mock implementation - in real app, fetch from aggregation service
+  // Backend doesn't have capacity endpoint yet - will be in aggregation service
   return {
     centerId,
     centerName: "Aggregation Center",
@@ -318,41 +335,40 @@ export async function getAvailablePickupSchedules(filters?: {
   dateRange?: { start: string; end: string };
   minAvailableCapacity?: number;
 }): Promise<FarmPickupSchedule[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  let filtered = MOCK_SCHEDULES.filter(s => 
-    s.status === "published" || s.status === "active"
-  );
-  
-  if (filters) {
-    if (filters.aggregationCenterId) {
-      filtered = filtered.filter(s => s.aggregationCenterId === filters.aggregationCenterId);
+  try {
+    const scheduleFilters: PickupScheduleFilters = {
+      aggregationCenterId: filters?.aggregationCenterId,
+      dateRange: filters?.dateRange,
+      status: "published",
+      hasAvailableCapacity: filters?.minAvailableCapacity ? true : undefined,
+    };
+    
+    let schedules = await getPickupSchedules(scheduleFilters);
+    
+    // Filter by minimum available capacity
+    if (filters?.minAvailableCapacity) {
+      schedules = schedules.filter(s => s.availableCapacity >= filters.minAvailableCapacity!);
     }
-    if (filters.dateRange) {
-      filtered = filtered.filter(s => {
-        const scheduleDate = new Date(s.scheduledDate);
-        const start = new Date(filters.dateRange!.start);
-        const end = new Date(filters.dateRange!.end);
-        return scheduleDate >= start && scheduleDate <= end;
-      });
-    }
-    if (filters.minAvailableCapacity) {
-      filtered = filtered.filter(s => s.availableCapacity >= filters.minAvailableCapacity!);
-    }
+    
+    return schedules;
+  } catch (error) {
+    console.error('Error fetching available pickup schedules:', error);
+    return [];
   }
-  
-  return filtered;
 }
 
 /**
  * Get farmer's pickup bookings
+ * TODO: Backend needs to implement GET /api/v1/transport/pickup-slots/bookings?farmerId=...
  */
 export async function getFarmerPickupBookings(farmerId: string): Promise<PickupSlotBooking[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_SLOT_BOOKINGS.filter(b => b.farmerId === farmerId);
+  // Backend doesn't have bookings endpoint yet
+  return [];
 }
 
 /**
  * Confirm pickup and create batch
+ * TODO: Backend needs to implement POST /api/v1/transport/pickup-slots/:id/confirm
  */
 export async function confirmPickup(
   bookingId: string,
@@ -364,85 +380,30 @@ export async function confirmPickup(
     notes?: string;
   }
 ): Promise<ApiResponse<PickupReceipt>> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  const booking = MOCK_SLOT_BOOKINGS.find(b => b.id === bookingId);
-  if (!booking) {
-    return { data: null as any, error: "Booking not found" };
-  }
-
-  // Generate QR code for batch
-  const qrCode = `QR-${data.batchId}`;
-
-  // Update booking
-  booking.batchId = data.batchId;
-  booking.qrCode = qrCode;
-  booking.pickupConfirmed = true;
-  booking.pickupConfirmedAt = new Date().toISOString();
-  booking.pickupConfirmedBy = booking.farmerId;
-  booking.status = "picked_up";
-  booking.variety = data.variety;
-  booking.qualityGrade = data.qualityGrade;
-  booking.photos = data.photos;
-  booking.notes = data.notes;
-
-  // Get schedule for receipt
-  const schedule = MOCK_SCHEDULES.find(s => s.id === booking.scheduleId);
-  if (!schedule) {
-    return { data: null as any, error: "Schedule not found" };
-  }
-
-  // Create receipt
-  const receipt: PickupReceipt = {
-    id: `receipt-${Date.now()}`,
-    receiptNumber: `PUP-${Date.now().toString().slice(-8)}`,
-    bookingId: booking.id,
-    scheduleId: booking.scheduleId,
-    farmerId: booking.farmerId,
-    farmerName: booking.farmerName,
-    providerId: schedule.providerId,
-    providerName: schedule.providerName,
-    aggregationCenterId: schedule.aggregationCenterId,
-    aggregationCenterName: schedule.aggregationCenterName,
-    batchId: data.batchId,
-    qrCode,
-    quantity: booking.quantity,
-    variety: data.variety,
-    qualityGrade: data.qualityGrade,
-    pickupLocation: booking.location,
-    pickupDate: new Date().toISOString().split("T")[0],
-    pickupTime: new Date().toISOString(),
-    scheduledDeliveryDate: schedule.scheduledDate,
-    photos: data.photos,
-    notes: data.notes,
-    createdAt: new Date().toISOString(),
-    createdBy: booking.farmerId,
-  };
-
-  booking.pickupReceiptId = receipt.id;
-
-  return { data: receipt, message: "Pickup confirmed and receipt generated" };
+  // Backend doesn't have confirm pickup endpoint yet
+  return { data: null as any, error: "Confirm pickup not implemented yet" };
 }
 
 /**
  * Get pickup receipt by ID
+ * TODO: Backend needs to implement GET /api/v1/transport/receipts/:id
  */
 export async function getPickupReceipt(receiptId: string): Promise<PickupReceipt | null> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  // Mock implementation - in real app, fetch from API
+  // Backend doesn't have receipts endpoint yet
   return null;
 }
 
 /**
  * Get pickup receipt by booking ID
+ * TODO: Backend needs to implement GET /api/v1/transport/receipts?bookingId=...
  */
 export async function getPickupReceiptByBooking(bookingId: string): Promise<PickupReceipt | null> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  // Mock implementation - in real app, fetch from API
+  // Backend doesn't have receipts endpoint yet
   return null;
 }
 
 /**
- * Generate batch ID
+ * Generate batch ID (client-side utility)
  */
 export function generateBatchId(farmerId: string, variety: string): string {
   const timestamp = Date.now();
