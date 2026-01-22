@@ -34,9 +34,106 @@ import type {
   PickupScheduleFilters,
   AggregationCenterCapacity,
   PickupReceipt,
+  TransportRequestStatus,
+  TransportRequestType,
+  PickupScheduleStatus,
+  PickupSlotStatus,
 } from "@/types/transport";
 import type { ApiResponse } from "@/types/inputCustomer";
-import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+
+// ==================== Enum Transformation Utilities ====================
+
+/**
+ * Map backend transport request status (UPPER_CASE) to frontend format (lowercase)
+ * Backend has separate pickup/delivery statuses, frontend has simplified "in_transit"
+ */
+function mapTransportRequestStatus(backendStatus: string): TransportRequestStatus {
+  const statusMap: Record<string, TransportRequestStatus> = {
+    PENDING: 'pending',
+    ACCEPTED: 'accepted',
+    REJECTED: 'rejected',
+    IN_TRANSIT_PICKUP: 'in_transit', // Map to simplified frontend status
+    IN_TRANSIT_DELIVERY: 'in_transit', // Map to simplified frontend status
+    IN_TRANSIT: 'in_transit',
+    DELIVERED: 'delivered',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Map backend transport request type (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapTransportRequestType(backendType: string): TransportRequestType {
+  const typeMap: Record<string, TransportRequestType> = {
+    PRODUCE_PICKUP: 'produce_pickup',
+    PRODUCE_DELIVERY: 'produce_delivery',
+    INPUT_DELIVERY: 'input_delivery',
+  };
+  return typeMap[backendType] || 'produce_pickup';
+}
+
+/**
+ * Map backend pickup schedule status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapPickupScheduleStatus(backendStatus: string): PickupScheduleStatus {
+  const statusMap: Record<string, PickupScheduleStatus> = {
+    DRAFT: 'draft',
+    PUBLISHED: 'published',
+    ACTIVE: 'active',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+  };
+  return statusMap[backendStatus] || 'draft';
+}
+
+/**
+ * Map backend pickup slot status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapPickupSlotStatus(backendStatus: string): PickupSlotStatus {
+  const statusMap: Record<string, PickupSlotStatus> = {
+    AVAILABLE: 'available',
+    BOOKED: 'booked',
+    FULL: 'full',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+  };
+  return statusMap[backendStatus] || 'available';
+}
+
+/**
+ * Transform transport request from backend format to frontend format
+ */
+function transformTransportRequest(request: any): TransportRequest {
+  return {
+    ...request,
+    status: mapTransportRequestStatus(request.status),
+    type: mapTransportRequestType(request.type),
+    requestType: request.requestType ? mapTransportRequestType(request.requestType) : request.requestType,
+  };
+}
+
+/**
+ * Transform pickup schedule from backend format to frontend format
+ */
+function transformPickupSchedule(schedule: any): FarmPickupSchedule {
+  return {
+    ...schedule,
+    status: mapPickupScheduleStatus(schedule.status),
+  };
+}
+
+/**
+ * Transform pickup slot from backend format to frontend format
+ */
+function transformPickupSlot(slot: any): PickupSlot {
+  return {
+    ...slot,
+    status: mapPickupSlotStatus(slot.status),
+  };
+}
 
 // ==================== Transport Requests ====================
 
@@ -49,10 +146,17 @@ export async function getTransportRequests(filters?: TransportFilters): Promise<
     const params: Record<string, any> = {};
     if (filters?.requesterId) params.requesterId = filters.requesterId;
     if (filters?.providerId) params.providerId = filters.providerId;
-    if (filters?.status) params.status = filters.status;
-    if (filters?.type) params.type = filters.type;
+    // Transform status filter to backend format (UPPER_CASE) if provided
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
+    // Transform type filter to backend format (UPPER_CASE) if provided
+    if (filters?.type && filters.type !== "all") {
+      params.type = filters.type.toUpperCase().replace(/_/g, '_');
+    }
 
-    return await apiGet<TransportRequest[]>('/transport/requests', params);
+    const requests = await apiGet<any[]>('/transport/requests', params);
+    return requests.map(transformTransportRequest);
   } catch (error) {
     console.error('Error fetching transport requests:', error);
     return [];
@@ -65,7 +169,8 @@ export async function getTransportRequests(filters?: TransportFilters): Promise<
  */
 export async function getTransportRequestById(id: string): Promise<TransportRequest | null> {
   try {
-    return await apiGet<TransportRequest>(`/transport/requests/${id}`);
+    const request = await apiGet<any>(`/transport/requests/${id}`);
+    return transformTransportRequest(request);
   } catch (error) {
     console.error('Error fetching transport request:', error);
     return null;
@@ -78,8 +183,8 @@ export async function getTransportRequestById(id: string): Promise<TransportRequ
  */
 export async function createTransportRequest(request: Partial<TransportRequest>): Promise<ApiResponse<TransportRequest>> {
   try {
-    const created = await apiPost<TransportRequest>('/transport/requests', request);
-    return { data: created, message: "Transport request created successfully" };
+    const created = await apiPost<any>('/transport/requests', request);
+    return { data: transformTransportRequest(created), message: "Transport request created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create transport request" };
   }
@@ -91,8 +196,8 @@ export async function createTransportRequest(request: Partial<TransportRequest>)
  */
 export async function acceptTransportRequest(id: string, providerId: string): Promise<ApiResponse<TransportRequest>> {
   try {
-    const accepted = await apiPut<TransportRequest>(`/transport/requests/${id}/accept`);
-    return { data: accepted, message: "Request accepted" };
+    const accepted = await apiPut<any>(`/transport/requests/${id}/accept`);
+    return { data: transformTransportRequest(accepted), message: "Request accepted" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to accept request" };
   }
@@ -100,11 +205,15 @@ export async function acceptTransportRequest(id: string, providerId: string): Pr
 
 /**
  * Reject transport request
- * TODO: Backend needs to implement PUT /api/v1/transport/requests/:id/reject
+ * Backend: PUT /api/v1/transport/requests/:id/reject
  */
 export async function rejectTransportRequest(id: string): Promise<ApiResponse<TransportRequest>> {
-  // Backend doesn't have reject endpoint yet - using status update as fallback
-  return updateTransportRequestStatus(id, "rejected" as TransportRequest["status"]);
+  try {
+    const rejected = await apiPut<any>(`/transport/requests/${id}/reject`);
+    return { data: transformTransportRequest(rejected), message: "Request rejected" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to reject request" };
+  }
 }
 
 /**
@@ -116,8 +225,10 @@ export async function updateTransportRequestStatus(
   status: TransportRequest["status"]
 ): Promise<ApiResponse<TransportRequest>> {
   try {
-    const updated = await apiPut<TransportRequest>(`/transport/requests/${id}/status`, { status });
-    return { data: updated, message: "Request status updated" };
+    // Transform frontend status to backend format (UPPER_CASE)
+    const backendStatus = status.toUpperCase().replace(/_/g, '_');
+    const updated = await apiPut<any>(`/transport/requests/${id}/status`, { status: backendStatus });
+    return { data: transformTransportRequest(updated), message: "Request status updated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update request status" };
   }
@@ -125,14 +236,18 @@ export async function updateTransportRequestStatus(
 
 /**
  * Get active deliveries
- * TODO: Backend needs to implement GET /api/v1/transport/deliveries endpoint
+ * Backend: GET /api/v1/transport/deliveries
  */
-export async function getActiveDeliveries(): Promise<ActiveDelivery[]> {
-  // Backend doesn't have deliveries endpoint yet
-  // Filter transport requests by status as fallback
+export async function getActiveDeliveries(filters?: {
+  providerId?: string;
+  requesterId?: string;
+}): Promise<ActiveDelivery[]> {
   try {
-    const requests = await getTransportRequests({ status: "in_transit" });
-    return requests.filter(r => r.status === "in_transit" || r.status === "delivered") as ActiveDelivery[];
+    const params: Record<string, any> = {};
+    if (filters?.providerId) params.providerId = filters.providerId;
+    if (filters?.requesterId) params.requesterId = filters.requesterId;
+
+    return await apiGet<ActiveDelivery[]>('/transport/deliveries', params);
   } catch (error) {
     console.error('Error fetching active deliveries:', error);
     return [];
@@ -206,14 +321,15 @@ export async function getPickupSchedules(filters?: PickupScheduleFilters): Promi
       params.dateTo = filters.dateRange.end;
     }
 
-    const schedules = await apiGet<FarmPickupSchedule[]>('/transport/pickup-schedules', params);
+    const schedules = await apiGet<any[]>('/transport/pickup-schedules', params);
+    const transformed = schedules.map(transformPickupSchedule);
     
     // Filter by available capacity on frontend if needed
     if (filters?.hasAvailableCapacity) {
-      return schedules.filter(s => s.availableCapacity > 0);
+      return transformed.filter(s => s.availableCapacity > 0);
     }
     
-    return schedules;
+    return transformed;
   } catch (error) {
     console.error('Error fetching pickup schedules:', error);
     return [];
@@ -226,7 +342,8 @@ export async function getPickupSchedules(filters?: PickupScheduleFilters): Promi
  */
 export async function getPickupScheduleById(id: string): Promise<FarmPickupSchedule | null> {
   try {
-    return await apiGet<FarmPickupSchedule>(`/transport/pickup-schedules/${id}`);
+    const schedule = await apiGet<any>(`/transport/pickup-schedules/${id}`);
+    return transformPickupSchedule(schedule);
   } catch (error) {
     console.error('Error fetching pickup schedule:', error);
     return null;
@@ -239,8 +356,8 @@ export async function getPickupScheduleById(id: string): Promise<FarmPickupSched
  */
 export async function createPickupSchedule(schedule: Partial<FarmPickupSchedule>): Promise<ApiResponse<FarmPickupSchedule>> {
   try {
-    const created = await apiPost<FarmPickupSchedule>('/transport/pickup-schedules', schedule);
-    return { data: created, message: "Pickup schedule created successfully" };
+    const created = await apiPost<any>('/transport/pickup-schedules', schedule);
+    return { data: transformPickupSchedule(created), message: "Pickup schedule created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create pickup schedule" };
   }
@@ -248,29 +365,56 @@ export async function createPickupSchedule(schedule: Partial<FarmPickupSchedule>
 
 /**
  * Update pickup schedule
- * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id
+ * Backend: PUT /api/v1/transport/pickup-schedules/:id
  */
 export async function updatePickupSchedule(id: string, schedule: Partial<FarmPickupSchedule>): Promise<ApiResponse<FarmPickupSchedule>> {
-  // Backend doesn't have update endpoint yet
-  return { data: schedule as FarmPickupSchedule, message: "Update not implemented yet" };
+  try {
+    // Map frontend fields to backend DTO format
+    const updateData: any = {};
+    if (schedule.route !== undefined) updateData.route = schedule.route;
+    if (schedule.scheduledDate !== undefined) updateData.scheduledDate = schedule.scheduledDate instanceof Date ? schedule.scheduledDate.toISOString() : schedule.scheduledDate;
+    if (schedule.scheduledTime !== undefined) updateData.scheduledTime = schedule.scheduledTime;
+    if (schedule.totalCapacity !== undefined) updateData.totalCapacity = schedule.totalCapacity;
+    if (schedule.vehicleId !== undefined) updateData.vehicleId = schedule.vehicleId;
+    if (schedule.vehicleType !== undefined) updateData.vehicleType = schedule.vehicleType;
+    if (schedule.driverId !== undefined) updateData.driverId = schedule.driverId;
+    if (schedule.driverName !== undefined) updateData.driverName = schedule.driverName;
+    if (schedule.driverPhone !== undefined) updateData.driverPhone = schedule.driverPhone;
+    if (schedule.pricePerKg !== undefined) updateData.pricePerKg = schedule.pricePerKg;
+    if (schedule.fixedPrice !== undefined) updateData.fixedPrice = schedule.fixedPrice;
+    if (schedule.notes !== undefined) updateData.notes = schedule.notes;
+
+    const updated = await apiPut<any>(`/transport/pickup-schedules/${id}`, updateData);
+    return { data: transformPickupSchedule(updated), message: "Pickup schedule updated successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to update pickup schedule" };
+  }
 }
 
 /**
  * Publish pickup schedule
- * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id/publish
+ * Backend: PUT /api/v1/transport/pickup-schedules/:id/publish
  */
 export async function publishPickupSchedule(id: string): Promise<ApiResponse<FarmPickupSchedule>> {
-  // Backend doesn't have publish endpoint yet
-  return { data: null as any, error: "Publish not implemented yet" };
+  try {
+    const published = await apiPut<any>(`/transport/pickup-schedules/${id}/publish`);
+    return { data: transformPickupSchedule(published), message: "Schedule published successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to publish schedule" };
+  }
 }
 
 /**
  * Cancel pickup schedule
- * TODO: Backend needs to implement PUT /api/v1/transport/pickup-schedules/:id/cancel
+ * Backend: PUT /api/v1/transport/pickup-schedules/:id/cancel
  */
-export async function cancelPickupSchedule(id: string): Promise<ApiResponse<FarmPickupSchedule>> {
-  // Backend doesn't have cancel endpoint yet
-  return { data: null as any, error: "Cancel not implemented yet" };
+export async function cancelPickupSchedule(id: string, reason?: string): Promise<ApiResponse<FarmPickupSchedule>> {
+  try {
+    const cancelled = await apiPut<any>(`/transport/pickup-schedules/${id}/cancel`, { reason });
+    return { data: transformPickupSchedule(cancelled), message: "Schedule cancelled successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to cancel schedule" };
+  }
 }
 
 /**
@@ -279,7 +423,8 @@ export async function cancelPickupSchedule(id: string): Promise<ApiResponse<Farm
  */
 export async function getPickupSlots(scheduleId: string): Promise<PickupSlot[]> {
   try {
-    return await apiGet<PickupSlot[]>('/transport/pickup-slots', { scheduleId });
+    const slots = await apiGet<any[]>('/transport/pickup-slots', { scheduleId });
+    return slots.map(transformPickupSlot);
   } catch (error) {
     console.error('Error fetching pickup slots:', error);
     return [];
@@ -292,7 +437,7 @@ export async function getPickupSlots(scheduleId: string): Promise<PickupSlot[]> 
  */
 export async function bookPickupSlot(scheduleId: string, slotId: string, booking: Partial<PickupSlotBooking>): Promise<ApiResponse<PickupSlotBooking>> {
   try {
-    const created = await apiPost<PickupSlotBooking>(`/transport/pickup-slots/${slotId}/book`, booking);
+    const created = await apiPost<any>(`/transport/pickup-slots/${slotId}/book`, booking);
     return { data: created, message: "Slot booked successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to book slot" };
@@ -359,29 +504,49 @@ export async function getAvailablePickupSchedules(filters?: {
 
 /**
  * Get farmer's pickup bookings
- * TODO: Backend needs to implement GET /api/v1/transport/pickup-slots/bookings?farmerId=...
+ * Backend: GET /api/v1/transport/pickup-slots/bookings?farmerId=...
  */
-export async function getFarmerPickupBookings(farmerId: string): Promise<PickupSlotBooking[]> {
-  // Backend doesn't have bookings endpoint yet
-  return [];
+export async function getFarmerPickupBookings(farmerId: string, filters?: {
+  status?: string;
+  scheduleId?: string;
+}): Promise<PickupSlotBooking[]> {
+  try {
+    const params: Record<string, any> = { farmerId };
+    if (filters?.status) params.status = filters.status;
+    if (filters?.scheduleId) params.scheduleId = filters.scheduleId;
+    return await apiGet<PickupSlotBooking[]>('/transport/pickup-slots/bookings', params);
+  } catch (error) {
+    console.error('Error fetching farmer pickup bookings:', error);
+    return [];
+  }
 }
 
 /**
  * Confirm pickup and create batch
- * TODO: Backend needs to implement POST /api/v1/transport/pickup-slots/:id/confirm
+ * Backend: POST /api/v1/transport/pickup-slots/bookings/:id/confirm
  */
 export async function confirmPickup(
   bookingId: string,
   data: {
-    batchId: string;
+    batchId?: string;
     variety: string;
     qualityGrade: "A" | "B" | "C";
     photos?: string[];
     notes?: string;
   }
-): Promise<ApiResponse<PickupReceipt>> {
-  // Backend doesn't have confirm pickup endpoint yet
-  return { data: null as any, error: "Confirm pickup not implemented yet" };
+): Promise<ApiResponse<PickupSlotBooking>> {
+  try {
+    const confirmed = await apiPost<any>(`/transport/pickup-slots/bookings/${bookingId}/confirm`, {
+      batchId: data.batchId,
+      variety: data.variety,
+      qualityGrade: data.qualityGrade,
+      photos: data.photos,
+      notes: data.notes,
+    });
+    return { data: confirmed, message: "Pickup confirmed successfully. Receipt generated." };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to confirm pickup" };
+  }
 }
 
 /**

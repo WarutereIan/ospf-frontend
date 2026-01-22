@@ -34,9 +34,72 @@ import type {
   AggregationFilters,
   StockFilters,
   AggregationStats,
+  CenterType,
+  CenterStatus,
+  StockTransactionType,
 } from "@/types/aggregation";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+
+// ==================== Enum Transformation Utilities ====================
+
+/**
+ * Map backend center type (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapCenterType(backendType: string): CenterType {
+  const typeMap: Record<string, CenterType> = {
+    MAIN: 'main',
+    SATELLITE: 'satellite',
+  };
+  return typeMap[backendType] || 'main';
+}
+
+/**
+ * Map backend center status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapCenterStatus(backendStatus: string): CenterStatus {
+  const statusMap: Record<string, CenterStatus> = {
+    OPERATIONAL: 'operational',
+    MAINTENANCE: 'maintenance',
+    CLOSED: 'closed',
+  };
+  return statusMap[backendStatus] || 'operational';
+}
+
+/**
+ * Map backend stock transaction type (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapStockTransactionType(backendType: string): StockTransactionType {
+  const typeMap: Record<string, StockTransactionType> = {
+    STOCK_IN: 'stock_in',
+    STOCK_OUT: 'stock_out',
+    TRANSFER: 'transfer',
+    WASTAGE: 'wastage',
+    ADJUSTMENT: 'adjustment',
+  };
+  return typeMap[backendType] || 'stock_in';
+}
+
+/**
+ * Transform aggregation center from backend format to frontend format
+ */
+function transformAggregationCenter(center: any): AggregationCenter {
+  return {
+    ...center,
+    centerType: center.centerType ? mapCenterType(center.centerType) : center.centerType,
+    status: center.status ? mapCenterStatus(center.status) : center.status,
+  };
+}
+
+/**
+ * Transform stock transaction from backend format to frontend format
+ */
+function transformStockTransaction(transaction: any): StockTransaction {
+  return {
+    ...transaction,
+    type: mapStockTransactionType(transaction.type),
+  };
+}
 
 /**
  * Get all aggregation centers
@@ -45,11 +108,17 @@ import { apiGet, apiPost, apiPut } from "@/lib/api-client";
 export async function getAggregationCenters(filters?: AggregationFilters): Promise<AggregationCenter[]> {
   try {
     const params: Record<string, any> = {};
-    if (filters?.centerType) params.centerType = filters.centerType;
-    if (filters?.status) params.status = filters.status;
+    // Transform filters to backend format (UPPER_CASE) if provided
+    if (filters?.centerType && filters.centerType !== "all") {
+      params.centerType = filters.centerType.toUpperCase();
+    }
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase();
+    }
     if (filters?.county) params.county = filters.county;
 
-    return await apiGet<AggregationCenter[]>('/aggregation/centers', params);
+    const centers = await apiGet<any[]>('/aggregation/centers', params);
+    return centers.map(transformAggregationCenter);
   } catch (error) {
     console.error('Error fetching aggregation centers:', error);
     return [];
@@ -75,8 +144,8 @@ export async function getAggregationCenterById(id: string): Promise<AggregationC
  */
 export async function createAggregationCenter(center: Partial<AggregationCenter>): Promise<ApiResponse<AggregationCenter>> {
   try {
-    const created = await apiPost<AggregationCenter>('/aggregation/centers', center);
-    return { data: created, message: "Aggregation center created successfully" };
+    const created = await apiPost<any>('/aggregation/centers', center);
+    return { data: transformAggregationCenter(created), message: "Aggregation center created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create aggregation center" };
   }
@@ -88,8 +157,8 @@ export async function createAggregationCenter(center: Partial<AggregationCenter>
  */
 export async function updateAggregationCenter(id: string, updates: Partial<AggregationCenter>): Promise<ApiResponse<AggregationCenter>> {
   try {
-    const updated = await apiPut<AggregationCenter>(`/aggregation/centers/${id}`, updates);
-    return { data: updated, message: "Aggregation center updated successfully" };
+    const updated = await apiPut<any>(`/aggregation/centers/${id}`, updates);
+    return { data: transformAggregationCenter(updated), message: "Aggregation center updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update aggregation center" };
   }
@@ -108,7 +177,8 @@ export async function getStockTransactions(filters?: StockFilters): Promise<Stoc
     if (filters?.dateFrom) params.dateFrom = filters.dateFrom;
     if (filters?.dateTo) params.dateTo = filters.dateTo;
 
-    return await apiGet<StockTransaction[]>('/aggregation/stock-transactions', params);
+    const transactions = await apiGet<any[]>('/aggregation/stock-transactions', params);
+    return transactions.map(transformStockTransaction);
   } catch (error) {
     console.error('Error fetching stock transactions:', error);
     return [];
@@ -121,8 +191,8 @@ export async function getStockTransactions(filters?: StockFilters): Promise<Stoc
  */
 export async function createStockIn(transaction: Partial<StockTransaction>): Promise<ApiResponse<StockTransaction>> {
   try {
-    const created = await apiPost<StockTransaction>('/aggregation/stock-in', transaction);
-    return { data: created, message: "Stock in recorded" };
+    const created = await apiPost<any>('/aggregation/stock-in', transaction);
+    return { data: transformStockTransaction(created), message: "Stock in recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record stock in" };
   }
@@ -134,8 +204,8 @@ export async function createStockIn(transaction: Partial<StockTransaction>): Pro
  */
 export async function createStockOut(transaction: Partial<StockTransaction>): Promise<ApiResponse<StockTransaction>> {
   try {
-    const created = await apiPost<StockTransaction>('/aggregation/stock-out', transaction);
-    return { data: created, message: "Stock out recorded" };
+    const created = await apiPost<any>('/aggregation/stock-out', transaction);
+    return { data: transformStockTransaction(created), message: "Stock out recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record stock out" };
   }

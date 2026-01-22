@@ -32,9 +32,77 @@ import type {
   CustomerFilters,
   InputStats,
   CustomerStats,
+  InputStatus,
+  InputOrderStatus,
+  InputPaymentStatus,
 } from "@/types/input";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+
+// ==================== Enum Transformation Utilities ====================
+
+/**
+ * Map backend input status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapInputStatus(backendStatus: string): InputStatus {
+  const statusMap: Record<string, InputStatus> = {
+    ACTIVE: 'active',
+    INACTIVE: 'inactive',
+    OUT_OF_STOCK: 'out_of_stock',
+  };
+  return statusMap[backendStatus] || 'inactive';
+}
+
+/**
+ * Map backend input order status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapInputOrderStatus(backendStatus: string): InputOrderStatus {
+  const statusMap: Record<string, InputOrderStatus> = {
+    PENDING: 'pending',
+    ACCEPTED: 'accepted',
+    PROCESSING: 'processing',
+    READY_FOR_PICKUP: 'ready_for_pickup',
+    IN_TRANSIT: 'in_transit',
+    DELIVERED: 'delivered',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+    REJECTED: 'rejected',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Map backend input payment status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapInputPaymentStatus(backendStatus: string): InputPaymentStatus {
+  const statusMap: Record<string, InputPaymentStatus> = {
+    PENDING: 'pending',
+    PAID: 'paid',
+    REFUNDED: 'refunded',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Transform input from backend format to frontend format
+ */
+function transformInput(input: any): Input {
+  return {
+    ...input,
+    status: mapInputStatus(input.status),
+  };
+}
+
+/**
+ * Transform input order from backend format to frontend format
+ */
+function transformInputOrder(order: any): InputOrder {
+  return {
+    ...order,
+    status: mapInputOrderStatus(order.status),
+    paymentStatus: order.paymentStatus ? mapInputPaymentStatus(order.paymentStatus) : order.paymentStatus,
+  };
+}
 
 // ==================== Input Products ====================
 
@@ -47,12 +115,16 @@ export async function getInputs(filters?: InputFilters): Promise<Input[]> {
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
     if (filters?.category) params.category = filters.category;
-    if (filters?.status) params.status = filters.status;
+    // Transform status filter to backend format (UPPER_CASE) if provided
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
     if (filters?.minPrice) params.minPrice = filters.minPrice;
     if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
     if (filters?.search) params.search = filters.search;
 
-    return await apiGet<Input[]>('/inputs', params);
+    const inputs = await apiGet<any[]>('/inputs', params);
+    return inputs.map(transformInput);
   } catch (error) {
     console.error('Error fetching inputs:', error);
     return [];
@@ -65,7 +137,8 @@ export async function getInputs(filters?: InputFilters): Promise<Input[]> {
  */
 export async function getInputById(id: string): Promise<Input | null> {
   try {
-    return await apiGet<Input>(`/inputs/${id}`);
+    const input = await apiGet<any>(`/inputs/${id}`);
+    return transformInput(input);
   } catch (error) {
     console.error('Error fetching input:', error);
     return null;
@@ -91,8 +164,8 @@ export async function createInput(input: Partial<Input>): Promise<ApiResponse<In
  */
 export async function updateInput(id: string, input: Partial<Input>): Promise<ApiResponse<Input>> {
   try {
-    const updated = await apiPut<Input>(`/inputs/${id}`, input);
-    return { data: updated, message: "Input updated successfully" };
+    const updated = await apiPut<any>(`/inputs/${id}`, input);
+    return { data: transformInput(updated), message: "Input updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update input" };
   }
@@ -123,10 +196,16 @@ export async function getInputOrders(filters?: InputOrderFilters): Promise<Input
     if (filters?.farmerId) params.farmerId = filters.farmerId;
     if (filters?.providerId) params.providerId = filters.providerId;
     if (filters?.inputId) params.inputId = filters.inputId;
-    if (filters?.status) params.status = filters.status;
-    if (filters?.paymentStatus) params.paymentStatus = filters.paymentStatus;
+    // Transform status filters to backend format (UPPER_CASE) if provided
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
+    if (filters?.paymentStatus && filters.paymentStatus !== "all") {
+      params.paymentStatus = filters.paymentStatus.toUpperCase();
+    }
 
-    return await apiGet<InputOrder[]>('/inputs/orders', params);
+    const orders = await apiGet<any[]>('/inputs/orders', params);
+    return orders.map(transformInputOrder);
   } catch (error) {
     console.error('Error fetching input orders:', error);
     return [];
@@ -139,7 +218,8 @@ export async function getInputOrders(filters?: InputOrderFilters): Promise<Input
  */
 export async function getInputOrderById(id: string): Promise<InputOrder | null> {
   try {
-    return await apiGet<InputOrder>(`/inputs/orders/${id}`);
+    const order = await apiGet<any>(`/inputs/orders/${id}`);
+    return transformInputOrder(order);
   } catch (error) {
     console.error('Error fetching input order:', error);
     return null;
@@ -152,8 +232,8 @@ export async function getInputOrderById(id: string): Promise<InputOrder | null> 
  */
 export async function createInputOrder(order: Partial<InputOrder>): Promise<ApiResponse<InputOrder>> {
   try {
-    const created = await apiPost<InputOrder>('/inputs/orders', order);
-    return { data: created, message: "Input order created successfully" };
+    const created = await apiPost<any>('/inputs/orders', order);
+    return { data: transformInputOrder(created), message: "Input order created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create input order" };
   }
@@ -168,8 +248,10 @@ export async function updateInputOrderStatus(
   status: InputOrder["status"]
 ): Promise<ApiResponse<InputOrder>> {
   try {
-    const updated = await apiPut<InputOrder>(`/inputs/orders/${id}/status`, { status });
-    return { data: updated, message: "Order status updated" };
+    // Transform frontend status to backend format (UPPER_CASE)
+    const backendStatus = status.toUpperCase().replace(/_/g, '_');
+    const updated = await apiPut<any>(`/inputs/orders/${id}/status`, { status: backendStatus });
+    return { data: transformInputOrder(updated), message: "Order status updated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update order status" };
   }
@@ -215,7 +297,8 @@ export async function getInputCustomerById(id: string): Promise<InputCustomer | 
  */
 export async function getCustomerOrderHistory(customerId: string): Promise<InputOrder[]> {
   try {
-    return await apiGet<InputOrder[]>(`/inputs/customers/${customerId}/orders`);
+    const orders = await apiGet<any[]>(`/inputs/customers/${customerId}/orders`);
+    return orders.map(transformInputOrder);
   } catch (error) {
     console.error('Error fetching customer order history:', error);
     return [];

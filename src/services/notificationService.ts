@@ -20,6 +20,8 @@ import type {
   Alert,
   NotificationFilters,
   NotificationStats,
+  NotificationType,
+  NotificationPriority,
 } from "@/types/notification";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPut, apiDelete } from "@/lib/api-client";
@@ -31,6 +33,65 @@ interface NotificationListResponse {
 }
 
 /**
+ * Map backend notification type to frontend type
+ * Backend uses UPPER_CASE types, frontend expects lowercase
+ */
+function mapNotificationType(backendType: string): NotificationType {
+  const typeMap: Record<string, NotificationType> = {
+    // Direct mappings
+    ORDER: 'order',
+    PAYMENT: 'payment',
+    TRANSPORT: 'transport',
+    QUALITY_CHECK: 'quality_check',
+    
+    // Order-related workflows map to 'order'
+    RFQ: 'order',
+    RFQ_RESPONSE: 'order',
+    SOURCING_REQUEST: 'order',
+    SUPPLIER_OFFER: 'order',
+    NEGOTIATION: 'order',
+    
+    // Transport-related map to 'transport'
+    PICKUP_SCHEDULE: 'transport',
+    PICKUP_BOOKING: 'transport',
+    
+    // System and alerts
+    SYSTEM: 'system',
+    ALERT: 'alert',
+  };
+  
+  return typeMap[backendType] || 'system'; // Default to 'system' for unknown types
+}
+
+/**
+ * Map backend priority to frontend priority
+ * Backend uses UPPER_CASE, frontend expects lowercase
+ */
+function mapNotificationPriority(backendPriority: string): NotificationPriority {
+  const priorityMap: Record<string, NotificationPriority> = {
+    LOW: 'low',
+    MEDIUM: 'medium',
+    HIGH: 'high',
+    URGENT: 'urgent',
+  };
+  
+  return priorityMap[backendPriority] || 'medium'; // Default to 'medium'
+}
+
+/**
+ * Transform backend notification to frontend format
+ * Converts isRead boolean to status string, maps notification type and priority
+ */
+function transformNotification(notification: any): Notification {
+  return {
+    ...notification,
+    status: notification.isRead ? "read" : "unread",
+    type: mapNotificationType(notification.type),
+    priority: mapNotificationPriority(notification.priority),
+  };
+}
+
+/**
  * Get notifications with filters
  * Backend: GET /api/v1/notifications
  */
@@ -38,14 +99,19 @@ export async function getNotifications(filters?: NotificationFilters): Promise<N
   try {
     const params: Record<string, any> = {};
     if (filters?.type) params.type = filters.type;
-    if (filters?.isRead !== undefined) params.isRead = filters.isRead;
+    // Transform status filter to isRead boolean for backend
+    if (filters?.status && filters.status !== "all") {
+      params.isRead = filters.status === "read";
+    }
     if (filters?.entityType) params.entityType = filters.entityType;
     if (filters?.entityId) params.entityId = filters.entityId;
     if (filters?.limit) params.limit = filters.limit;
     if (filters?.offset) params.offset = filters.offset;
 
-    const response = await apiGet<NotificationListResponse>('/notifications', params);
-    return response.notifications || [];
+    const response = await apiGet<any>('/notifications', params);
+    const notifications = response.notifications || response.data || [];
+    // Transform each notification to include status field
+    return notifications.map(transformNotification);
   } catch (error) {
     console.error('Error fetching notifications:', error);
     return [];
@@ -58,7 +124,8 @@ export async function getNotifications(filters?: NotificationFilters): Promise<N
  */
 export async function getNotificationById(id: string): Promise<Notification | null> {
   try {
-    return await apiGet<Notification>(`/notifications/${id}`);
+    const notification = await apiGet<any>(`/notifications/${id}`);
+    return transformNotification(notification);
   } catch (error) {
     console.error('Error fetching notification:', error);
     return null;
@@ -71,8 +138,8 @@ export async function getNotificationById(id: string): Promise<Notification | nu
  */
 export async function markNotificationAsRead(id: string): Promise<ApiResponse<Notification>> {
   try {
-    const notification = await apiPut<Notification>(`/notifications/${id}/read`);
-    return { data: notification, message: "Notification marked as read" };
+    const notification = await apiPut<any>(`/notifications/${id}/read`);
+    return { data: transformNotification(notification), message: "Notification marked as read" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to mark notification as read" };
   }
@@ -92,12 +159,11 @@ export async function markAllNotificationsAsRead(): Promise<{ count: number }> {
 }
 
 /**
- * Archive notification (not implemented in backend yet)
- * TODO: Backend needs to implement archive functionality
+ * Archive notification
+ * Note: Archived status not supported - just mark as read instead
  */
 export async function archiveNotification(id: string): Promise<ApiResponse<Notification>> {
-  // Backend doesn't have archive endpoint yet
-  // For now, we'll just mark as read
+  // Archived status not supported - mark as read instead
   return markNotificationAsRead(id);
 }
 

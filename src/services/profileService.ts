@@ -27,9 +27,65 @@ import type {
   Rating,
   RatingSummary,
   RatingFilters,
+  UserRole,
+  ProfileStatus,
 } from "@/types/profile";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPut, apiPost } from "@/lib/api-client";
+
+// ==================== Enum Transformation Utilities ====================
+
+/**
+ * Map backend user role (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapUserRole(backendRole: string): UserRole {
+  const roleMap: Record<string, UserRole> = {
+    FARMER: 'farmer',
+    BUYER: 'buyer',
+    INPUT_PROVIDER: 'input_provider',
+    TRANSPORT_PROVIDER: 'transport_provider',
+    AGGREGATION_MANAGER: 'aggregation_manager',
+    COUNTY_OFFICER: 'county_officer',
+    STAFF: 'staff',
+    ADMIN: 'staff', // Map ADMIN to staff for frontend
+  };
+  return roleMap[backendRole] || 'farmer';
+}
+
+/**
+ * Map backend profile status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapProfileStatus(backendStatus: string): ProfileStatus {
+  const statusMap: Record<string, ProfileStatus> = {
+    ACTIVE: 'active',
+    INACTIVE: 'inactive',
+    SUSPENDED: 'suspended',
+    PENDING_VERIFICATION: 'pending',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Transform profile from backend format to frontend format
+ * Flattens nested user object and transforms enums
+ */
+function transformProfile(profile: any): Profile {
+  // Flatten nested user object if present
+  const flattened: any = {
+    ...profile,
+    // Extract user fields to root level
+    email: profile.user?.email || profile.email,
+    role: profile.user?.role ? mapUserRole(profile.user.role) : (profile.role ? mapUserRole(profile.role) : profile.role),
+    status: profile.user?.status ? mapProfileStatus(profile.user.status) : (profile.status ? mapProfileStatus(profile.status) : profile.status),
+  };
+  
+  // Remove nested user object if it exists
+  if (flattened.user) {
+    delete flattened.user;
+  }
+  
+  return flattened as Profile;
+}
 
 /**
  * Get profile by ID
@@ -39,7 +95,8 @@ import { apiGet, apiPut, apiPost } from "@/lib/api-client";
  */
 export async function getProfileById(id: string): Promise<Profile | null> {
   try {
-    return await apiGet<Profile>(`/profiles/${id}`);
+    const profile = await apiGet<any>(`/profiles/${id}`);
+    return transformProfile(profile);
   } catch (error) {
     console.error('Error fetching profile:', error);
     return null;
@@ -53,7 +110,8 @@ export async function getProfileById(id: string): Promise<Profile | null> {
  */
 export async function getFarmerProfile(id: string): Promise<FarmerProfile | null> {
   try {
-    return await apiGet<FarmerProfile>(`/profiles/${id}/farmer`);
+    const profile = await apiGet<any>(`/profiles/${id}/farmer`);
+    return transformProfile(profile) as FarmerProfile;
   } catch (error) {
     console.error('Error fetching farmer profile:', error);
     return null;
@@ -67,7 +125,8 @@ export async function getFarmerProfile(id: string): Promise<FarmerProfile | null
  */
 export async function getBuyerProfile(id: string): Promise<BuyerProfile | null> {
   try {
-    return await apiGet<BuyerProfile>(`/profiles/${id}/buyer`);
+    const profile = await apiGet<any>(`/profiles/${id}/buyer`);
+    return transformProfile(profile) as BuyerProfile;
   } catch (error) {
     console.error('Error fetching buyer profile:', error);
     return null;
@@ -101,7 +160,8 @@ export async function getProfiles(filters?: ProfileFilters): Promise<Profile[]> 
  */
 export async function updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
   try {
-    return await apiPut<Profile>(`/profiles/${id}`, updates);
+    const updated = await apiPut<any>(`/profiles/${id}`, updates);
+    return transformProfile(updated);
   } catch (error) {
     console.error('Error updating profile:', error);
     throw error;
@@ -136,7 +196,7 @@ export async function getRatings(filters?: RatingFilters & { userId?: string }):
 
     const params: Record<string, any> = {};
     if (filters.minRating) params.minRating = filters.minRating;
-    if (filters.maxRating) params.maxRating = filters.maxRating;
+    //if (filters.maxRating) params.maxRating = filters.maxRating;
 
     return await apiGet<Rating[]>(`/profiles/${filters.userId}/ratings`, params);
   } catch (error) {

@@ -38,9 +38,214 @@ import type {
   MarketplaceOrderFilters,
   SourcingRequestFilters,
   MarketplaceStats,
+  MarketplaceOrderStatus,
+  ListingStatus,
+  PaymentStatus,
+  OFSPVariety,
+  SourcingProductType,
+  RFQStatus,
+  RFQResponseStatus,
+  NegotiationStatus,
 } from "@/types/marketplace";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+
+// ==================== Enum Transformation Utilities ====================
+
+/**
+ * Map backend order status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapOrderStatus(backendStatus: string): MarketplaceOrderStatus {
+  const statusMap: Record<string, MarketplaceOrderStatus> = {
+    ORDER_PLACED: 'order_placed',
+    ORDER_ACCEPTED: 'order_accepted',
+    ORDER_REJECTED: 'rejected',
+    PAYMENT_SECURED: 'payment_secured',
+    IN_TRANSIT: 'in_transit',
+    AT_AGGREGATION: 'at_aggregation',
+    QUALITY_CHECKED: 'quality_checked',
+    QUALITY_APPROVED: 'quality_approved',
+    QUALITY_REJECTED: 'quality_rejected',
+    OUT_FOR_DELIVERY: 'out_for_delivery',
+    DELIVERED: 'delivered',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+    DISPUTED: 'disputed',
+  };
+  return statusMap[backendStatus] || backendStatus.toLowerCase().replace(/-/g, '_') as MarketplaceOrderStatus;
+}
+
+/**
+ * Map backend listing status (UPPER_CASE) to frontend format (lowercase)
+ * Handles "EXPIRED" → "pending" mapping
+ */
+function mapListingStatus(backendStatus: string): ListingStatus {
+  const statusMap: Record<string, ListingStatus> = {
+    ACTIVE: 'active',
+    SOLD: 'sold',
+    INACTIVE: 'inactive',
+    EXPIRED: 'pending', // Backend has EXPIRED, frontend uses pending
+    PENDING: 'pending',
+  };
+  return statusMap[backendStatus] || 'inactive';
+}
+
+/**
+ * Map backend payment status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapPaymentStatus(backendStatus: string): PaymentStatus {
+  const statusMap: Record<string, PaymentStatus> = {
+    PENDING: 'pending',
+    SECURED: 'secured',
+    RELEASED: 'released',
+    REFUNDED: 'refunded',
+    DISPUTED: 'disputed',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Map backend OFSP variety (UPPER_CASE) to frontend format (Title Case)
+ */
+function mapOFSPVariety(backendVariety: string): OFSPVariety {
+  const varietyMap: Record<string, OFSPVariety> = {
+    KENYA: 'Kenya',
+    SPK004: 'SPK004', // Keep as-is
+    KAKAMEGA: 'Kakamega',
+    KABODE: 'Kabode',
+    OTHER: 'Other',
+  };
+  return varietyMap[backendVariety] || 'Other';
+}
+
+/**
+ * Map backend sourcing product type (UPPER_CASE) to frontend format (lowercase)
+ * Handles "OFSP" if present (though frontend doesn't have it)
+ */
+function mapSourcingProductType(backendType: string): SourcingProductType {
+  const typeMap: Record<string, SourcingProductType> = {
+    FRESH_ROOTS: 'fresh_roots',
+    PROCESS_GRADE: 'process_grade',
+    PLANTING_VINES: 'planting_vines',
+    OFSP: 'fresh_roots', // Map OFSP to fresh_roots if backend sends it
+  };
+  return typeMap[backendType] || 'fresh_roots';
+}
+
+/**
+ * Map backend RFQ status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapRFQStatus(backendStatus: string): RFQStatus {
+  const statusMap: Record<string, RFQStatus> = {
+    DRAFT: 'draft',
+    PUBLISHED: 'published',
+    CLOSED: 'closed',
+    EVALUATING: 'evaluating',
+    AWARDED: 'awarded',
+    CANCELLED: 'cancelled',
+  };
+  return statusMap[backendStatus] || 'draft';
+}
+
+/**
+ * Map backend RFQ response status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapRFQResponseStatus(backendStatus: string): RFQResponseStatus {
+  const statusMap: Record<string, RFQResponseStatus> = {
+    DRAFT: 'draft',
+    SUBMITTED: 'submitted',
+    UNDER_REVIEW: 'under_review',
+    SHORTLISTED: 'shortlisted',
+    AWARDED: 'awarded',
+    REJECTED: 'rejected',
+    WITHDRAWN: 'withdrawn',
+  };
+  return statusMap[backendStatus] || 'draft';
+}
+
+/**
+ * Map backend negotiation status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapNegotiationStatus(backendStatus: string): NegotiationStatus {
+  const statusMap: Record<string, NegotiationStatus> = {
+    PENDING: 'pending',
+    COUNTER_OFFER: 'counter_offer',
+    ACCEPTED: 'accepted',
+    REJECTED: 'rejected',
+    EXPIRED: 'expired',
+    CONVERTED: 'converted',
+  };
+  return statusMap[backendStatus] || 'pending';
+}
+
+/**
+ * Transform marketplace order from backend format to frontend format
+ */
+function transformMarketplaceOrder(order: any): MarketplaceOrder {
+  return {
+    ...order,
+    status: mapOrderStatus(order.status),
+    paymentStatus: order.paymentStatus ? mapPaymentStatus(order.paymentStatus) : order.paymentStatus,
+    variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+  };
+}
+
+/**
+ * Transform produce listing from backend format to frontend format
+ */
+function transformProduceListing(listing: any): ProduceListing {
+  return {
+    ...listing,
+    status: mapListingStatus(listing.status),
+    variety: listing.variety ? mapOFSPVariety(listing.variety) : listing.variety,
+  };
+}
+
+/**
+ * Transform sourcing request from backend format to frontend format
+ */
+function transformSourcingRequest(request: any): SourcingRequest {
+  return {
+    ...request,
+    productType: request.productType ? mapSourcingProductType(request.productType) : request.productType,
+    variety: request.variety ? mapOFSPVariety(request.variety) : request.variety,
+  };
+}
+
+/**
+ * Transform RFQ from backend format to frontend format
+ */
+function transformRFQ(rfq: any): RFQ {
+  return {
+    ...transformSourcingRequest(rfq),
+    rfqNumber: rfq.rfqNumber || rfq.requestId || '',
+    rfqStatus: rfq.rfqStatus ? mapRFQStatus(rfq.rfqStatus) : (rfq.status ? mapRFQStatus(rfq.status) : 'draft'),
+    quoteDeadline: rfq.quoteDeadline || rfq.deadline || '',
+    responses: rfq.responses ? rfq.responses.map(transformRFQResponse) : rfq.responses,
+  } as RFQ;
+}
+
+/**
+ * Transform RFQ response from backend format to frontend format
+ */
+function transformRFQResponse(response: any): RFQResponse {
+  return {
+    ...response,
+    status: mapRFQResponseStatus(response.status),
+    variety: response.variety ? mapOFSPVariety(response.variety) : response.variety,
+  };
+}
+
+/**
+ * Transform negotiation from backend format to frontend format
+ */
+function transformNegotiation(negotiation: any): Negotiation {
+  return {
+    ...negotiation,
+    status: mapNegotiationStatus(negotiation.status),
+    variety: negotiation.variety ? mapOFSPVariety(negotiation.variety) : negotiation.variety,
+  };
+}
 
 // ==================== Produce Listings ====================
 
@@ -53,12 +258,13 @@ export async function getListings(filters?: MarketplaceFilters): Promise<Produce
     const params: Record<string, any> = {};
     if (filters?.farmerId) params.farmerId = filters.farmerId;
     if (filters?.variety) params.variety = filters.variety;
-    if (filters?.county) params.county = filters.county;
+    if ((filters as any)?.county) params.county = (filters as any).county;
     if (filters?.status) params.status = filters.status;
     if (filters?.minPrice) params.minPrice = filters.minPrice;
     if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
 
-    return await apiGet<ProduceListing[]>('/marketplace/listings', params);
+    const listings = await apiGet<any[]>('/marketplace/listings', params);
+    return listings.map(transformProduceListing);
   } catch (error) {
     console.error('Error fetching listings:', error);
     return [];
@@ -71,7 +277,8 @@ export async function getListings(filters?: MarketplaceFilters): Promise<Produce
  */
 export async function getListingById(id: string): Promise<ProduceListing | null> {
   try {
-    return await apiGet<ProduceListing>(`/marketplace/listings/${id}`);
+    const listing = await apiGet<any>(`/marketplace/listings/${id}`);
+    return transformProduceListing(listing);
   } catch (error) {
     console.error('Error fetching listing:', error);
     return null;
@@ -84,8 +291,8 @@ export async function getListingById(id: string): Promise<ProduceListing | null>
  */
 export async function createListing(listing: Partial<ProduceListing>): Promise<ApiResponse<ProduceListing>> {
   try {
-    const created = await apiPost<ProduceListing>('/marketplace/listings', listing);
-    return { data: created, message: "Listing created successfully" };
+    const created = await apiPost<any>('/marketplace/listings', listing);
+    return { data: transformProduceListing(created), message: "Listing created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create listing" };
   }
@@ -97,8 +304,8 @@ export async function createListing(listing: Partial<ProduceListing>): Promise<A
  */
 export async function updateListing(id: string, listing: Partial<ProduceListing>): Promise<ApiResponse<ProduceListing>> {
   try {
-    const updated = await apiPut<ProduceListing>(`/marketplace/listings/${id}`, listing);
-    return { data: updated, message: "Listing updated successfully" };
+    const updated = await apiPut<any>(`/marketplace/listings/${id}`, listing);
+    return { data: transformProduceListing(updated), message: "Listing updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update listing" };
   }
@@ -128,10 +335,14 @@ export async function getMarketplaceOrders(filters?: MarketplaceOrderFilters): P
     const params: Record<string, any> = {};
     if (filters?.buyerId) params.buyerId = filters.buyerId;
     if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.status) params.status = filters.status;
-    if (filters?.listingId) params.listingId = filters.listingId;
+    // Transform status filter to backend format (UPPER_CASE) if provided
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
+    if ((filters as any)?.listingId) params.listingId = (filters as any).listingId;
 
-    return await apiGet<MarketplaceOrder[]>('/marketplace/orders', params);
+    const orders = await apiGet<any[]>('/marketplace/orders', params);
+    return orders.map(transformMarketplaceOrder);
   } catch (error) {
     console.error('Error fetching orders:', error);
     return [];
@@ -144,7 +355,8 @@ export async function getMarketplaceOrders(filters?: MarketplaceOrderFilters): P
  */
 export async function getMarketplaceOrderById(id: string): Promise<MarketplaceOrder | null> {
   try {
-    return await apiGet<MarketplaceOrder>(`/marketplace/orders/${id}`);
+    const order = await apiGet<any>(`/marketplace/orders/${id}`);
+    return transformMarketplaceOrder(order);
   } catch (error) {
     console.error('Error fetching order:', error);
     return null;
@@ -157,8 +369,8 @@ export async function getMarketplaceOrderById(id: string): Promise<MarketplaceOr
  */
 export async function createMarketplaceOrder(order: Partial<MarketplaceOrder>): Promise<ApiResponse<MarketplaceOrder>> {
   try {
-    const created = await apiPost<MarketplaceOrder>('/marketplace/orders', order);
-    return { data: created, message: "Order created successfully" };
+    const created = await apiPost<any>('/marketplace/orders', order);
+    return { data: transformMarketplaceOrder(created), message: "Order created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create order" };
   }
@@ -173,8 +385,10 @@ export async function updateMarketplaceOrderStatus(
   status: MarketplaceOrder["status"]
 ): Promise<ApiResponse<MarketplaceOrder>> {
   try {
-    const updated = await apiPut<MarketplaceOrder>(`/marketplace/orders/${id}/status`, { status });
-    return { data: updated, message: "Order status updated" };
+    // Transform frontend status to backend format (UPPER_CASE)
+    const backendStatus = status.toUpperCase().replace(/_/g, '_');
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/status`, { status: backendStatus });
+    return { data: transformMarketplaceOrder(updated), message: "Order status updated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update order status" };
   }
@@ -190,9 +404,15 @@ export async function getSourcingRequests(filters?: SourcingRequestFilters): Pro
   try {
     const params: Record<string, any> = {};
     if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.status) params.status = filters.status;
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase();
+    }
+    if (filters?.productType && filters.productType !== "all") {
+      params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
+    }
 
-    return await apiGet<SourcingRequest[]>('/marketplace/sourcing-requests', params);
+    const requests = await apiGet<any[]>('/marketplace/sourcing-requests', params);
+    return requests.map(transformSourcingRequest);
   } catch (error) {
     console.error('Error fetching sourcing requests:', error);
     return [];
@@ -205,7 +425,8 @@ export async function getSourcingRequests(filters?: SourcingRequestFilters): Pro
  */
 export async function getSourcingRequestById(id: string): Promise<SourcingRequest | null> {
   try {
-    return await apiGet<SourcingRequest>(`/marketplace/sourcing-requests/${id}`);
+    const request = await apiGet<any>(`/marketplace/sourcing-requests/${id}`);
+    return transformSourcingRequest(request);
   } catch (error) {
     console.error('Error fetching sourcing request:', error);
     return null;
@@ -218,8 +439,8 @@ export async function getSourcingRequestById(id: string): Promise<SourcingReques
  */
 export async function createSourcingRequest(request: Partial<SourcingRequest>): Promise<ApiResponse<SourcingRequest>> {
   try {
-    const created = await apiPost<SourcingRequest>('/marketplace/sourcing-requests', request);
-    return { data: created, message: "Sourcing request created successfully" };
+    const created = await apiPost<any>('/marketplace/sourcing-requests', request);
+    return { data: transformSourcingRequest(created), message: "Sourcing request created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create sourcing request" };
   }
@@ -227,11 +448,32 @@ export async function createSourcingRequest(request: Partial<SourcingRequest>): 
 
 /**
  * Update a sourcing request
- * TODO: Backend needs to implement PUT /api/v1/marketplace/sourcing-requests/:id
+ * Backend: PUT /api/v1/marketplace/sourcing-requests/:id
  */
 export async function updateSourcingRequest(id: string, request: Partial<SourcingRequest>): Promise<ApiResponse<SourcingRequest>> {
-  // Backend doesn't have update endpoint yet
-  return { data: request as SourcingRequest, message: "Update not implemented yet" };
+  try {
+    // Map frontend fields to backend DTO format
+    const updateData: any = {};
+    if (request.title !== undefined) updateData.title = request.title;
+    if (request.productType !== undefined) updateData.productType = request.productType;
+    if (request.variety !== undefined) updateData.variety = request.variety;
+    if (request.quantity !== undefined) updateData.quantity = request.quantity;
+    if (request.unit !== undefined) updateData.unit = request.unit;
+    if (request.qualityGrade !== undefined) updateData.qualityGrade = request.qualityGrade;
+    if (request.deadline !== undefined) {
+      updateData.deliveryDate = typeof request.deadline === 'string' ? request.deadline : (request.deadline as any)?.toISOString?.() || String(request.deadline);
+    }
+    if (request.deliveryLocation !== undefined) updateData.deliveryLocation = request.deliveryLocation;
+    if (request.additionalRequirements !== undefined) updateData.description = request.additionalRequirements;
+
+    const updated = await apiPut<any>(`/marketplace/sourcing-requests/${id}`, updateData);
+    return { 
+      data: transformSourcingRequest(updated), 
+      message: "Sourcing request updated successfully" 
+    };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to update sourcing request" };
+  }
 }
 
 /**
@@ -264,37 +506,96 @@ export async function acceptSupplierOffer(offerId: string): Promise<ApiResponse<
 
 /**
  * Get recurring orders
- * TODO: Backend needs to implement recurring orders endpoints
+ * Backend: GET /api/v1/marketplace/recurring-orders
  */
-export async function getRecurringOrders(): Promise<RecurringOrder[]> {
-  // Backend doesn't have recurring orders endpoint yet
-  return [];
+export async function getRecurringOrders(filters?: {
+  buyerId?: string;
+  farmerId?: string;
+  isActive?: boolean;
+}): Promise<RecurringOrder[]> {
+  try {
+    const params: Record<string, any> = {};
+    if (filters?.buyerId) params.buyerId = filters.buyerId;
+    if (filters?.farmerId) params.farmerId = filters.farmerId;
+    if (filters?.isActive !== undefined) params.isActive = filters.isActive;
+
+    const orders = await apiGet<any[]>('/marketplace/recurring-orders', params);
+    return orders.map(order => ({
+      ...order,
+      variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+    }));
+  } catch (error) {
+    console.error('Error fetching recurring orders:', error);
+    return [];
+  }
+}
+
+/**
+ * Get recurring order by ID
+ * Backend: GET /api/v1/marketplace/recurring-orders/:id
+ */
+export async function getRecurringOrderById(id: string): Promise<RecurringOrder | null> {
+  try {
+    const order = await apiGet<any>(`/marketplace/recurring-orders/${id}`);
+    return {
+      ...order,
+      variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+    };
+  } catch (error) {
+    console.error('Error fetching recurring order:', error);
+    return null;
+  }
 }
 
 /**
  * Create recurring order
- * TODO: Backend needs to implement recurring orders endpoints
+ * Backend: POST /api/v1/marketplace/recurring-orders
  */
-export async function createRecurringOrder(order: Partial<RecurringOrder>): Promise<ApiResponse<RecurringOrder>> {
-  // Backend doesn't have recurring orders endpoint yet
-  return { data: order as RecurringOrder, message: "Recurring orders not implemented yet" };
+export async function createRecurringOrder(order: Partial<RecurringOrder> & { buyerId: string; farmerId: string }): Promise<ApiResponse<RecurringOrder>> {
+  try {
+    const created = await apiPost<any>('/marketplace/recurring-orders', order);
+    return { 
+      data: {
+        ...created,
+        variety: created.variety ? mapOFSPVariety(created.variety) : created.variety,
+      }, 
+      message: "Recurring order created successfully" 
+    };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to create recurring order" };
+  }
 }
 
 /**
  * Update recurring order
- * TODO: Backend needs to implement recurring orders endpoints
+ * Backend: PUT /api/v1/marketplace/recurring-orders/:id
  */
 export async function updateRecurringOrder(id: string, order: Partial<RecurringOrder>): Promise<ApiResponse<RecurringOrder>> {
-  // Backend doesn't have recurring orders endpoint yet
-  return { data: order as RecurringOrder, message: "Recurring orders not implemented yet" };
+  try {
+    const updated = await apiPut<any>(`/marketplace/recurring-orders/${id}`, order);
+    return { 
+      data: {
+        ...updated,
+        variety: updated.variety ? mapOFSPVariety(updated.variety) : updated.variety,
+      }, 
+      message: "Recurring order updated successfully" 
+    };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to update recurring order" };
+  }
 }
 
 /**
- * Cancel recurring order
- * TODO: Backend needs to implement recurring orders endpoints
+ * Cancel/Delete recurring order
+ * Backend: DELETE /api/v1/marketplace/recurring-orders/:id
  */
 export async function cancelRecurringOrder(id: string): Promise<void> {
-  // Backend doesn't have recurring orders endpoint yet
+  try {
+    await apiDelete(`/marketplace/recurring-orders/${id}`);
+  } catch (error) {
+    console.error('Error deleting recurring order:', error);
+    throw error;
+  }
 }
 
 /**
@@ -338,9 +639,12 @@ export async function getNegotiations(filters?: NegotiationFilters): Promise<Neg
     if (filters?.listingId) params.listingId = filters.listingId;
     if (filters?.buyerId) params.buyerId = filters.buyerId;
     if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.status) params.status = filters.status;
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
 
-    return await apiGet<Negotiation[]>('/marketplace/negotiations', params);
+    const negotiations = await apiGet<any[]>('/marketplace/negotiations', params);
+    return negotiations.map(transformNegotiation);
   } catch (error) {
     console.error('Error fetching negotiations:', error);
     return [];
@@ -353,7 +657,8 @@ export async function getNegotiations(filters?: NegotiationFilters): Promise<Neg
  */
 export async function getNegotiationById(id: string): Promise<Negotiation | null> {
   try {
-    return await apiGet<Negotiation>(`/marketplace/negotiations/${id}`);
+    const negotiation = await apiGet<any>(`/marketplace/negotiations/${id}`);
+    return transformNegotiation(negotiation);
   } catch (error) {
     console.error('Error fetching negotiation:', error);
     return null;
@@ -369,12 +674,12 @@ export async function initiateNegotiation(
   message: Partial<NegotiationMessage>
 ): Promise<ApiResponse<Negotiation>> {
   try {
-    const created = await apiPost<Negotiation>('/marketplace/negotiations', {
+    const created = await apiPost<any>('/marketplace/negotiations', {
       listingId,
       ...message,
     });
     return { 
-      data: created, 
+      data: transformNegotiation(created), 
       message: "Negotiation initiated successfully" 
     };
   } catch (error: any) {
@@ -391,9 +696,9 @@ export async function sendNegotiationMessage(
   message: Partial<NegotiationMessage>
 ): Promise<ApiResponse<Negotiation>> {
   try {
-    const updated = await apiPost<Negotiation>(`/marketplace/negotiations/${negotiationId}/messages`, message);
+    const updated = await apiPost<any>(`/marketplace/negotiations/${negotiationId}/messages`, message);
     return { 
-      data: updated, 
+      data: transformNegotiation(updated), 
       message: "Message sent successfully" 
     };
   } catch (error: any) {
@@ -407,9 +712,9 @@ export async function sendNegotiationMessage(
  */
 export async function acceptNegotiation(negotiationId: string): Promise<ApiResponse<Negotiation>> {
   try {
-    const accepted = await apiPut<Negotiation>(`/marketplace/negotiations/${negotiationId}/accept`);
+    const accepted = await apiPut<any>(`/marketplace/negotiations/${negotiationId}/accept`);
     return { 
-      data: accepted, 
+      data: transformNegotiation(accepted), 
       message: "Negotiation accepted" 
     };
   } catch (error: any) {
@@ -423,9 +728,9 @@ export async function acceptNegotiation(negotiationId: string): Promise<ApiRespo
  */
 export async function rejectNegotiation(negotiationId: string): Promise<ApiResponse<Negotiation>> {
   try {
-    const rejected = await apiPut<Negotiation>(`/marketplace/negotiations/${negotiationId}/reject`);
+    const rejected = await apiPut<any>(`/marketplace/negotiations/${negotiationId}/reject`);
     return { 
-      data: rejected, 
+      data: transformNegotiation(rejected), 
       message: "Negotiation rejected" 
     };
   } catch (error: any) {
@@ -457,9 +762,15 @@ export async function getRFQs(filters?: RFQFilters): Promise<RFQ[]> {
   try {
     const params: Record<string, any> = {};
     if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.status) params.status = filters.status;
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase();
+    }
+    if (filters?.productType && filters.productType !== "all") {
+      params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
+    }
 
-    return await apiGet<RFQ[]>('/marketplace/rfqs', params);
+    const rfqs = await apiGet<any[]>('/marketplace/rfqs', params);
+    return rfqs.map(transformRFQ);
   } catch (error) {
     console.error('Error fetching RFQs:', error);
     return [];
@@ -472,7 +783,8 @@ export async function getRFQs(filters?: RFQFilters): Promise<RFQ[]> {
  */
 export async function getRFQById(id: string): Promise<RFQ | null> {
   try {
-    return await apiGet<RFQ>(`/marketplace/rfqs/${id}`);
+    const rfq = await apiGet<any>(`/marketplace/rfqs/${id}`);
+    return transformRFQ(rfq);
   } catch (error) {
     console.error('Error fetching RFQ:', error);
     return null;
@@ -485,9 +797,9 @@ export async function getRFQById(id: string): Promise<RFQ | null> {
  */
 export async function createRFQ(rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
   try {
-    const created = await apiPost<RFQ>('/marketplace/rfqs', rfq);
+    const created = await apiPost<any>('/marketplace/rfqs', rfq);
     return { 
-      data: created, 
+      data: transformRFQ(created), 
       message: "RFQ created successfully" 
     };
   } catch (error: any) {
@@ -501,9 +813,9 @@ export async function createRFQ(rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
  */
 export async function updateRFQ(id: string, rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
   try {
-    const updated = await apiPut<RFQ>(`/marketplace/rfqs/${id}`, rfq);
+    const updated = await apiPut<any>(`/marketplace/rfqs/${id}`, rfq);
     return { 
-      data: updated, 
+      data: transformRFQ(updated), 
       message: "RFQ updated successfully" 
     };
   } catch (error: any) {
@@ -517,9 +829,9 @@ export async function updateRFQ(id: string, rfq: Partial<RFQ>): Promise<ApiRespo
  */
 export async function publishRFQ(id: string): Promise<ApiResponse<RFQ>> {
   try {
-    const published = await apiPut<RFQ>(`/marketplace/rfqs/${id}/publish`);
+    const published = await apiPut<any>(`/marketplace/rfqs/${id}/publish`);
     return { 
-      data: published, 
+      data: transformRFQ(published), 
       message: "RFQ published successfully" 
     };
   } catch (error: any) {
@@ -533,9 +845,9 @@ export async function publishRFQ(id: string): Promise<ApiResponse<RFQ>> {
  */
 export async function closeRFQ(id: string): Promise<ApiResponse<RFQ>> {
   try {
-    const closed = await apiPut<RFQ>(`/marketplace/rfqs/${id}/close`);
+    const closed = await apiPut<any>(`/marketplace/rfqs/${id}/close`);
     return { 
-      data: closed, 
+      data: transformRFQ(closed), 
       message: "RFQ closed successfully" 
     };
   } catch (error: any) {
@@ -545,11 +857,18 @@ export async function closeRFQ(id: string): Promise<ApiResponse<RFQ>> {
 
 /**
  * Cancel RFQ
- * TODO: Backend needs to implement PUT /api/v1/marketplace/rfqs/:id/cancel
+ * Backend: PUT /api/v1/marketplace/rfqs/:id/cancel
  */
-export async function cancelRFQ(id: string): Promise<ApiResponse<RFQ>> {
-  // Backend doesn't have cancel endpoint yet - using close as fallback
-  return closeRFQ(id);
+export async function cancelRFQ(id: string, reason?: string): Promise<ApiResponse<RFQ>> {
+  try {
+    const cancelled = await apiPut<any>(`/marketplace/rfqs/${id}/cancel`, { reason });
+    return { 
+      data: transformRFQ(cancelled), 
+      message: "RFQ cancelled successfully" 
+    };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to cancel RFQ" };
+  }
 }
 
 /**
@@ -563,9 +882,12 @@ export async function getRFQResponses(
   try {
     const params: Record<string, any> = {};
     if (filters?.supplierId) params.supplierId = filters.supplierId;
-    if (filters?.status) params.status = filters.status;
+    if (filters?.status && filters.status !== "all") {
+      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    }
 
-    return await apiGet<RFQResponse[]>(`/marketplace/rfqs/${rfqId}/responses`, params);
+    const responses = await apiGet<any[]>(`/marketplace/rfqs/${rfqId}/responses`, params);
+    return responses.map(transformRFQResponse);
   } catch (error) {
     console.error('Error fetching RFQ responses:', error);
     return [];
@@ -581,9 +903,9 @@ export async function submitRFQResponse(
   response: Partial<RFQResponse>
 ): Promise<ApiResponse<RFQResponse>> {
   try {
-    const created = await apiPost<RFQResponse>(`/marketplace/rfqs/${rfqId}/responses`, response);
+    const created = await apiPost<any>(`/marketplace/rfqs/${rfqId}/responses`, response);
     return { 
-      data: created, 
+      data: transformRFQResponse(created), 
       message: "Quote submitted successfully" 
     };
   } catch (error: any) {
@@ -600,7 +922,8 @@ export async function getRFQResponseById(
   responseId: string
 ): Promise<RFQResponse | null> {
   try {
-    return await apiGet<RFQResponse>(`/marketplace/rfq-responses/${responseId}`);
+    const response = await apiGet<any>(`/marketplace/rfq-responses/${responseId}`);
+    return transformRFQResponse(response);
   } catch (error) {
     console.error('Error fetching RFQ response:', error);
     return null;
@@ -617,9 +940,11 @@ export async function updateRFQResponseStatus(
   status: RFQResponse["status"]
 ): Promise<ApiResponse<RFQResponse>> {
   try {
-    const updated = await apiPut<RFQResponse>(`/marketplace/rfq-responses/${responseId}/status`, { status });
+    // Transform frontend status to backend format (UPPER_CASE)
+    const backendStatus = status.toUpperCase().replace(/_/g, '_');
+    const updated = await apiPut<any>(`/marketplace/rfq-responses/${responseId}/status`, { status: backendStatus });
     return { 
-      data: updated, 
+      data: transformRFQResponse(updated), 
       message: "Response status updated" 
     };
   } catch (error: any) {
@@ -638,9 +963,9 @@ export async function awardRFQ(
   try {
     // Backend accepts single responseId, so we'll award the first one
     // TODO: Backend may need to support multiple awards
-    const awarded = await apiPut<RFQ>(`/marketplace/rfqs/${rfqId}/award/${responseIds[0]}`);
+    const awarded = await apiPut<any>(`/marketplace/rfqs/${rfqId}/award/${responseIds[0]}`);
     return { 
-      data: awarded, 
+      data: transformRFQ(awarded), 
       message: "RFQ awarded successfully" 
     };
   } catch (error: any) {
@@ -650,15 +975,24 @@ export async function awardRFQ(
 
 /**
  * Convert RFQ response to order
- * TODO: Backend needs to implement POST /api/v1/marketplace/rfqs/:rfqId/responses/:responseId/convert-to-order
+ * Backend: POST /api/v1/marketplace/rfqs/:rfqId/responses/:responseId/convert-to-order
  */
 export async function convertRFQResponseToOrder(
   rfqId: string,
-  responseId: string
+  responseId: string,
+  deliveryAddress?: string,
+  deliveryCounty?: string
 ): Promise<ApiResponse<MarketplaceOrder>> {
-  // Backend doesn't have convert endpoint yet
-  return { 
-    data: null as any, 
-    error: "Convert to order not implemented yet" 
-  };
+  try {
+    const order = await apiPost<any>(
+      `/marketplace/rfqs/${rfqId}/responses/${responseId}/convert-to-order`,
+      { deliveryAddress, deliveryCounty }
+    );
+    return { 
+      data: order, 
+      message: "Order created from RFQ response" 
+    };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to convert RFQ response to order" };
+  }
 }

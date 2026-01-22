@@ -120,13 +120,22 @@ export type Profile =
 
 /**
  * Profile filter options
+ * 
+ * Backend-supported filters: role, county, subcounty, ward
+ * Client-side only filters: status, searchQuery, verified, location
  */
 export interface ProfileFilters {
+  // Backend-supported filters (sent to API)
   role?: UserRole;
+  county?: string;
+  subcounty?: string; // Backend uses 'subcounty', Prisma uses 'subCounty' (camelCase)
+  ward?: string;
+  
+  // Client-side only filters (applied after fetching from backend)
   status?: ProfileStatus;
-  location?: string;
   searchQuery?: string;
   verified?: boolean;
+  location?: string; // Alias for searchQuery or separate location search
 }
 
 /**
