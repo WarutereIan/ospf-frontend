@@ -43,6 +43,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTransport } from "@/contexts/TransportContext";
 import { BatchTraceabilityDialog, type BatchTraceabilityInfo } from "@/components/buyer/BatchTraceabilityDialog";
 import { getFarmerPickupBookings } from "@/services/transportService";
+import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { ProduceListing } from "@/types/marketplace";
 import type { PickupSlotBooking } from "@/types/transport";
@@ -311,6 +312,10 @@ export function ProduceManagement() {
         };
 
         await createListing(listing);
+        showSuccess(
+          "Listing created successfully",
+          `Your ${newListing.variety} listing has been added to the marketplace`
+        );
         setNewListing({
           variety: "",
           quantity: "",
@@ -326,7 +331,7 @@ export function ProduceManagement() {
         }
       } catch (error) {
         console.error("Failed to create listing:", error);
-        alert("Failed to create listing. Please try again.");
+        showError("Failed to create listing", formatApiError(error));
       }
     }
   };
@@ -334,13 +339,14 @@ export function ProduceManagement() {
   const handleDeleteListing = async (id: string) => {
     try {
       await deleteListing(id);
+      showSuccess("Listing deleted successfully", "The listing has been removed from the marketplace");
       // Refresh listings
       if (user?.id) {
         await fetchListings({ farmerId: user.id });
       }
     } catch (error) {
       console.error("Failed to delete listing:", error);
-      alert("Failed to delete listing. Please try again.");
+      showError("Failed to delete listing", formatApiError(error));
     }
   };
 

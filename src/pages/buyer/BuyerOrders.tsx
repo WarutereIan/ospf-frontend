@@ -65,7 +65,6 @@ export function BuyerOrders() {
         (order) =>
           order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
           order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          order.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           order.variety.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -117,6 +116,44 @@ export function BuyerOrders() {
     }
   };
 
+  const getPaymentStatusColor = (paymentStatus: string) => {
+    switch (paymentStatus) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "secured":
+        return "bg-blue-100 text-blue-800";
+      case "confirmed_by_farmer":
+        return "bg-green-100 text-green-800";
+      case "released":
+        return "bg-green-100 text-green-800";
+      case "refunded":
+        return "bg-orange-100 text-orange-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getPaymentStatusLabel = (paymentStatus: string) => {
+    switch (paymentStatus) {
+      case "pending":
+        return "Pending";
+      case "secured":
+        return "Secured";
+      case "confirmed_by_farmer":
+        return "Confirmed";
+      case "released":
+        return "Released";
+      case "refunded":
+        return "Refunded";
+      case "disputed":
+        return "Disputed";
+      default:
+        return paymentStatus.replace(/_/g, " ");
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -138,7 +175,7 @@ export function BuyerOrders() {
             <div className="relative flex-1">
               <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by order ID, farmer name, or variety..."
+                placeholder="Search by order ID or variety..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -177,7 +214,7 @@ export function BuyerOrders() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
-                  <TableHead>Farmer</TableHead>
+                  <TableHead>Payment Status</TableHead>
                   <TableHead>Variety</TableHead>
                   <TableHead>Quantity</TableHead>
                   <TableHead>Amount</TableHead>
@@ -194,7 +231,11 @@ export function BuyerOrders() {
                     onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
                   >
                     <TableCell className="font-medium">{order.id}</TableCell>
-                    <TableCell>{order.farmerName}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getPaymentStatusColor(order.paymentStatus || "pending")}>
+                        {getPaymentStatusLabel(order.paymentStatus || "pending")}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{order.variety}</TableCell>
                     <TableCell>{order.quantity} kg</TableCell>
                     <TableCell className="font-semibold">

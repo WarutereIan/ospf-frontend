@@ -8,7 +8,7 @@
  * - Transaction evidence
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   Partner,
   ActivityLog,
@@ -358,15 +358,8 @@ export function StaffProvider({ children }: { children: ReactNode }) {
   const filteredActivityLogs = activityLogs;
   const filteredDataQualityIssues = dataQualityIssues;
 
-  useEffect(() => {
-    fetchPartners();
-    fetchActivityLogs();
-    fetchDataQualityIssues();
-    fetchTransactionEvidence();
-    fetchSettings();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (e.g. Partners → fetchPartners;
+  // ActivityLogs → fetchActivityLogs; DataQuality → fetchDataQualityIssues; StaffDashboard → fetchAll).
 
   const value: StaffContextType = {
     partners,

@@ -76,7 +76,7 @@
 ### Status Flow
 
 ```
-order_placed → order_accepted → payment_secured → in_transit → at_aggregation → 
+order_placed → order_accepted → payment_secured → payment_confirmed_by_farmer → in_transit → at_aggregation → 
 quality_checked → quality_approved/quality_rejected → out_for_delivery → 
 delivered → completed
 ```
@@ -166,41 +166,104 @@ delivered → completed
 ---
 
 #### 3. **Payment Secured** (`payment_secured`)
-**Trigger:** Buyer makes payment (escrow)
+**Trigger:** Buyer confirms payment with evidence
 
 **Actors:**
-- **Buyer:** Makes payment
-- **Payment System:** Processes payment
+- **Buyer:** Confirms payment with details and evidence
+- **System:** Records payment confirmation
 - **Farmer:** Receives confirmation
 
 **Actions:**
-- Buyer initiates payment
-- Payment processed through escrow
-- Funds held in escrow
+- Buyer makes payment externally (M-Pesa, bank transfer, cash, etc.)
+- Buyer navigates to order details page
+- Buyer clicks "Confirm Payment" button
+- Buyer fills payment confirmation form:
+  - Payment method (M-Pesa, Bank Transfer, Cash, Credit)
+  - Transaction reference/ID
+  - Payment amount
+  - Payment date
+  - Payment details/notes (optional text)
+  - Payment evidence (optional image upload - receipt, screenshot, etc.)
+- Buyer checks "I confirm I have made this payment" checkbox
+- Buyer submits payment confirmation
+- System validates payment details
+- Payment record created/updated with confirmation details
 - Payment status updated to "secured"
-- Order status updated
+- Order status updated to "payment_secured"
+- Payment status: "secured" (awaiting farmer confirmation)
+- Order processing blocked until farmer confirms payment receipt
 
 **Data Points:**
 - Payment ID
 - Payment Amount
+- Payment Method
+- Transaction Reference/ID
+- Payment Date
+- Payment Details/Notes (text)
+- Payment Evidence (image URL if uploaded)
+- Confirmed By (Buyer ID)
+- Confirmed At Timestamp
 - Payment Status: "secured"
-- Payment Timestamp
-- Escrow Transaction ID
 
 **Notifications:**
-- **To Farmer:** "Payment secured for order #XXX. Proceed with fulfillment"
-- **To Buyer:** "Payment secured. Order #XXX is being processed"
+- **To Farmer:** "Payment confirmed for order #XXX. Amount: KES XXX. Transaction: [Reference]. Please confirm receipt to proceed"
+- **To Buyer:** "Payment confirmation recorded. Waiting for farmer confirmation"
 
 **Outputs:**
-- Payment record
-- EscrowTransaction record
-- Updated MarketplaceOrder
-- Activity log entry
+- Payment record (with confirmation details)
+- Updated MarketplaceOrder (status: payment_secured)
+- Activity log entry (PAYMENT_CONFIRMED)
 - Notification records (2)
+
+**Note:** This replaces the automated escrow system. Buyers now manually confirm payments with evidence. After buyer confirmation, the farmer must also confirm receipt of payment before order processing continues.
 
 ---
 
-#### 4. **In Transit** (`in_transit`)
+#### 4. **Farmer Payment Confirmation** (`payment_confirmed_by_farmer`)
+**Trigger:** Farmer confirms receipt of buyer's payment
+
+**Actors:**
+- **Farmer:** Confirms payment receipt
+- **System:** Records farmer confirmation
+- **Buyer:** Receives confirmation
+
+**Actions:**
+- Farmer receives notification that buyer has confirmed payment
+- Farmer navigates to order details page
+- Farmer reviews buyer's payment confirmation details:
+  - Payment method
+  - Transaction reference
+  - Payment amount
+  - Payment evidence (if provided)
+- Farmer clicks "Confirm Payment Received" button
+- Farmer optionally adds notes about payment receipt
+- Farmer submits confirmation
+- System validates farmer owns the order
+- Payment status updated to "confirmed_by_farmer"
+- Order status remains "payment_secured" (or can be updated to allow processing)
+- Order processing can now continue to next stages (transport, fulfillment)
+
+**Data Points:**
+- Farmer Confirmation Timestamp
+- Farmer Confirmation Notes (optional)
+- Payment Status: "confirmed_by_farmer"
+- Order Status: "payment_secured" (ready for fulfillment)
+
+**Notifications:**
+- **To Buyer:** "Farmer has confirmed receipt of payment for order #XXX. Order is being processed"
+- **To Farmer:** "Payment confirmation recorded. You can now proceed with order fulfillment"
+
+**Outputs:**
+- Updated Payment record (farmer confirmation timestamp and notes)
+- Updated MarketplaceOrder (ready for fulfillment stages)
+- Activity log entry (PAYMENT_CONFIRMED_BY_FARMER)
+- Notification records (2)
+
+**Note:** This two-step confirmation ensures both parties acknowledge the payment before order fulfillment begins, reducing disputes and ensuring transparency.
+
+---
+
+#### 5. **In Transit** (`in_transit`)
 **Trigger:** Transport request accepted and pickup completed
 
 **Actors:**
@@ -2467,49 +2530,159 @@ pending → secured → released
 - `secured` → `disputed` (dispute raised)
 - `disputed` → `released` or `refunded` (dispute resolved)
 
-### Escrow Lifecycle
+### Manual Payment Confirmation Flow
 
-#### 1. **Escrow Created**
-**Trigger:** Order accepted and payment initiated
+#### 1. **Payment Pending** (`pending`)
+**Trigger:** Order accepted by farmer
+
+**Status:** Payment not yet confirmed
 
 **Actions:**
-- Escrow transaction created
-- Funds held in escrow
-- Payment status: "secured"
+- Order status: `order_accepted`
+- Payment status: `pending`
+- Buyer notified to confirm payment
+- Order processing blocked until payment confirmed
 
 **Data Points:**
-- Escrow Transaction ID
 - Order ID
-- Amount
-- Created Timestamp
+- Payment Amount
+- Payment Status: "pending"
+
+**Notifications:**
+- **To Buyer:** "Order #XXX accepted. Please confirm payment to proceed"
 
 **Outputs:**
-- EscrowTransaction record
-- Payment record
+- MarketplaceOrder (status: order_accepted, paymentStatus: pending)
+- Notification record
 
 ---
 
-#### 2. **Escrow Held**
-**Status:** Funds held during order fulfillment
+#### 2. **Payment Confirmation** (Manual Process)
+**Trigger:** Buyer confirms payment with evidence
+
+**Actors:**
+- **Buyer:** Confirms payment
+- **System:** Records confirmation
 
 **Actions:**
-- Funds remain in escrow
-- Order progresses through lifecycle
-- Escrow status: "held"
+- Buyer makes payment externally (M-Pesa, bank transfer, cash, etc.)
+- Buyer navigates to order details
+- Buyer clicks "Confirm Payment" button
+- Buyer fills payment confirmation form:
+  - **Payment Method:** M-Pesa, Bank Transfer, Cash, Credit
+  - **Transaction Reference:** Transaction ID, M-Pesa code, reference number
+  - **Payment Amount:** Amount paid (validated against order total)
+  - **Payment Date:** Date payment was made
+  - **Payment Details:** Optional text notes about payment
+  - **Payment Evidence:** Optional image upload (receipt, screenshot, proof of payment)
+- Buyer checks confirmation checkbox: "I confirm I have made this payment"
+- Buyer submits confirmation
+- System validates:
+  - Payment amount matches order total (or allows partial with notes)
+  - Required fields provided
+  - Evidence uploaded (optional but recommended)
+- Payment record created/updated with confirmation details
+- Payment status updated to "secured"
+- Order status updated to "payment_secured"
+- Order processing unlocked - can proceed to next stages
 
 **Data Points:**
-- Held Duration
-- Order Status
+- Payment ID
+- Payment Method
+- Transaction Reference/ID
+- Payment Amount
+- Payment Date
+- Payment Details/Notes (text)
+- Payment Evidence (image URL)
+- Confirmed By (Buyer ID)
+- Confirmed At Timestamp
+- Payment Status: "secured"
+
+**Notifications:**
+- **To Farmer:** "Payment confirmed for order #XXX. Amount: KES XXX. Transaction: [Reference]. Proceed with fulfillment"
+- **To Buyer:** "Payment confirmation recorded successfully. Order #XXX is being processed"
+
+**Outputs:**
+- Payment record (with confirmation details)
+- Updated MarketplaceOrder (status: payment_secured, paymentStatus: secured)
+- Activity log entry (PAYMENT_CONFIRMED)
+- Notification records (2)
 
 ---
 
-#### 3. **Escrow Released**
+#### 3. **Farmer Payment Confirmation** (`confirmed_by_farmer`)
+**Trigger:** Farmer confirms receipt of buyer's payment
+
+**Actors:**
+- **Farmer:** Confirms payment receipt
+- **System:** Records farmer confirmation
+- **Buyer:** Receives confirmation
+
+**Actions:**
+- Farmer receives notification that buyer has confirmed payment
+- Farmer navigates to order details page
+- Farmer reviews buyer's payment confirmation details:
+  - Payment method
+  - Transaction reference
+  - Payment amount
+  - Payment evidence (if provided)
+- Farmer clicks "Confirm Payment Received" button
+- Farmer optionally adds notes about payment receipt
+- Farmer submits confirmation
+- System validates farmer owns the order
+- Payment status updated to "confirmed_by_farmer"
+- Order status remains "payment_secured" (ready for fulfillment)
+- Order processing can now continue to next stages (transport, fulfillment)
+
+**Data Points:**
+- Farmer Confirmation Timestamp
+- Farmer Confirmation Notes (optional)
+- Payment Status: "confirmed_by_farmer"
+- Order Status: "payment_secured" (ready for fulfillment)
+
+**Notifications:**
+- **To Buyer:** "Farmer has confirmed receipt of payment for order #XXX. Order is being processed"
+- **To Farmer:** "Payment confirmation recorded. You can now proceed with order fulfillment"
+
+**Outputs:**
+- Updated Payment record (farmer confirmation timestamp and notes)
+- Updated MarketplaceOrder (ready for fulfillment stages)
+- Activity log entry (PAYMENT_CONFIRMED_BY_FARMER)
+- Notification records (2)
+
+**Note:** This two-step confirmation ensures both parties acknowledge the payment before order fulfillment begins, reducing disputes and ensuring transparency.
+
+---
+
+#### 4. **Payment Secured** (`secured`)
+**Status:** Payment confirmed by both parties, order processing continues
+
+**Actions:**
+- Payment confirmed by buyer
+- Payment receipt confirmed by farmer
+- Order status: `payment_secured`
+- Order can proceed to fulfillment stages:
+  - Transport coordination
+  - Pickup scheduling
+  - Delivery
+  - Quality checks
+
+**Data Points:**
+- Buyer Confirmation Timestamp
+- Farmer Confirmation Timestamp
+- Order Status
+- Payment Status: "confirmed_by_farmer"
+
+---
+
+#### 4. **Payment Released** (`released`)
 **Trigger:** Order completed successfully
 
 **Actions:**
-- Funds released to seller (farmer/input provider)
-- Payment status: "released"
-- Escrow status: "released"
+- Order status: `completed` or `delivered`
+- Payment status: `released`
+- Payment marked as completed
+- Farmer receives payment confirmation
 
 **Data Points:**
 - Released At Timestamp
@@ -2517,22 +2690,23 @@ pending → secured → released
 - Recipient ID
 
 **Notifications:**
-- **To Seller:** "Payment released for order #XXX. Amount: KES XXX"
+- **To Farmer:** "Order #XXX completed. Payment confirmed. Amount: KES XXX"
 
 **Outputs:**
-- Updated EscrowTransaction
-- Updated Payment record
+- Updated Payment record (status: released)
+- Updated MarketplaceOrder
 - Notification record
 
 ---
 
-#### 4. **Escrow Refunded**
+#### 5. **Payment Refunded** (`refunded`)
 **Trigger:** Order cancelled, rejected, or quality rejected
 
 **Actions:**
-- Funds refunded to buyer
-- Payment status: "refunded"
-- Escrow status: "refunded"
+- Order cancelled/rejected
+- Payment status: `refunded`
+- Refund reason recorded
+- Buyer notified of refund
 
 **Data Points:**
 - Refunded At Timestamp
@@ -2540,36 +2714,61 @@ pending → secured → released
 - Refund Reason
 
 **Notifications:**
-- **To Buyer:** "Refund processed for order #XXX. Amount: KES XXX"
+- **To Buyer:** "Order #XXX cancelled/rejected. Payment refunded. Amount: KES XXX"
 
 **Outputs:**
-- Updated EscrowTransaction
-- Updated Payment record
+- Updated Payment record (status: refunded)
 - Refund record
 - Notification record
 
 ---
 
-#### 5. **Escrow Disputed**
-**Trigger:** Dispute raised
+#### 6. **Payment Disputed** (`disputed`)
+**Trigger:** Dispute raised regarding payment
 
 **Actions:**
 - Dispute created
-- Escrow status: "disputed"
-- Funds held pending resolution
+- Payment status: `disputed`
+- Payment details reviewed
+- Dispute resolution process initiated
 
 **Data Points:**
 - Dispute ID
 - Dispute Reason
 - Dispute Created At
+- Payment Evidence (for review)
 
 **Notifications:**
-- **To Both Parties:** "Dispute raised for order #XXX"
+- **To Both Parties:** "Payment dispute raised for order #XXX"
 
 **Outputs:**
 - Dispute record
-- Updated EscrowTransaction
+- Updated Payment record (status: disputed)
 - Notification records (2)
+
+---
+
+### Payment Confirmation Data Model
+
+**Core Entity:** `Payment`
+
+**Payment Confirmation Fields:**
+- `paymentMethod`: M-Pesa, Bank Transfer, Cash, Credit
+- `transactionReference`: Transaction ID, M-Pesa code, reference number
+- `paymentAmount`: Amount paid
+- `paymentDate`: Date payment was made
+- `paymentDetails`: Optional text notes
+- `paymentEvidence`: Optional image URL (receipt, screenshot)
+- `confirmedBy`: Buyer ID
+- `confirmedAt`: Confirmation timestamp
+- `status`: Payment status (pending, secured, released, refunded, disputed)
+
+**Related Entities:**
+- `MarketplaceOrder` (marketplace payments)
+- `InputOrder` (input order payments)
+- `TransportRequest` (transport fee payments)
+- `Notification` (payment notifications)
+- `ActivityLog` (payment activity tracking)
 
 ---
 

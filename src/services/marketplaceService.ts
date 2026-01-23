@@ -25,6 +25,7 @@ import type {
   ProduceListing,
   MarketplaceOrder,
   SourcingRequest,
+  SourcingRequestStatus,
   SupplierOffer,
   RecurringOrder,
   Negotiation,
@@ -49,6 +50,7 @@ import type {
 } from "@/types/marketplace";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+import { showSuccess } from "@/lib/toast";
 
 // ==================== Enum Transformation Utilities ====================
 
@@ -91,6 +93,21 @@ function mapListingStatus(backendStatus: string): ListingStatus {
 }
 
 /**
+ * Map frontend listing status (lowercase) to backend Prisma enum (UPPER_CASE).
+ * Use when sending filters to the API (e.g. GET /marketplace/listings?status=ACTIVE).
+ */
+function toBackendListingStatus(frontendStatus: ListingStatus | 'all'): string | undefined {
+  if (!frontendStatus || frontendStatus === 'all') return undefined;
+  const statusMap: Record<string, string> = {
+    active: 'ACTIVE',
+    sold: 'SOLD',
+    inactive: 'INACTIVE',
+    pending: 'EXPIRED', // Frontend "pending" = backend EXPIRED
+  };
+  return statusMap[frontendStatus];
+}
+
+/**
  * Map backend payment status (UPPER_CASE) to frontend format (lowercase)
  */
 function mapPaymentStatus(backendStatus: string): PaymentStatus {
@@ -107,15 +124,12 @@ function mapPaymentStatus(backendStatus: string): PaymentStatus {
 /**
  * Map backend OFSP variety (UPPER_CASE) to frontend format (Title Case)
  */
-function mapOFSPVariety(backendVariety: string): OFSPVariety {
-  const varietyMap: Record<string, OFSPVariety> = {
-    KENYA: 'Kenya',
-    SPK004: 'SPK004', // Keep as-is
-    KAKAMEGA: 'Kakamega',
-    KABODE: 'Kabode',
-    OTHER: 'Other',
-  };
-  return varietyMap[backendVariety] || 'Other';
+function mapOFSPVariety(backendVariety: string | null | undefined): OFSPVariety | undefined {
+  if (!backendVariety) return undefined;
+  // Backend sends uppercase enum values, normalize to uppercase and return uppercase
+  const upper = backendVariety.toUpperCase();
+  const validVarieties: OFSPVariety[] = ['KENYA', 'SPK004', 'KAKAMEGA', 'KABODE', 'OTHER'];
+  return validVarieties.includes(upper as OFSPVariety) ? (upper as OFSPVariety) : 'KENYA';
 }
 
 /**
@@ -164,6 +178,20 @@ function mapRFQResponseStatus(backendStatus: string): RFQResponseStatus {
 }
 
 /**
+ * Map backend sourcing request status (UPPER_CASE) to frontend format (lowercase)
+ */
+function mapSourcingRequestStatus(backendStatus: string): SourcingRequestStatus {
+  const statusMap: Record<string, SourcingRequestStatus> = {
+    DRAFT: 'draft',
+    OPEN: 'open',
+    URGENT: 'urgent',
+    CLOSED: 'closed',
+    FULFILLED: 'fulfilled',
+  };
+  return statusMap[backendStatus] ?? 'draft';
+}
+
+/**
  * Map backend negotiation status (UPPER_CASE) to frontend format (lowercase)
  */
 function mapNegotiationStatus(backendStatus: string): NegotiationStatus {
@@ -202,13 +230,94 @@ function transformProduceListing(listing: any): ProduceListing {
 }
 
 /**
- * Transform sourcing request from backend format to frontend format
+ * Transform sourcing request from backend format to frontend format.
+ * Backend (Prisma): quantity, fulfilled, unit, priceRangeMin, priceRangeMax, pricePerUnit, priceUnit, deadline (ISO).
  */
 function transformSourcingRequest(request: any): SourcingRequest {
+  // Transform variety from backend enum (UPPERCASE) to frontend format
+  const transformVariety = (v: string | null | undefined): string | undefined => {
+    if (!v) return undefined;
+    // Backend sends uppercase, keep it uppercase for frontend
+    const upper = v.toUpperCase();
+    const valid = ['KENYA', 'SPK004', 'KAKAMEGA', 'KABODE', 'OTHER'];
+    return valid.includes(upper) ? upper : undefined;
+  };
+  const total = typeof request.quantity === 'number' && Number.isFinite(request.quantity)
+    ? request.quantity
+    : typeof request.total === 'number' && Number.isFinite(request.total)
+      ? request.total
+      : 0;
+  const fulfilled = typeof request.fulfilled === 'number' && Number.isFinite(request.fulfilled)
+    ? request.fulfilled
+    : 0;
+  const priceRangeMin = request.priceRangeMin ?? request.priceRange?.min;
+  const priceRangeMax = request.priceRangeMax ?? request.priceRange?.max;
+  const priceRange =
+    typeof priceRangeMin === 'number' &&
+    Number.isFinite(priceRangeMin) &&
+    typeof priceRangeMax === 'number' &&
+    Number.isFinite(priceRangeMax)
+      ? { min: priceRangeMin, max: priceRangeMax }
+      : undefined;
+  const pricePerUnit = typeof request.pricePerUnit === 'number' && Number.isFinite(request.pricePerUnit)
+    ? request.pricePerUnit
+    : undefined;
+  const priceUnit = request.priceUnit === 'kg' || request.priceUnit === 'unit' ? request.priceUnit : 'kg';
+  const deadline = request.deadline != null
+    ? (typeof request.deadline === 'string' ? request.deadline : (request.deadline as Date)?.toISOString?.() ?? '')
+    : request.deliveryDate ?? '';
+  const buyerName = request.buyer?.profile
+    ? [request.buyer.profile.firstName, request.buyer.profile.lastName].filter(Boolean).join(' ') || request.buyer.email
+    : request.buyerName ?? request.buyer?.email ?? '';
+
+  const status = request.status ? mapSourcingRequestStatus(request.status) : 'draft';
+
+  const offers = Array.isArray(request.offers)
+    ? request.offers.map(transformSupplierOffer)
+    : [];
+
   return {
     ...request,
     productType: request.productType ? mapSourcingProductType(request.productType) : request.productType,
     variety: request.variety ? mapOFSPVariety(request.variety) : request.variety,
+    status,
+    total,
+    quantity: total,
+    fulfilled,
+    priceRange,
+    pricePerUnit,
+    priceUnit,
+    deadline,
+    buyerName,
+    offers,
+  };
+}
+
+/**
+ * Transform supplier offer from backend format to frontend format.
+ * Backend: farmer (profile), quantity, quantityUnit, pricePerKg, qualityGrade, batchId, qrCode, status.
+ */
+function transformSupplierOffer(offer: any): SupplierOffer {
+  const prof = offer.farmer?.profile;
+  const supplierName = prof
+    ? [prof.firstName, prof.lastName].filter(Boolean).join(' ') || offer.farmer?.email || 'Unknown'
+    : offer.supplierName || 'Unknown';
+  const g = (offer.qualityGrade ?? offer.grade ?? 'B').toString().toUpperCase().slice(0, 1);
+  const gradeSafe: 'A' | 'B' | 'C' = (g === 'A' || g === 'B' || g === 'C') ? g : 'B';
+  return {
+    id: offer.id,
+    sourcingRequestId: offer.sourcingRequestId,
+    farmerId: offer.farmerId,
+    supplierName,
+    rating: typeof prof?.rating === 'number' && Number.isFinite(prof.rating) ? prof.rating : undefined,
+    quantity: typeof offer.quantity === 'number' ? offer.quantity : 0,
+    quantityUnit: offer.quantityUnit === 'tons' ? 'tons' : offer.quantityUnit === 'units' ? 'units' : 'kg',
+    pricePerKg: typeof offer.pricePerKg === 'number' ? offer.pricePerKg : 0,
+    grade: gradeSafe,
+    batchId: offer.batchId ?? undefined,
+    qrCode: offer.qrCode ?? undefined,
+    status: offer.status?.toLowerCase?.() as 'pending' | 'accepted' | 'rejected' | 'converted' | undefined,
+    createdAt: typeof offer.createdAt === 'string' ? offer.createdAt : (offer.createdAt as Date)?.toISOString?.() ?? new Date().toISOString(),
   };
 }
 
@@ -229,10 +338,43 @@ function transformRFQ(rfq: any): RFQ {
  * Transform RFQ response from backend format to frontend format
  */
 function transformRFQResponse(response: any): RFQResponse {
+  // Debug: Log raw response to see what we're getting (only in dev)
+  if (import.meta.env.DEV && (!response.pricePerUnit && response.pricePerUnit !== 0) && (!response.totalAmount && response.totalAmount !== 0)) {
+    console.log('RFQ Response data structure:', {
+      pricePerUnit: response.pricePerUnit,
+      totalAmount: response.totalAmount,
+      quantity: response.quantity,
+      rawResponse: response,
+    });
+  }
+  
+  // Handle numeric conversions - check both direct fields and potential string values
+  // Note: 0 is a valid value, so we check for null/undefined specifically
+  // Also handle edge cases like string "O" or other invalid values
+  const parseNumeric = (value: any): number => {
+    if (value == null) return 0;
+    if (typeof value === 'number') {
+      return isNaN(value) ? 0 : value;
+    }
+    const parsed = parseFloat(String(value));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+  
+  const pricePerUnit = parseNumeric(response.pricePerUnit);
+  const totalAmount = parseNumeric(response.totalAmount);
+  const quantity = parseNumeric(response.quantity);
+  
   return {
     ...response,
     status: mapRFQResponseStatus(response.status),
     variety: response.variety ? mapOFSPVariety(response.variety) : response.variety,
+    // Ensure numeric fields are properly converted
+    quantity,
+    pricePerUnit,
+    totalAmount,
+    // Map supplier info from nested supplier object if present
+    supplierName: response.supplierName || response.supplier?.profile?.name || response.supplier?.name || 'Unknown Supplier',
+    supplierRating: response.supplierRating || response.supplier?.rating,
   };
 }
 
@@ -259,7 +401,8 @@ export async function getListings(filters?: MarketplaceFilters): Promise<Produce
     if (filters?.farmerId) params.farmerId = filters.farmerId;
     if (filters?.variety) params.variety = filters.variety;
     if ((filters as any)?.county) params.county = (filters as any).county;
-    if (filters?.status) params.status = filters.status;
+    const backendStatus = toBackendListingStatus(filters?.status ?? 'all');
+    if (backendStatus) params.status = backendStatus;
     if (filters?.minPrice) params.minPrice = filters.minPrice;
     if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
 
@@ -286,16 +429,111 @@ export async function getListingById(id: string): Promise<ProduceListing | null>
 }
 
 /**
+ * Backend CreateListingDto shape (POST /marketplace/listings).
+ */
+interface CreateListingDto {
+  variety: 'KENYA' | 'SPK004' | 'KAKAMEGA' | 'KABODE' | 'OTHER';
+  quantity: number;
+  qualityGrade: 'A' | 'B' | 'C';
+  pricePerKg: number;
+  county: string;
+  subcounty?: string;
+  ward?: string;
+  location?: string;
+  description?: string;
+  photos?: string[];
+  batchId?: string;
+  harvestDate?: string;
+}
+
+/**
+ * Map frontend listing to backend CreateListingDto.
+ */
+function toCreateListingDto(listing: Partial<ProduceListing>): CreateListingDto {
+  const variety = listing.variety 
+    ? (listing.variety === 'Kenya' ? 'KENYA' : 
+       listing.variety === 'SPK004' ? 'SPK004' :
+       listing.variety === 'Kakamega' ? 'KAKAMEGA' :
+       listing.variety === 'Kabode' ? 'KABODE' : 'OTHER')
+    : 'KENYA';
+  
+  return {
+    variety: variety as CreateListingDto['variety'],
+    quantity: typeof listing.quantity === 'number' ? listing.quantity : 0,
+    qualityGrade: (listing.qualityGrade === 'A' || listing.qualityGrade === 'B' || listing.qualityGrade === 'C') 
+      ? listing.qualityGrade 
+      : 'B',
+    pricePerKg: typeof listing.pricePerKg === 'number' ? listing.pricePerKg : 0,
+    county: listing.county || '',
+    subcounty: listing.subcounty,
+    ward: listing.ward,
+    location: listing.location,
+    description: listing.description,
+    photos: listing.photos,
+    batchId: listing.batchId,
+    harvestDate: listing.harvestDate,
+  };
+}
+
+/**
  * Create a produce listing
  * Backend: POST /api/v1/marketplace/listings
  */
 export async function createListing(listing: Partial<ProduceListing>): Promise<ApiResponse<ProduceListing>> {
   try {
-    const created = await apiPost<any>('/marketplace/listings', listing);
+    const dto = toCreateListingDto(listing);
+    const created = await apiPost<any>('/marketplace/listings', dto);
     return { data: transformProduceListing(created), message: "Listing created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create listing" };
   }
+}
+
+/**
+ * Backend UpdateListingDto shape (PUT /marketplace/listings/:id).
+ */
+interface UpdateListingDto {
+  variety?: 'KENYA' | 'SPK004' | 'KAKAMEGA' | 'KABODE' | 'OTHER';
+  quantity?: number;
+  availableQuantity?: number;
+  qualityGrade?: 'A' | 'B' | 'C';
+  pricePerKg?: number;
+  county?: string;
+  subcounty?: string;
+  ward?: string;
+  location?: string;
+  description?: string;
+  photos?: string[];
+  status?: string;
+}
+
+/**
+ * Map frontend listing to backend UpdateListingDto.
+ */
+function toUpdateListingDto(listing: Partial<ProduceListing>): UpdateListingDto {
+  const dto: UpdateListingDto = {};
+  
+  if (listing.variety) {
+    dto.variety = (listing.variety === 'Kenya' ? 'KENYA' : 
+                   listing.variety === 'SPK004' ? 'SPK004' :
+                   listing.variety === 'Kakamega' ? 'KAKAMEGA' :
+                   listing.variety === 'Kabode' ? 'KABODE' : 'OTHER') as UpdateListingDto['variety'];
+  }
+  if (listing.quantity !== undefined) dto.quantity = listing.quantity;
+  if (listing.availableQuantity !== undefined) dto.availableQuantity = listing.availableQuantity;
+  if (listing.qualityGrade && (listing.qualityGrade === 'A' || listing.qualityGrade === 'B' || listing.qualityGrade === 'C')) {
+    dto.qualityGrade = listing.qualityGrade;
+  }
+  if (listing.pricePerKg !== undefined) dto.pricePerKg = listing.pricePerKg;
+  if (listing.county) dto.county = listing.county;
+  if (listing.subcounty) dto.subcounty = listing.subcounty;
+  if (listing.ward) dto.ward = listing.ward;
+  if (listing.location) dto.location = listing.location;
+  if (listing.description) dto.description = listing.description;
+  if (listing.photos) dto.photos = listing.photos;
+  if (listing.status) dto.status = listing.status;
+  
+  return dto;
 }
 
 /**
@@ -304,7 +542,8 @@ export async function createListing(listing: Partial<ProduceListing>): Promise<A
  */
 export async function updateListing(id: string, listing: Partial<ProduceListing>): Promise<ApiResponse<ProduceListing>> {
   try {
-    const updated = await apiPut<any>(`/marketplace/listings/${id}`, listing);
+    const dto = toUpdateListingDto(listing);
+    const updated = await apiPut<any>(`/marketplace/listings/${id}`, dto);
     return { data: transformProduceListing(updated), message: "Listing updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update listing" };
@@ -364,14 +603,64 @@ export async function getMarketplaceOrderById(id: string): Promise<MarketplaceOr
 }
 
 /**
+ * Backend CreateOrderDto shape (POST /marketplace/orders).
+ */
+interface CreateOrderDto {
+  listingId?: string;
+  farmerId: string;
+  variety: 'KENYA' | 'SPK004' | 'KAKAMEGA' | 'KABODE' | 'OTHER';
+  quantity: number;
+  qualityGrade: 'A' | 'B' | 'C';
+  pricePerKg: number;
+  deliveryAddress?: string;
+  notes?: string;
+  rfqResponseId?: string;
+  supplierOfferId?: string;
+  negotiationId?: string;
+  deliveryCounty: string;
+}
+
+/**
+ * Map frontend order to backend CreateOrderDto.
+ */
+function toCreateOrderDto(order: Partial<MarketplaceOrder>): CreateOrderDto {
+  const variety = order.variety 
+    ? (order.variety === 'Kenya' ? 'KENYA' : 
+       order.variety === 'SPK004' ? 'SPK004' :
+       order.variety === 'Kakamega' ? 'KAKAMEGA' :
+       order.variety === 'Kabode' ? 'KABODE' : 'OTHER')
+    : 'KENYA';
+  
+  return {
+    listingId: order.listingId,
+    farmerId: order.farmerId || '',
+    variety: variety as CreateOrderDto['variety'],
+    quantity: typeof order.quantity === 'number' ? order.quantity : 0,
+    qualityGrade: (order.qualityGrade === 'A' || order.qualityGrade === 'B' || order.qualityGrade === 'C') 
+      ? order.qualityGrade 
+      : 'B',
+    pricePerKg: typeof order.pricePerKg === 'number' ? order.pricePerKg : 0,
+    deliveryAddress: order.deliveryAddress,
+    notes: order.notes,
+    rfqResponseId: order.rfqResponseId,
+    supplierOfferId: order.supplierOfferId,
+    negotiationId: order.negotiationId,
+    deliveryCounty: order.deliveryCounty || '',
+  };
+}
+
+/**
  * Create a marketplace order
  * Backend: POST /api/v1/marketplace/orders
  */
 export async function createMarketplaceOrder(order: Partial<MarketplaceOrder>): Promise<ApiResponse<MarketplaceOrder>> {
   try {
-    const created = await apiPost<any>('/marketplace/orders', order);
+    const dto = toCreateOrderDto(order);
+    const created = await apiPost<any>('/marketplace/orders', dto);
+    showSuccess("Order created successfully");
     return { data: transformMarketplaceOrder(created), message: "Order created successfully" };
   } catch (error: any) {
+    // Error toast is automatically shown by api-client
     return { data: null as any, error: error.message || "Failed to create order" };
   }
 }
@@ -434,14 +723,107 @@ export async function getSourcingRequestById(id: string): Promise<SourcingReques
 }
 
 /**
+ * Backend CreateSourcingRequestDto shape (POST /marketplace/sourcing-requests).
+ * Only these fields are accepted; forbidNonWhitelisted rejects extra properties.
+ */
+interface CreateSourcingRequestDto {
+  title?: string;
+  publishImmediately?: boolean;
+  productType: 'FRESH_ROOTS' | 'PROCESS_GRADE' | 'PLANTING_VINES' | 'OFSP';
+  variety: 'KENYA' | 'SPK004' | 'KAKAMEGA' | 'KABODE' | 'OTHER';
+  quantity: number;
+  unit?: 'kg' | 'tons' | 'units';
+  qualityGrade: 'A' | 'B' | 'C';
+  deliveryDate: string; // ISO 8601
+  deliveryLocation: string;
+  description?: string;
+  priceRangeMin?: number;
+  priceRangeMax?: number;
+  pricePerUnit?: number;
+  priceUnit?: 'kg' | 'unit';
+}
+
+function toBackendProductType(v: string | undefined): CreateSourcingRequestDto['productType'] {
+  const s = (v || '').toLowerCase().replace(/\s+/g, '_');
+  if (s === 'fresh_roots' || s === 'fresh_ofsp_roots') return 'FRESH_ROOTS';
+  if (s === 'process_grade' || s === 'ofsp_flour') return 'PROCESS_GRADE';
+  if (s === 'planting_vines' || s === 'planting_vines') return 'PLANTING_VINES';
+  if (s === 'ofsp') return 'OFSP';
+  return 'FRESH_ROOTS';
+}
+
+function toBackendVariety(v: string | undefined): CreateSourcingRequestDto['variety'] {
+  const u = (v || 'KENYA').toUpperCase();
+  const valid: CreateSourcingRequestDto['variety'][] = ['KENYA', 'SPK004', 'KAKAMEGA', 'KABODE', 'OTHER'];
+  return valid.includes(u as any) ? (u as CreateSourcingRequestDto['variety']) : 'KENYA';
+}
+
+function toBackendQualityGrade(v: string | undefined): CreateSourcingRequestDto['qualityGrade'] {
+  if (v === 'A' || v === 'B' || v === 'C') return v;
+  const s = (v || '').toLowerCase();
+  if (s.includes('grade a') || s.includes('premium')) return 'A';
+  if (s.includes('grade b') || s.includes('standard')) return 'B';
+  if (s.includes('processing')) return 'C';
+  return 'B';
+}
+
+function toBackendUnit(v: string | undefined): 'kg' | 'tons' | 'units' {
+  const u = (v || 'kg').toLowerCase();
+  if (u === 'tons') return 'tons';
+  if (u === 'units' || u === 'bags') return 'units';
+  return 'kg';
+}
+
+/**
+ * Map frontend form / Partial<SourcingRequest> to backend CreateSourcingRequestDto.
+ */
+function toCreateSourcingRequestDto(
+  r: Partial<SourcingRequest> & { deliveryRegion?: string; qualityGrade?: string; variety?: string; publishImmediately?: boolean }
+): CreateSourcingRequestDto {
+  const quantity = typeof r.quantity === 'number' ? r.quantity : (r.total ?? 0);
+  const deadline = r.deadline ?? (r.nextDeliveryDate as string) ?? '';
+  const dateStr = deadline.includes('T') ? deadline : deadline ? `${deadline}T00:00:00.000Z` : new Date().toISOString();
+  const dto: CreateSourcingRequestDto = {
+    title: r.title || undefined,
+    productType: toBackendProductType(r.productType as string),
+    variety: toBackendVariety(r.variety),
+    quantity: Number.isFinite(quantity) ? quantity : 0,
+    unit: toBackendUnit(r.unit),
+    qualityGrade: toBackendQualityGrade(r.qualityGrade as string),
+    deliveryDate: dateStr,
+    deliveryLocation: (r.deliveryLocation ?? r.deliveryRegion ?? '').trim() || 'Nairobi HQ',
+    description: (r.additionalRequirements as string) || r.notes || undefined,
+  };
+  
+  // Add price information if available
+  if (r.priceRange && typeof r.priceRange.min === 'number' && typeof r.priceRange.max === 'number') {
+    dto.priceRangeMin = r.priceRange.min;
+    dto.priceRangeMax = r.priceRange.max;
+    dto.priceUnit = r.priceUnit || (r.unit === 'kg' ? 'kg' : r.unit === 'units' ? 'unit' : 'kg');
+  } else if (r.pricePerUnit !== undefined && typeof r.pricePerUnit === 'number') {
+    dto.pricePerUnit = r.pricePerUnit;
+    dto.priceUnit = r.priceUnit || (r.unit === 'kg' ? 'kg' : r.unit === 'units' ? 'unit' : 'kg');
+  }
+  
+  if (r.publishImmediately === true) dto.publishImmediately = true;
+  return dto;
+}
+
+/**
  * Create a sourcing request
  * Backend: POST /api/v1/marketplace/sourcing-requests
+ * Maps frontend payload to CreateSourcingRequestDto (only whitelisted fields).
  */
-export async function createSourcingRequest(request: Partial<SourcingRequest>): Promise<ApiResponse<SourcingRequest>> {
+export async function createSourcingRequest(
+  request: Partial<SourcingRequest> & { deliveryRegion?: string; qualityGrade?: string; variety?: string; publishImmediately?: boolean }
+): Promise<ApiResponse<SourcingRequest>> {
   try {
-    const created = await apiPost<any>('/marketplace/sourcing-requests', request);
+    const dto = toCreateSourcingRequestDto(request);
+    const created = await apiPost<any>('/marketplace/sourcing-requests', dto);
+    showSuccess("Sourcing request created successfully");
     return { data: transformSourcingRequest(created), message: "Sourcing request created successfully" };
   } catch (error: any) {
+    // Error toast is automatically shown by api-client
     return { data: null as any, error: error.message || "Failed to create sourcing request" };
   }
 }
@@ -465,6 +847,21 @@ export async function updateSourcingRequest(id: string, request: Partial<Sourcin
     }
     if (request.deliveryLocation !== undefined) updateData.deliveryLocation = request.deliveryLocation;
     if (request.additionalRequirements !== undefined) updateData.description = request.additionalRequirements;
+    
+    // Map price information
+    // Check for priceRangeMin/priceRangeMax directly first (set explicitly in handleSaveEdit)
+    if (request.priceRangeMin !== undefined && request.priceRangeMax !== undefined) {
+      updateData.priceRangeMin = request.priceRangeMin;
+      updateData.priceRangeMax = request.priceRangeMax;
+      updateData.priceUnit = request.priceUnit || (request.unit === 'kg' ? 'kg' : request.unit === 'units' ? 'unit' : 'kg');
+    } else if (request.priceRange && typeof request.priceRange.min === 'number' && typeof request.priceRange.max === 'number') {
+      updateData.priceRangeMin = request.priceRange.min;
+      updateData.priceRangeMax = request.priceRange.max;
+      updateData.priceUnit = request.priceUnit || (request.unit === 'kg' ? 'kg' : request.unit === 'units' ? 'unit' : 'kg');
+    } else if (request.pricePerUnit !== undefined && typeof request.pricePerUnit === 'number') {
+      updateData.pricePerUnit = request.pricePerUnit;
+      updateData.priceUnit = request.priceUnit || (request.unit === 'kg' ? 'kg' : request.unit === 'units' ? 'unit' : 'kg');
+    }
 
     const updated = await apiPut<any>(`/marketplace/sourcing-requests/${id}`, updateData);
     return { 
@@ -477,12 +874,67 @@ export async function updateSourcingRequest(id: string, request: Partial<Sourcin
 }
 
 /**
+ * Publish a sourcing request (DRAFT → OPEN)
+ * Backend: PUT /api/v1/marketplace/sourcing-requests/:id/publish
+ */
+export async function publishSourcingRequest(id: string): Promise<ApiResponse<SourcingRequest>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/sourcing-requests/${id}/publish`);
+    return { data: transformSourcingRequest(updated), message: "Sourcing request published" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to publish sourcing request" };
+  }
+}
+
+/**
+ * Close a sourcing request (OPEN/URGENT → CLOSED)
+ * Backend: PUT /api/v1/marketplace/sourcing-requests/:id/close
+ */
+export async function closeSourcingRequest(id: string): Promise<ApiResponse<SourcingRequest>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/sourcing-requests/${id}/close`);
+    return { data: transformSourcingRequest(updated), message: "Sourcing request closed" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to close sourcing request" };
+  }
+}
+
+/**
+ * Backend CreateSupplierOfferDto shape (POST /marketplace/sourcing-requests/:requestId/offers).
+ */
+interface CreateSupplierOfferDto {
+  quantity: number;
+  quantityUnit: string;
+  pricePerKg: number;
+  qualityGrade?: string;
+  batchId?: string;
+  notes?: string;
+  deliveryDate?: string;
+}
+
+/**
+ * Map frontend offer to backend CreateSupplierOfferDto.
+ */
+function toCreateSupplierOfferDto(offer: Partial<SupplierOffer>): CreateSupplierOfferDto {
+  return {
+    quantity: typeof offer.quantity === 'number' ? offer.quantity : 0,
+    quantityUnit: offer.quantityUnit || 'kg',
+    pricePerKg: typeof offer.pricePerKg === 'number' ? offer.pricePerKg : 0,
+    qualityGrade: offer.grade,
+    batchId: offer.batchId,
+    notes: offer.notes,
+    deliveryDate: offer.deliveryDate,
+  };
+}
+
+/**
  * Submit supplier offer
  * Backend: POST /api/v1/marketplace/sourcing-requests/:requestId/offers
  */
 export async function submitSupplierOffer(requestId: string, offer: Partial<SupplierOffer>): Promise<ApiResponse<SupplierOffer>> {
   try {
-    const created = await apiPost<SupplierOffer>(`/marketplace/sourcing-requests/${requestId}/offers`, offer);
+    const dto = toCreateSupplierOfferDto(offer);
+    const created = await apiPost<SupplierOffer>(`/marketplace/sourcing-requests/${requestId}/offers`, dto);
     return { data: created, message: "Offer submitted successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to submit offer" };
@@ -496,8 +948,10 @@ export async function submitSupplierOffer(requestId: string, offer: Partial<Supp
 export async function acceptSupplierOffer(offerId: string): Promise<ApiResponse<SupplierOffer>> {
   try {
     const accepted = await apiPut<SupplierOffer>(`/marketplace/supplier-offers/${offerId}/accept`);
+    showSuccess("Offer accepted successfully");
     return { data: accepted, message: "Offer accepted" };
   } catch (error: any) {
+    // Error toast is automatically shown by api-client
     return { data: null as any, error: error.message || "Failed to accept offer" };
   }
 }
@@ -666,6 +1120,28 @@ export async function getNegotiationById(id: string): Promise<Negotiation | null
 }
 
 /**
+ * Backend CreateNegotiationDto shape (POST /marketplace/negotiations).
+ */
+interface CreateNegotiationDto {
+  listingId: string;
+  proposedPrice: number;
+  proposedQuantity: number;
+  message?: string;
+}
+
+/**
+ * Map frontend negotiation to backend CreateNegotiationDto.
+ */
+function toCreateNegotiationDto(listingId: string, message: Partial<NegotiationMessage>): CreateNegotiationDto {
+  return {
+    listingId,
+    proposedPrice: typeof message.proposedPrice === 'number' ? message.proposedPrice : 0,
+    proposedQuantity: typeof message.proposedQuantity === 'number' ? message.proposedQuantity : 0,
+    message: message.message,
+  };
+}
+
+/**
  * Initiate negotiation
  * Backend: POST /api/v1/marketplace/negotiations
  */
@@ -674,10 +1150,8 @@ export async function initiateNegotiation(
   message: Partial<NegotiationMessage>
 ): Promise<ApiResponse<Negotiation>> {
   try {
-    const created = await apiPost<any>('/marketplace/negotiations', {
-      listingId,
-      ...message,
-    });
+    const dto = toCreateNegotiationDto(listingId, message);
+    const created = await apiPost<any>('/marketplace/negotiations', dto);
     return { 
       data: transformNegotiation(created), 
       message: "Negotiation initiated successfully" 
@@ -685,6 +1159,26 @@ export async function initiateNegotiation(
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to initiate negotiation" };
   }
+}
+
+/**
+ * Backend SendNegotiationMessageDto shape (POST /marketplace/negotiations/:id/messages).
+ */
+interface SendNegotiationMessageDto {
+  message: string;
+  counterPrice?: number;
+  counterQuantity?: number;
+}
+
+/**
+ * Map frontend message to backend SendNegotiationMessageDto.
+ */
+function toSendNegotiationMessageDto(message: Partial<NegotiationMessage>): SendNegotiationMessageDto {
+  return {
+    message: message.message || '',
+    counterPrice: typeof message.counterPrice === 'number' ? message.counterPrice : undefined,
+    counterQuantity: typeof message.counterQuantity === 'number' ? message.counterQuantity : undefined,
+  };
 }
 
 /**
@@ -696,7 +1190,8 @@ export async function sendNegotiationMessage(
   message: Partial<NegotiationMessage>
 ): Promise<ApiResponse<Negotiation>> {
   try {
-    const updated = await apiPost<any>(`/marketplace/negotiations/${negotiationId}/messages`, message);
+    const dto = toSendNegotiationMessageDto(message);
+    const updated = await apiPost<any>(`/marketplace/negotiations/${negotiationId}/messages`, dto);
     return { 
       data: transformNegotiation(updated), 
       message: "Message sent successfully" 
@@ -752,6 +1247,104 @@ export async function convertNegotiationToOrder(
   };
 }
 
+// ==================== RFQ DTO Mapper ====================
+
+/** Backend CreateRFQDto: only these fields are allowed (forbidNonWhitelisted). */
+interface CreateRFQDto {
+  title?: string;
+  productType: string;
+  variety: string;
+  quantity: number;
+  unit?: string;
+  qualityGrade: string;
+  deliveryDate: string;
+  deliveryLocation?: string;
+  description?: string;
+  quoteDeadline?: string;
+}
+
+const PRODUCT_TYPE_TO_BACKEND: Record<string, string> = {
+  fresh_roots: "FRESH_ROOTS",
+  process_grade: "PROCESS_GRADE",
+  planting_vines: "PLANTING_VINES",
+  ofsp: "OFSP",
+};
+
+const VARIETY_TO_BACKEND: Record<string, string> = {
+  Kenya: "KENYA",
+  SPK004: "SPK004",
+  Kakamega: "KAKAMEGA",
+  Kabode: "KABODE",
+  Other: "OTHER",
+};
+
+function toCreateRFQDto(rfq: Partial<RFQ>): CreateRFQDto {
+  const productType = (rfq.productType && PRODUCT_TYPE_TO_BACKEND[rfq.productType])
+    ? PRODUCT_TYPE_TO_BACKEND[rfq.productType]
+    : "FRESH_ROOTS";
+  const variety = (rfq.variety && VARIETY_TO_BACKEND[rfq.variety])
+    ? VARIETY_TO_BACKEND[rfq.variety]
+    : "OTHER";
+  const quantity = typeof rfq.total === "number" && Number.isFinite(rfq.total)
+    ? Math.max(0, rfq.total)
+    : Math.max(0, parseFloat(String(rfq.total ?? 0)) || 0);
+  const unit = rfq.unit === "tons" || rfq.unit === "units" ? rfq.unit : "kg";
+  const qualityGrade = rfq.qualityGrade === "A" || rfq.qualityGrade === "B" || rfq.qualityGrade === "C"
+    ? rfq.qualityGrade
+    : "B";
+  const deliveryDate = rfq.deadline || rfq.nextDeliveryDate || "";
+  const deliveryLocation = rfq.deliveryRegion ?? rfq.deliveryLocation;
+  const parts: string[] = [];
+  if (rfq.additionalRequirements) parts.push(String(rfq.additionalRequirements));
+  if (rfq.termsAndConditions) parts.push(String(rfq.termsAndConditions));
+  if (rfq.evaluationCriteria) parts.push(String(rfq.evaluationCriteria));
+  const description = parts.length ? parts.join("\n\n") : undefined;
+
+  const dto: CreateRFQDto = {
+    ...(rfq.title != null && rfq.title !== "" && { title: String(rfq.title) }),
+    productType,
+    variety,
+    quantity,
+    unit,
+    qualityGrade,
+    deliveryDate,
+    ...(deliveryLocation != null && String(deliveryLocation).trim() !== "" && { deliveryLocation: String(deliveryLocation).trim() }),
+    ...(description != null && description !== "" && { description }),
+    ...(rfq.quoteDeadline != null && rfq.quoteDeadline !== "" && { quoteDeadline: String(rfq.quoteDeadline) }),
+  };
+  return dto;
+}
+
+function toUpdateRFQDto(rfq: Partial<RFQ>): Partial<CreateRFQDto> {
+  const out: Partial<CreateRFQDto> = {};
+  if (rfq.title != null) out.title = String(rfq.title);
+  if (rfq.productType != null && PRODUCT_TYPE_TO_BACKEND[rfq.productType])
+    out.productType = PRODUCT_TYPE_TO_BACKEND[rfq.productType];
+  if (rfq.variety != null && VARIETY_TO_BACKEND[rfq.variety])
+    out.variety = VARIETY_TO_BACKEND[rfq.variety];
+  if (typeof rfq.total === "number" && Number.isFinite(rfq.total))
+    out.quantity = Math.max(0, rfq.total);
+  else if (rfq.total != null) {
+    const n = parseFloat(String(rfq.total));
+    if (Number.isFinite(n)) out.quantity = Math.max(0, n);
+  }
+  if (rfq.unit === "kg" || rfq.unit === "tons" || rfq.unit === "units") out.unit = rfq.unit;
+  if (rfq.qualityGrade === "A" || rfq.qualityGrade === "B" || rfq.qualityGrade === "C")
+    out.qualityGrade = rfq.qualityGrade;
+  const deliveryDate = rfq.deadline ?? rfq.nextDeliveryDate;
+  if (deliveryDate != null && String(deliveryDate).trim() !== "") out.deliveryDate = String(deliveryDate).trim();
+  const deliveryLocation = rfq.deliveryRegion ?? rfq.deliveryLocation;
+  if (deliveryLocation != null && String(deliveryLocation).trim() !== "")
+    out.deliveryLocation = String(deliveryLocation).trim();
+  const parts: string[] = [];
+  if (rfq.additionalRequirements) parts.push(String(rfq.additionalRequirements));
+  if (rfq.termsAndConditions) parts.push(String(rfq.termsAndConditions));
+  if (rfq.evaluationCriteria) parts.push(String(rfq.evaluationCriteria));
+  if (parts.length) out.description = parts.join("\n\n");
+  if (rfq.quoteDeadline != null && rfq.quoteDeadline !== "") out.quoteDeadline = String(rfq.quoteDeadline);
+  return out;
+}
+
 // ==================== RFQ Functions ====================
 
 /**
@@ -794,10 +1387,12 @@ export async function getRFQById(id: string): Promise<RFQ | null> {
 /**
  * Create RFQ
  * Backend: POST /api/v1/marketplace/rfqs
+ * Payload must match CreateRFQDto (forbidNonWhitelisted).
  */
 export async function createRFQ(rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
   try {
-    const created = await apiPost<any>('/marketplace/rfqs', rfq);
+    const dto = toCreateRFQDto(rfq);
+    const created = await apiPost<any>('/marketplace/rfqs', dto);
     return { 
       data: transformRFQ(created), 
       message: "RFQ created successfully" 
@@ -810,10 +1405,12 @@ export async function createRFQ(rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
 /**
  * Update RFQ
  * Backend: PUT /api/v1/marketplace/rfqs/:id
+ * Payload must match Partial<CreateRFQDto> (forbidNonWhitelisted).
  */
 export async function updateRFQ(id: string, rfq: Partial<RFQ>): Promise<ApiResponse<RFQ>> {
   try {
-    const updated = await apiPut<any>(`/marketplace/rfqs/${id}`, rfq);
+    const dto = toUpdateRFQDto(rfq);
+    const updated = await apiPut<any>(`/marketplace/rfqs/${id}`, dto);
     return { 
       data: transformRFQ(updated), 
       message: "RFQ updated successfully" 
@@ -887,11 +1484,42 @@ export async function getRFQResponses(
     }
 
     const responses = await apiGet<any[]>(`/marketplace/rfqs/${rfqId}/responses`, params);
+    // Debug: Log first response to check data structure (only in dev)
+    if (import.meta.env.DEV && responses.length > 0) {
+      console.log('RFQ Response data from backend:', {
+        pricePerUnit: responses[0].pricePerUnit,
+        totalAmount: responses[0].totalAmount,
+        quantity: responses[0].quantity,
+        typeOfPricePerUnit: typeof responses[0].pricePerUnit,
+        typeOfTotalAmount: typeof responses[0].totalAmount,
+        fullResponse: responses[0],
+      });
+    }
     return responses.map(transformRFQResponse);
   } catch (error) {
     console.error('Error fetching RFQ responses:', error);
     return [];
   }
+}
+
+/**
+ * Backend CreateRFQResponseDto shape (POST /marketplace/rfqs/:rfqId/responses).
+ */
+interface CreateRFQResponseDto {
+  pricePerKg: number;
+  notes?: string;
+  deliveryDate?: string;
+}
+
+/**
+ * Map frontend RFQ response to backend CreateRFQResponseDto.
+ */
+function toCreateRFQResponseDto(response: Partial<RFQResponse>): CreateRFQResponseDto {
+  return {
+    pricePerKg: typeof response.pricePerKg === 'number' ? response.pricePerKg : 0,
+    notes: response.notes,
+    deliveryDate: response.deliveryDate,
+  };
 }
 
 /**
@@ -903,7 +1531,8 @@ export async function submitRFQResponse(
   response: Partial<RFQResponse>
 ): Promise<ApiResponse<RFQResponse>> {
   try {
-    const created = await apiPost<any>(`/marketplace/rfqs/${rfqId}/responses`, response);
+    const dto = toCreateRFQResponseDto(response);
+    const created = await apiPost<any>(`/marketplace/rfqs/${rfqId}/responses`, dto);
     return { 
       data: transformRFQResponse(created), 
       message: "Quote submitted successfully" 

@@ -19,8 +19,10 @@ export type QualityGrade = "A" | "B" | "C";
 
 /**
  * OFSP variety
+ * @deprecated Use OFSPVariety enum from @/types/shared/enums instead
+ * Keeping for backward compatibility - use uppercase enum values
  */
-export type OFSPVariety = "Kenya" | "SPK004" | "Kakamega" | "Kabode" | "Other";
+export type OFSPVariety = "KENYA" | "SPK004" | "KAKAMEGA" | "KABODE" | "OTHER";
 
 /**
  * Marketplace Order Status
@@ -48,6 +50,7 @@ export type MarketplaceOrderStatus =
 export type PaymentStatus = 
   | "pending" 
   | "secured" 
+  | "confirmed_by_farmer"
   | "released" 
   | "refunded" 
   | "disputed";
@@ -216,6 +219,7 @@ export interface SourcingRequest {
   additionalRequirements?: string;
   deliveryLocation?: string; // Delivery location (used in some contexts)
   notes?: string; // Additional notes (used in some contexts)
+  offers?: SupplierOffer[]; // Supplier offers for this request
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
 }
@@ -247,7 +251,7 @@ export interface SupplierOffer {
   grade: QualityGrade;
   batchId?: string; // Batch ID for traceability
   qrCode?: string; // QR code for traceability
-  status?: "pending" | "accepted" | "rejected";
+  status?: "pending" | "accepted" | "rejected" | "converted";
   createdAt: string; // ISO 8601
 }
 

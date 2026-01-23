@@ -27,7 +27,9 @@ export default function InputProviderDashboard() {
   
   const { 
     trends,
+    inputProviderAnalytics,
     fetchTrends,
+    fetchInputProviderAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -38,8 +40,9 @@ export default function InputProviderDashboard() {
       fetchInputOrders();
       fetchCustomers();
       fetchTrends({ timeRange: "month" });
+      fetchInputProviderAnalytics({ timeRange: "month" });
     }
-  }, [user?.id, fetchInputs, fetchInputOrders, fetchCustomers, fetchTrends]);
+  }, [user?.id, fetchInputs, fetchInputOrders, fetchCustomers, fetchTrends, fetchInputProviderAnalytics]);
 
   const isLoading = inputLoading || analyticsLoading;
 

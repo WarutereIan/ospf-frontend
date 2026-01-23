@@ -40,6 +40,7 @@ import type {
 } from "@/types/aggregation";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { showSuccess } from "@/lib/toast";
 
 // ==================== Enum Transformation Utilities ====================
 
@@ -139,12 +140,60 @@ export async function getAggregationCenterById(id: string): Promise<AggregationC
 }
 
 /**
+ * Backend CreateAggregationCenterDto shape (POST /aggregation/centers).
+ */
+interface CreateAggregationCenterDto {
+  name: string;
+  location: string;
+  county: string;
+  subCounty?: string;
+  ward?: string;
+  coordinates: string;
+  centerType: 'MAIN' | 'SATELLITE';
+  mainCenterId?: string;
+  totalCapacity: number;
+  managerId: string;
+  managerName?: string;
+  managerPhone?: string;
+  status?: 'OPERATIONAL' | 'MAINTENANCE' | 'CLOSED';
+}
+
+/**
+ * Map frontend aggregation center to backend CreateAggregationCenterDto.
+ */
+function toCreateAggregationCenterDto(center: Partial<AggregationCenter>): CreateAggregationCenterDto {
+  const centerType = center.centerType 
+    ? (center.centerType === 'main' ? 'MAIN' : 'SATELLITE')
+    : 'MAIN';
+  
+  return {
+    name: center.name || '',
+    location: center.location || '',
+    county: center.county || '',
+    subCounty: center.subCounty,
+    ward: center.ward,
+    coordinates: center.coordinates || '',
+    centerType: centerType as CreateAggregationCenterDto['centerType'],
+    mainCenterId: center.mainCenterId,
+    totalCapacity: typeof center.totalCapacity === 'number' ? center.totalCapacity : 0,
+    managerId: center.managerId || '',
+    managerName: center.managerName,
+    managerPhone: center.managerPhone,
+    status: center.status 
+      ? (center.status === 'operational' ? 'OPERATIONAL' :
+         center.status === 'maintenance' ? 'MAINTENANCE' : 'CLOSED') as CreateAggregationCenterDto['status']
+      : undefined,
+  };
+}
+
+/**
  * Create aggregation center
  * Backend: POST /api/v1/aggregation/centers
  */
 export async function createAggregationCenter(center: Partial<AggregationCenter>): Promise<ApiResponse<AggregationCenter>> {
   try {
-    const created = await apiPost<any>('/aggregation/centers', center);
+    const dto = toCreateAggregationCenterDto(center);
+    const created = await apiPost<any>('/aggregation/centers', dto);
     return { data: transformAggregationCenter(created), message: "Aggregation center created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create aggregation center" };
@@ -176,6 +225,7 @@ export async function getStockTransactions(filters?: StockFilters): Promise<Stoc
     if (filters?.variety) params.variety = filters.variety;
     if (filters?.dateFrom) params.dateFrom = filters.dateFrom;
     if (filters?.dateTo) params.dateTo = filters.dateTo;
+    if (filters?.status) params.status = filters.status;
 
     const transactions = await apiGet<any[]>('/aggregation/stock-transactions', params);
     return transactions.map(transformStockTransaction);
@@ -186,12 +236,105 @@ export async function getStockTransactions(filters?: StockFilters): Promise<Stoc
 }
 
 /**
+ * Confirm a pending stock transaction
+ * Backend: POST /api/v1/aggregation/stock-transactions/:id/confirm
+ */
+export async function confirmStockTransaction(transactionId: string): Promise<ApiResponse<StockTransaction>> {
+  try {
+    const confirmed = await apiPost<any>(`/aggregation/stock-transactions/${transactionId}/confirm`, {});
+    return { data: transformStockTransaction(confirmed), message: "Stock transaction confirmed successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to confirm stock transaction" };
+  }
+}
+
+/**
+ * Reject a pending stock transaction
+ * Backend: POST /api/v1/aggregation/stock-transactions/:id/reject
+ */
+export async function rejectStockTransaction(transactionId: string, reason: string): Promise<ApiResponse<StockTransaction>> {
+  try {
+    const rejected = await apiPost<any>(`/aggregation/stock-transactions/${transactionId}/reject`, { reason });
+    return { data: transformStockTransaction(rejected), message: "Stock transaction rejected" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to reject stock transaction" };
+  }
+}
+
+/**
+ * Search batches using PostgreSQL full-text search
+ * Backend: GET /api/v1/aggregation/batches/search
+ */
+export async function searchBatches(query: string, limit: number = 10): Promise<StockTransaction[]> {
+  try {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+    const params: Record<string, any> = { q: query.trim() };
+    if (limit) params.limit = limit;
+
+    const transactions = await apiGet<any[]>('/aggregation/batches/search', params);
+    return transactions.map(transformStockTransaction);
+  } catch (error) {
+    console.error('Error searching batches:', error);
+    return [];
+  }
+}
+
+/**
+ * Backend CreateStockTransactionDto shape (POST /aggregation/stock-in, /aggregation/stock-out).
+ */
+interface CreateStockTransactionDto {
+  centerId: string;
+  variety: string;
+  quantity: number;
+  qualityGrade: 'A' | 'B' | 'C';
+  pricePerKg?: number;
+  orderId?: string;
+  farmerId?: string;
+  farmerName?: string;
+  buyerId?: string;
+  buyerName?: string;
+  batchId?: string;
+  qrCode?: string;
+  notes?: string;
+  sourceCenterId?: string;
+  transferTransactionId?: string;
+}
+
+/**
+ * Map frontend stock transaction to backend CreateStockTransactionDto.
+ */
+function toCreateStockTransactionDto(transaction: Partial<StockTransaction>): CreateStockTransactionDto {
+  return {
+    centerId: transaction.centerId || '',
+    variety: transaction.variety || '',
+    quantity: typeof transaction.quantity === 'number' ? transaction.quantity : 0,
+    qualityGrade: (transaction.qualityGrade === 'A' || transaction.qualityGrade === 'B' || transaction.qualityGrade === 'C')
+      ? transaction.qualityGrade
+      : 'B',
+    pricePerKg: transaction.pricePerKg,
+    orderId: transaction.orderId,
+    farmerId: transaction.farmerId,
+    farmerName: transaction.farmerName,
+    buyerId: transaction.buyerId,
+    buyerName: transaction.buyerName,
+    batchId: transaction.batchId,
+    qrCode: transaction.qrCode,
+    notes: transaction.notes,
+    sourceCenterId: transaction.sourceCenterId,
+    transferTransactionId: transaction.transferTransactionId,
+  };
+}
+
+/**
  * Create stock in transaction
  * Backend: POST /api/v1/aggregation/stock-in
  */
 export async function createStockIn(transaction: Partial<StockTransaction>): Promise<ApiResponse<StockTransaction>> {
   try {
-    const created = await apiPost<any>('/aggregation/stock-in', transaction);
+    const dto = toCreateStockTransactionDto(transaction);
+    const created = await apiPost<any>('/aggregation/stock-in', dto);
     return { data: transformStockTransaction(created), message: "Stock in recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record stock in" };
@@ -204,7 +347,8 @@ export async function createStockIn(transaction: Partial<StockTransaction>): Pro
  */
 export async function createStockOut(transaction: Partial<StockTransaction>): Promise<ApiResponse<StockTransaction>> {
   try {
-    const created = await apiPost<any>('/aggregation/stock-out', transaction);
+    const dto = toCreateStockTransactionDto(transaction);
+    const created = await apiPost<any>('/aggregation/stock-out', dto);
     return { data: transformStockTransaction(created), message: "Stock out recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record stock out" };
@@ -246,12 +390,71 @@ export async function getQualityChecks(filters?: { centerId?: string; transactio
 }
 
 /**
+ * Backend CreateQualityCheckDto shape (POST /aggregation/quality-checks).
+ */
+interface CreateQualityCheckDto {
+  centerId: string;
+  orderId?: string;
+  transactionId?: string;
+  farmerId?: string;
+  farmerName?: string;
+  batchId?: string;
+  variety: string;
+  quantity: number;
+  weightRange?: string;
+  colorIntensity?: number;
+  physicalCondition?: string;
+  freshness?: string;
+  daysSinceHarvest?: number;
+  qualityGrade: 'A' | 'B' | 'C';
+  qualityScore: number;
+  colorScore?: number;
+  damageScore?: number;
+  sizeScore?: number;
+  dryMatterContent?: number;
+  notes?: string;
+  photos?: string[];
+}
+
+/**
+ * Map frontend quality check to backend CreateQualityCheckDto.
+ */
+function toCreateQualityCheckDto(check: Partial<QualityCheck>): CreateQualityCheckDto {
+  return {
+    centerId: check.centerId || '',
+    orderId: check.orderId,
+    transactionId: check.transactionId,
+    farmerId: check.farmerId,
+    farmerName: check.farmerName,
+    batchId: check.batchId,
+    variety: check.variety || '',
+    quantity: typeof check.quantity === 'number' ? check.quantity : 0,
+    weightRange: check.weightRange,
+    colorIntensity: check.colorIntensity,
+    physicalCondition: check.physicalCondition,
+    freshness: check.freshness,
+    daysSinceHarvest: check.daysSinceHarvest,
+    qualityGrade: (check.qualityGrade === 'A' || check.qualityGrade === 'B' || check.qualityGrade === 'C')
+      ? check.qualityGrade
+      : 'B',
+    qualityScore: typeof check.qualityScore === 'number' ? check.qualityScore : 0,
+    colorScore: check.colorScore,
+    damageScore: check.damageScore,
+    sizeScore: check.sizeScore,
+    dryMatterContent: check.dryMatterContent,
+    notes: check.notes,
+    photos: check.photos,
+  };
+}
+
+/**
  * Create quality check
  * Backend: POST /api/v1/aggregation/quality-checks
  */
 export async function createQualityCheck(check: Partial<QualityCheck>): Promise<ApiResponse<QualityCheck>> {
   try {
-    const created = await apiPost<QualityCheck>('/aggregation/quality-checks', check);
+    const dto = toCreateQualityCheckDto(check);
+    const created = await apiPost<QualityCheck>('/aggregation/quality-checks', dto);
     return { data: created, message: "Quality check recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record quality check" };
@@ -278,12 +481,49 @@ export async function getWastageEntries(filters?: WastageFilters): Promise<Wasta
 }
 
 /**
+ * Backend CreateWastageEntryDto shape (POST /aggregation/wastage).
+ */
+interface CreateWastageEntryDto {
+  centerId: string;
+  inventoryItemId?: string;
+  batchId?: string;
+  variety: string;
+  quantity: number;
+  qualityGrade: 'A' | 'B' | 'C';
+  category: 'SPOILAGE' | 'DAMAGE' | 'EXPIRED' | 'OTHER';
+  reason?: string;
+  notes?: string;
+}
+
+/**
+ * Map frontend wastage entry to backend CreateWastageEntryDto.
+ */
+function toCreateWastageEntryDto(entry: Partial<WastageEntry>): CreateWastageEntryDto {
+  return {
+    centerId: entry.centerId || '',
+    inventoryItemId: entry.inventoryItemId,
+    batchId: entry.batchId,
+    variety: entry.variety || '',
+    quantity: typeof entry.quantity === 'number' ? entry.quantity : 0,
+    qualityGrade: (entry.qualityGrade === 'A' || entry.qualityGrade === 'B' || entry.qualityGrade === 'C')
+      ? entry.qualityGrade
+      : 'B',
+    category: (entry.category === 'SPOILAGE' || entry.category === 'DAMAGE' || entry.category === 'EXPIRED' || entry.category === 'OTHER')
+      ? entry.category
+      : 'OTHER',
+    reason: entry.reason,
+    notes: entry.notes,
+  };
+}
+
+/**
  * Create wastage entry
  * Backend: POST /api/v1/aggregation/wastage
  */
 export async function createWastageEntry(entry: Partial<WastageEntry>): Promise<ApiResponse<WastageEntry>> {
   try {
-    const created = await apiPost<WastageEntry>('/aggregation/wastage', entry);
+    const dto = toCreateWastageEntryDto(entry);
+    const created = await apiPost<WastageEntry>('/aggregation/wastage', dto);
     return { data: created, message: "Wastage entry recorded" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to record wastage entry" };

@@ -8,6 +8,7 @@ import {
   IconClipboardCheck,
   IconTruckDelivery,
   IconCheck,
+  IconUserCheck,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,7 @@ export type OrderStage =
   | "order_placed"
   | "order_accepted"
   | "payment_secured"
+  | "payment_confirmed_by_farmer"
   | "in_transit"
   | "at_aggregation"
   | "quality_approved"
@@ -48,7 +50,12 @@ const stageConfig: Record<
   payment_secured: {
     label: "Payment Secured",
     icon: IconCreditCard,
-    description: "Payment in escrow",
+    description: "Buyer confirmed payment",
+  },
+  payment_confirmed_by_farmer: {
+    label: "Payment Confirmed",
+    icon: IconUserCheck,
+    description: "Farmer confirmed payment receipt",
   },
   in_transit: {
     label: "In Transit",
@@ -86,6 +93,7 @@ const stageOrder: OrderStage[] = [
   "order_placed",
   "order_accepted",
   "payment_secured",
+  "payment_confirmed_by_farmer",
   "in_transit",
   "at_aggregation",
   "quality_approved",
@@ -109,7 +117,10 @@ export function OrderTimeline({ currentStage, stages }: OrderTimelineProps) {
           {stageOrder.map((stage, index) => {
             const stageData = stageConfig[stage];
             const stageInfo = stages.find((s) => s.stage === stage);
-            const isCompleted = index <= currentIndex;
+            // Use stageInfo.completed if available, otherwise fall back to index-based completion
+            const isCompleted = stageInfo?.completed !== undefined 
+              ? stageInfo.completed 
+              : index <= currentIndex;
             const isCurrent = stage === currentStage;
             const Icon = stageData.icon;
 

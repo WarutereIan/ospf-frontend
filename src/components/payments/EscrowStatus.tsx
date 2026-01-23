@@ -15,9 +15,8 @@ import { cn } from "@/lib/utils";
 export type EscrowStatus =
   | "pending"
   | "processing"
-  | "in_escrow"
-  | "quality_check"
-  | "ready_for_release"
+  | "secured"
+  | "confirmed_by_farmer"
   | "released"
   | "completed"
   | "disputed"
@@ -46,61 +45,52 @@ const statusConfig: Record<
 > = {
   pending: {
     label: "Pending",
-    description: "Order created, no payment initiated",
+    description: "Order created, payment not yet confirmed",
     icon: IconClock,
     color: "text-yellow-800",
     bgColor: "bg-yellow-100 border-yellow-300",
     moneyLocation: "N/A",
-    nextAction: "Buyer initiates payment",
+    nextAction: "Buyer confirms payment",
   },
   processing: {
     label: "Processing",
-    description: "Payment in progress",
+    description: "Payment confirmation in progress",
     icon: IconLoader2,
     color: "text-blue-800",
     bgColor: "bg-blue-100 border-blue-300",
-    moneyLocation: "Payment gateway",
+    moneyLocation: "Pending confirmation",
     nextAction: "Wait for confirmation",
   },
-  in_escrow: {
-    label: "In Escrow",
-    description: "Payment held securely",
+  secured: {
+    label: "Payment Secured",
+    description: "Buyer confirmed payment made",
     icon: IconCreditCard,
-    color: "text-green-800",
-    bgColor: "bg-green-100 border-green-300",
-    moneyLocation: "Escrow account",
-    nextAction: "Farmer delivers produce",
-  },
-  quality_check: {
-    label: "Quality Check",
-    description: "At aggregation center",
-    icon: IconAlertTriangle,
-    color: "text-orange-800",
-    bgColor: "bg-orange-100 border-orange-300",
-    moneyLocation: "Escrow account",
-    nextAction: "Quality verification",
-  },
-  ready_for_release: {
-    label: "Ready for Release",
-    description: "QC passed, awaiting confirmation",
-    icon: IconCircleCheck,
     color: "text-blue-800",
     bgColor: "bg-blue-100 border-blue-300",
-    moneyLocation: "Escrow account",
-    nextAction: "Buyer confirms receipt",
+    moneyLocation: "Awaiting farmer confirmation",
+    nextAction: "Farmer confirms receipt",
+  },
+  confirmed_by_farmer: {
+    label: "Confirmed by Farmer",
+    description: "Farmer confirmed payment receipt",
+    icon: IconCircleCheck,
+    color: "text-green-800",
+    bgColor: "bg-green-100 border-green-300",
+    moneyLocation: "Payment confirmed",
+    nextAction: "Order processing continues",
   },
   released: {
     label: "Released",
-    description: "Payment sent to farmer",
+    description: "Payment released to farmer",
     icon: IconCircleCheck,
     color: "text-green-800",
     bgColor: "bg-green-100 border-green-300",
-    moneyLocation: "In transit to farmer",
-    nextAction: "Farmer receives M-PESA",
+    moneyLocation: "Farmer's account",
+    nextAction: "Transaction completed",
   },
   completed: {
     label: "Completed",
-    description: "Farmer received payment",
+    description: "Payment transaction completed",
     icon: IconCircleCheck,
     color: "text-green-800",
     bgColor: "bg-green-100 border-green-300",
@@ -109,16 +99,16 @@ const statusConfig: Record<
   },
   disputed: {
     label: "Disputed",
-    description: "Issue flagged",
+    description: "Payment issue flagged",
     icon: IconAlertTriangle,
     color: "text-red-800",
     bgColor: "bg-red-100 border-red-300",
-    moneyLocation: "Escrow account (frozen)",
-    nextAction: "Concern staff review",
+    moneyLocation: "Under review",
+    nextAction: "Staff review required",
   },
   refunded: {
     label: "Refunded",
-    description: "Cancelled/rejected",
+    description: "Payment refunded to buyer",
     icon: IconCircleX,
     color: "text-gray-800",
     bgColor: "bg-gray-100 border-gray-300",
@@ -135,7 +125,26 @@ export function EscrowStatus({
   releasedAt,
   onRefresh,
 }: EscrowStatusProps) {
-  const config = statusConfig[status];
+  // Normalize status to lowercase (backend may return uppercase)
+  const normalizedStatus = (status || '').toLowerCase() as EscrowStatus;
+  const config = statusConfig[normalizedStatus];
+  
+  // Handle unknown status gracefully
+  if (!config) {
+    console.warn(`Unknown payment status: ${status} (normalized: ${normalizedStatus})`);
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment Status</CardTitle>
+          <CardDescription>Order #{orderId}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Badge variant="outline">Unknown Status: {status}</Badge>
+        </CardContent>
+      </Card>
+    );
+  }
+  
   const Icon = config.icon;
 
   return (
@@ -178,8 +187,8 @@ export function EscrowStatus({
             <span className="font-semibold">KES {(amount * 0.02).toLocaleString()}</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t mt-2">
-            <span className="font-semibold">Total in Escrow</span>
-            <span className="text-xl font-bold">KES {(amount * 1.02).toLocaleString()}</span>
+            <span className="font-semibold">Total Amount</span>
+            <span className="text-xl font-bold">KES {amount.toLocaleString()}</span>
           </div>
         </div>
 
@@ -208,20 +217,18 @@ export function EscrowStatus({
         </div>
 
         {/* Status-specific messages */}
-        {status === "in_escrow" && (
+        {status === "secured" && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-800">
-              💰 Your payment is securely held in escrow. It will be released to the farmer once delivery is
-              confirmed and quality check passes.
+              💰 Payment confirmation recorded. Waiting for farmer to confirm receipt before order processing continues.
             </p>
           </div>
         )}
 
-        {status === "ready_for_release" && (
+        {status === "confirmed_by_farmer" && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <p className="text-sm text-green-800">
-              ✅ Quality check passed! Payment will be released to the farmer automatically in 24 hours if no
-              dispute is raised.
+              ✅ Farmer has confirmed payment receipt. Order processing can now continue.
             </p>
           </div>
         )}

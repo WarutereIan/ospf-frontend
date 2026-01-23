@@ -74,9 +74,11 @@ export function StaffDashboard() {
     dashboardStats, 
     trends, 
     performanceMetrics,
+    staffAnalytics,
     fetchDashboardStats, 
     fetchTrends, 
     fetchPerformanceMetrics,
+    fetchStaffAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
   
@@ -93,6 +95,7 @@ export function StaffDashboard() {
     fetchDashboardStats({ timeRange: "month" });
     fetchTrends({ timeRange: "month" });
     fetchPerformanceMetrics({ timeRange: "month" });
+    fetchStaffAnalytics({ timeRange: "month" });
     fetchProfiles({ role: "farmer" });
     fetchCenters();
     fetchInventory();

@@ -15,6 +15,7 @@ import {
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
+import { FarmerPaymentConfirmationDialog } from "@/components/payments/FarmerPaymentConfirmationDialog";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { usePayment } from "@/contexts/PaymentContext";
 import type { MarketplaceOrder } from "@/types/marketplace";
@@ -24,6 +25,8 @@ export function FarmerOrderDetails() {
   const navigate = useNavigate();
   const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
   const { payments, fetchPayments } = usePayment();
+  
+  const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
 
   // Fetch order details on mount
   useEffect(() => {
@@ -35,6 +38,14 @@ export function FarmerOrderDetails() {
 
   const order = selectedOrder;
   const payment = payments.find((p) => p.orderId === id);
+  
+  // Determine if farmer needs to confirm payment
+  // Payment should be "secured" (buyer confirmed) but not yet "confirmed_by_farmer"
+  const needsFarmerConfirmation = payment && 
+    (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED") &&
+    payment.status?.toLowerCase() !== "confirmed_by_farmer" &&
+    payment.status !== "CONFIRMED_BY_FARMER" &&
+    (order?.status === "payment_secured" || order?.status === "order_accepted" || order?.status === "order_placed");
 
   if (isLoading) {
     return (
@@ -79,18 +90,29 @@ export function FarmerOrderDetails() {
             <h1 className="text-2xl sm:text-3xl font-bold">Order Details</h1>
             <p className="text-sm text-muted-foreground mt-1">Order #{order.id}</p>
           </div>
-          <Badge
-            variant="outline"
-            className={
-              order.status === "completed" || order.status === "delivered"
-                ? "bg-green-100 text-green-800"
-                : order.status === "quality_rejected" || order.status === "rejected"
-                ? "bg-red-100 text-red-800"
-                : "bg-blue-100 text-blue-800"
-            }
-          >
-            {order.status.replace(/_/g, " ")}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {needsFarmerConfirmation && (
+              <Button
+                onClick={() => setPaymentConfirmationOpen(true)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <IconClipboardCheck className="mr-2 h-4 w-4" />
+                Confirm Payment Received
+              </Button>
+            )}
+            <Badge
+              variant="outline"
+              className={
+                order.status === "completed" || order.status === "delivered"
+                  ? "bg-green-100 text-green-800"
+                  : order.status === "quality_rejected" || order.status === "rejected"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-blue-100 text-blue-800"
+              }
+            >
+              {order.status.replace(/_/g, " ")}
+            </Badge>
+          </div>
         </div>
       </div>
 
@@ -114,16 +136,46 @@ export function FarmerOrderDetails() {
                 completed: order.status !== "order_placed",
               },
               {
+                stage: "payment_secured",
+                timestamp: payment?.confirmedAt || (["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 12 * 60 * 1000).toISOString()
+                  : undefined),
+                completed: payment && (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED" || payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER") || ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "payment_confirmed_by_farmer",
+                timestamp: payment?.farmerConfirmedAt || (payment && (
+                  payment.status?.toLowerCase() === "confirmed_by_farmer" || 
+                  payment.status === "CONFIRMED_BY_FARMER" ||
+                  payment.farmerConfirmedBy !== undefined
+                )
+                  ? (payment.confirmedAt || new Date().toISOString())
+                  : undefined),
+                completed: payment && (
+                  payment.status?.toLowerCase() === "confirmed_by_farmer" || 
+                  payment.status === "CONFIRMED_BY_FARMER" ||
+                  payment.farmerConfirmedAt !== undefined ||
+                  payment.farmerConfirmedBy !== undefined
+                ) || ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "in_transit",
+                timestamp: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 8 * 60 * 1000).toISOString()
+                  : undefined,
+                completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
                 stage: "at_aggregation",
                 timestamp: ["at_aggregation", "quality_checked", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 10 * 60 * 1000).toISOString()
+                  ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
                   : undefined,
                 completed: ["at_aggregation", "quality_checked", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "quality_approved",
                 timestamp: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                  ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
                   : undefined,
                 completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
@@ -255,9 +307,11 @@ export function FarmerOrderDetails() {
           </CardHeader>
           <CardContent>
             <EscrowStatus
-              status={payment.status as EscrowStatusType}
+              status={(payment.status || '').toLowerCase() as EscrowStatusType}
               amount={payment.amount || order.totalAmount}
               orderId={order.id}
+              createdAt={payment.confirmedAt}
+              releasedAt={payment.releasedAt}
             />
           </CardContent>
         </Card>
@@ -289,10 +343,41 @@ export function FarmerOrderDetails() {
                     },
                   ]
                 : []),
-              ...(["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+              ...(payment && payment.confirmedAt
                 ? [
                     {
                       id: "3",
+                      status: "payment_secured" as any,
+                      timestamp: payment.confirmedAt,
+                      changedBy: { id: order.buyerId, name: order.buyerName, role: "buyer" as const },
+                      notes: "Buyer confirmed payment",
+                      metadata: {
+                        amount: `KES ${(payment.amount || order.totalAmount).toLocaleString()}`,
+                        method: payment.method || "N/A",
+                      },
+                    },
+                  ]
+                : []),
+              ...(payment && (
+                payment.farmerConfirmedAt || 
+                payment.farmerConfirmedBy ||
+                payment.status?.toLowerCase() === "confirmed_by_farmer" ||
+                payment.status === "CONFIRMED_BY_FARMER"
+              )
+                ? [
+                    {
+                      id: "4",
+                      status: "payment_confirmed_by_farmer" as any,
+                      timestamp: payment.farmerConfirmedAt || payment.confirmedAt || new Date().toISOString(),
+                      changedBy: { id: "F001", name: "You", role: "farmer" as const },
+                      notes: payment.farmerConfirmationNotes || "Farmer confirmed payment receipt",
+                    },
+                  ]
+                : []),
+              ...(["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                ? [
+                    {
+                      id: "5",
                       status: "at_aggregation" as any,
                       timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
                       changedBy: { id: "M001", name: "Center Staff", role: "manager" as const },
@@ -303,6 +388,27 @@ export function FarmerOrderDetails() {
           />
         </CardContent>
       </Card>
+
+      {/* Farmer Payment Confirmation Dialog */}
+      {payment && (
+        <FarmerPaymentConfirmationDialog
+          open={paymentConfirmationOpen}
+          onOpenChange={setPaymentConfirmationOpen}
+          orderId={order.id}
+          orderNumber={order.orderNumber || order.id}
+          paymentAmount={payment.amount || order.totalAmount}
+          paymentMethod={payment.method}
+          transactionReference={payment.transactionReference || undefined}
+          paymentEvidence={payment.paymentEvidence || undefined}
+          onPaymentConfirmed={() => {
+            // Refresh order and payment data
+            if (id) {
+              fetchOrderById(id);
+              fetchPayments({ orderId: id });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

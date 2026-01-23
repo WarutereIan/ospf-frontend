@@ -10,6 +10,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import { StaffProvider } from "@/contexts/StaffContext";
 import { Layout } from "@/components/layout/Layout";
+import { Toaster } from "@/components/ui/toaster";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
@@ -24,6 +25,7 @@ import InputProviderDashboard from "@/pages/dashboard/InputProviderDashboard";
 import TransportProviderDashboard from "@/pages/dashboard/TransportProviderDashboard";
 import { ProduceManagement } from "@/pages/farmer/ProduceManagement";
 import { FarmerOrders } from "@/pages/farmer/FarmerOrders";
+import { FarmerOrderDetails } from "@/pages/farmer/FarmerOrderDetails";
 import { PeerLeaderboard } from "@/pages/farmer/PeerLeaderboard";
 import { MarketInfo } from "@/pages/farmer/MarketInfo";
 import { Analytics as FarmerAnalytics } from "@/pages/farmer/Analytics";
@@ -78,17 +80,17 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
   return (
-    <AuthProvider>
-      <ProfileProvider>
-        <InputProvider>
-          <MarketplaceProvider>
-            <TransportProvider>
-              <AggregationProvider>
-                <PaymentProvider>
-                  <NotificationProvider>
-                    <AnalyticsProvider>
-                      <StaffProvider>
-                        <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <ProfileProvider>
+          <InputProvider>
+            <MarketplaceProvider>
+              <TransportProvider>
+                <AggregationProvider>
+                  <PaymentProvider>
+                    <NotificationProvider>
+                      <AnalyticsProvider>
+                        <StaffProvider>
           <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -105,6 +107,8 @@ export function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             
             {/* Farmer Routes - More specific routes first */}
+            <Route path="/dashboard/farmer/orders/:id" element={<FarmerOrderDetails />} />
+            <Route path="/dashboard/farmer/orders" element={<FarmerOrders />} />
             <Route path="/dashboard/farmer/rfqs" element={<RFQList />} />
             <Route path="/dashboard/farmer/negotiations" element={<NegotiationList />} />
             <Route path="/dashboard/farmer/pickup-schedules" element={<PickupManagement />} />
@@ -197,17 +201,18 @@ export function App() {
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
-        </BrowserRouter>
-                      </StaffProvider>
-                    </AnalyticsProvider>
-                  </NotificationProvider>
-                </PaymentProvider>
-              </AggregationProvider>
-            </TransportProvider>
-          </MarketplaceProvider>
-        </InputProvider>
-      </ProfileProvider>
-    </AuthProvider>
+                        </StaffProvider>
+                      </AnalyticsProvider>
+                    </NotificationProvider>
+                  </PaymentProvider>
+                </AggregationProvider>
+              </TransportProvider>
+            </MarketplaceProvider>
+          </InputProvider>
+        </ProfileProvider>
+      </AuthProvider>
+      <Toaster />
+    </BrowserRouter>
   );
 }
 

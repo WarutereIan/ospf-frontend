@@ -27,7 +27,9 @@ export default function TransportProviderDashboard() {
   
   const { 
     trends,
+    transportProviderAnalytics,
     fetchTrends,
+    fetchTransportProviderAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -38,8 +40,9 @@ export default function TransportProviderDashboard() {
       fetchActiveDeliveries();
       fetchStats();
       fetchTrends({ timeRange: "week" });
+      fetchTransportProviderAnalytics({ timeRange: "week" });
     }
-  }, [user?.id, fetchRequests, fetchActiveDeliveries, fetchStats, fetchTrends]);
+  }, [user?.id, fetchRequests, fetchActiveDeliveries, fetchStats, fetchTrends, fetchTransportProviderAnalytics]);
 
   const isLoading = transportLoading || analyticsLoading;
 

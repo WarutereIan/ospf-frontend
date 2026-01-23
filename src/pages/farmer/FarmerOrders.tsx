@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { MarketplaceOrder } from "@/types/marketplace";
@@ -10,49 +10,32 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   IconArrowLeft,
   IconSearch,
   IconEye,
-  IconCheck,
-  IconX,
   IconPackage,
   IconTruck,
   IconCircleCheck,
   IconAlertCircle,
-  IconLoader2,
   IconShoppingCart,
   IconCurrency,
   IconBuilding,
   IconClipboardCheck,
 } from "@tabler/icons-react";
-import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
-import { OrderStatusHistory, type OrderStatus } from "@/components/orders/OrderStatusHistory";
-import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
-import { DigitalReceipt } from "@/components/orders/DigitalReceipt";
-import { TraceabilityView } from "@/components/orders/TraceabilityView";
-import { QualityFeedback } from "@/components/farmer/QualityFeedback";
+import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import {
   StatCard,
   OrderPipeline,
 } from "@/components/visualizations";
 
 export function FarmerOrders() {
+  const navigate = useNavigate();
   const { orders, fetchOrders, updateOrderStatus, isLoading, orderFilters, setOrderFilters } = useMarketplace();
   const { user } = useAuth();
   
   const [filteredOrders, setFilteredOrders] = useState<MarketplaceOrder[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState<MarketplaceOrder | null>(null);
-  const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   // Fetch farmer's orders on mount and when filters change
@@ -85,15 +68,22 @@ export function FarmerOrders() {
     setFilteredOrders(filtered);
   }, [orders, searchTerm]);
 
-  const handleViewOrder = (order: MarketplaceOrder) => {
-    setSelectedOrder(order);
-    setOrderDetailsOpen(true);
+  const handleViewOrder = (orderId: string, e?: React.MouseEvent) => {
+    // Prevent navigation if clicking on action buttons
+    if (e) {
+      e.stopPropagation();
+    }
+    navigate(`/dashboard/farmer/orders/${orderId}`);
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: MarketplaceOrder["status"]) => {
     setUpdatingStatus(orderId);
     try {
       await updateOrderStatus(orderId, newStatus);
+      showSuccess(
+        "Order status updated successfully",
+        `Order status has been updated to ${newStatus.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}`
+      );
       // Refresh orders
       if (user?.id) {
         await fetchOrders({ farmerId: user.id });
@@ -101,7 +91,7 @@ export function FarmerOrders() {
       setUpdatingStatus(null);
     } catch (error) {
       console.error("Failed to update order status:", error);
-      alert("Failed to update order status. Please try again.");
+      showError("Failed to update order status", formatApiError(error));
       setUpdatingStatus(null);
     }
   };
@@ -338,7 +328,11 @@ export function FarmerOrders() {
               <TableBody>
                 {filteredOrders.length > 0 ? (
                   filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
+                    <TableRow 
+                      key={order.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleViewOrder(order.id)}
+                    >
                       <TableCell className="font-medium">{order.id}</TableCell>
                       <TableCell>{order.buyerName}</TableCell>
                       <TableCell>
@@ -353,7 +347,11 @@ export function FarmerOrders() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" variant="ghost" onClick={() => handleViewOrder(order)}>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={(e) => handleViewOrder(order.id, e)}
+                        >
                           <IconEye className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -378,455 +376,6 @@ export function FarmerOrders() {
         </CardContent>
       </Card>
 
-      {/* Order Details Dialog */}
-      <Dialog open={orderDetailsOpen} onOpenChange={setOrderDetailsOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-            <DialogDescription>Order #{selectedOrder?.id}</DialogDescription>
-          </DialogHeader>
-
-          {selectedOrder && (
-            <div className="space-y-6">
-              {/* Order Timeline */}
-              <OrderTimeline
-                currentStage={selectedOrder.status as OrderStage}
-                stages={[
-                  {
-                    stage: "order_placed",
-                    timestamp: selectedOrder.createdAt,
-                    completed: true,
-                  },
-                  {
-                    stage: "order_accepted",
-                    timestamp:
-                      selectedOrder.status !== "order_placed"
-                        ? new Date(Date.now() - 15 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: selectedOrder.status !== "order_placed",
-                  },
-                  {
-                    stage: "payment_secured",
-                    timestamp:
-                      ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 10 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "in_transit",
-                    timestamp:
-                      ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "at_aggregation",
-                    timestamp:
-                      ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "quality_approved",
-                    timestamp:
-                      ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                        selectedOrder.status
-                      )
-                        ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
-                        : undefined,
-                    completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(
-                      selectedOrder.status
-                    ),
-                  },
-                  {
-                    stage: "out_for_delivery",
-                    timestamp:
-                      ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status)
-                        ? new Date(Date.now() - 30 * 1000).toISOString()
-                        : undefined,
-                    completed: ["out_for_delivery", "delivered", "completed"].includes(selectedOrder.status),
-                  },
-                  {
-                    stage: "delivered",
-                    timestamp:
-                      ["delivered", "completed"].includes(selectedOrder.status)
-                        ? new Date().toISOString()
-                        : undefined,
-                    completed: ["delivered", "completed"].includes(selectedOrder.status),
-                  },
-                  {
-                    stage: "completed",
-                    timestamp: selectedOrder.status === "completed" ? new Date().toISOString() : undefined,
-                    completed: selectedOrder.status === "completed",
-                  },
-                ]}
-              />
-
-              {/* Order Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Order Status</h3>
-                  <Badge variant="outline" className={getStatusColor(selectedOrder.status)}>
-                    <span className="flex items-center gap-1">
-                      {getStatusIcon(selectedOrder.status)}
-                      {formatStatus(selectedOrder.status)}
-                    </span>
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Order Date</h3>
-                  <p className="text-sm">{formatDate(selectedOrder.createdAt)}</p>
-                </div>
-              </div>
-
-              {/* Buyer Information */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Buyer Information</h3>
-                <div className="border rounded-md p-4 space-y-1">
-                  <p className="font-medium">{selectedOrder.buyerName}</p>
-                  <p className="text-sm text-muted-foreground">{selectedOrder.buyerPhone}</p>
-                </div>
-              </div>
-
-              {/* Order Details */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Order Details</h3>
-                <div className="border rounded-md p-4 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Variety</span>
-                    <span className="font-medium">{selectedOrder.variety}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Quality Grade</span>
-                    <Badge variant="outline">Grade {selectedOrder.qualityGrade}</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Quantity</span>
-                    <span className="font-medium">{selectedOrder.quantity} kg</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Price per kg</span>
-                    <span className="font-medium">KES {selectedOrder.pricePerKg}/kg</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-3">
-                    <span className="font-semibold">Total Amount</span>
-                    <span className="text-xl font-bold">
-                      KES {selectedOrder.totalAmount.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Information */}
-              {selectedOrder.deliveryLocation && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Delivery Location</h3>
-                  <div className="border rounded-md p-4">
-                    <p className="text-sm">{selectedOrder.deliveryLocation}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Payment Status */}
-              {selectedOrder.paymentStatus && selectedOrder.paymentAmount && (
-                <EscrowStatus
-                  status={selectedOrder.paymentStatus === "secured" ? "in_escrow" : selectedOrder.paymentStatus === "pending" ? "pending" : selectedOrder.paymentStatus === "released" ? "released" : "pending" as EscrowStatus}
-                  amount={selectedOrder.paymentAmount || 0}
-                  orderId={selectedOrder.id}
-                  createdAt={selectedOrder.createdAt}
-                />
-              )}
-
-              {/* Status History */}
-              <OrderStatusHistory
-                orderId={selectedOrder.id}
-                currentStatus={(selectedOrder.status === "cancelled" || selectedOrder.status === "quality_rejected" ? "rejected" : selectedOrder.status) as OrderStatus}
-                history={[
-                  {
-                    id: "hist-1",
-                    status: "order_placed" as const,
-                    changedBy: {
-                      id: "buyer-1",
-                      name: selectedOrder.buyerName,
-                      role: "buyer" as const,
-                    },
-                    timestamp: selectedOrder.createdAt,
-                    notes: "Order placed by buyer",
-                  },
-                  ...(selectedOrder.status !== "order_placed"
-                    ? [
-                  {
-                    id: "hist-2",
-                    status: "order_accepted" as const,
-                    changedBy: {
-                      id: "farmer-1",
-                      name: "You",
-                      role: "farmer" as const,
-                    },
-                    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-                    notes: "Order accepted",
-                  },
-                      ]
-                    : []),
-                  ...(selectedOrder.paymentStatus && selectedOrder.paymentStatus !== "pending"
-                    ? [
-                        {
-                          id: "hist-3",
-                          status: "payment_secured" as const,
-                          changedBy: {
-                            id: "system-1",
-                            name: "System",
-                            role: "system" as const,
-                          },
-                          timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-                          notes: "Payment secured in escrow",
-                          metadata: {
-                            amount: `KES ${selectedOrder.paymentAmount?.toLocaleString()}`,
-                            method: "M-PESA",
-                          },
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-
-              {/* Photo Documentation */}
-              {selectedOrder.photos && selectedOrder.photos.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">Photos</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {selectedOrder.photos.map((photo, index) => (
-                      <div key={index} className="aspect-square rounded-lg overflow-hidden border">
-                        <img
-                          src={photo}
-                          alt={`Order photo ${index + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quality Feedback */}
-              {(selectedOrder.status === "quality_approved" ||
-                selectedOrder.status === "out_for_delivery" ||
-                selectedOrder.status === "delivered" ||
-                selectedOrder.status === "completed") && (
-                <QualityFeedback
-                  orderId={selectedOrder.id}
-                  qualityGrade={selectedOrder.qualityGrade}
-                  overallScore={selectedOrder.qualityGrade === "A" ? 92 : selectedOrder.qualityGrade === "B" ? 78 : 65}
-                  criteria={[
-                    {
-                      name: "Size & Uniformity",
-                      score: selectedOrder.qualityGrade === "A" ? 18 : selectedOrder.qualityGrade === "B" ? 15 : 12,
-                      maxScore: 20,
-                      feedback:
-                        selectedOrder.qualityGrade === "A"
-                          ? "Excellent size uniformity across all roots"
-                          : selectedOrder.qualityGrade === "B"
-                          ? "Good size consistency with minor variations"
-                          : "Variable sizes, acceptable for processing",
-                      passed: selectedOrder.qualityGrade !== "C",
-                    },
-                    {
-                      name: "Appearance & Color",
-                      score: selectedOrder.qualityGrade === "A" ? 19 : selectedOrder.qualityGrade === "B" ? 16 : 13,
-                      maxScore: 20,
-                      feedback:
-                        selectedOrder.qualityGrade === "A"
-                          ? "Perfect color and appearance"
-                          : selectedOrder.qualityGrade === "B"
-                          ? "Good appearance with minor blemishes"
-                          : "Some blemishes present",
-                      passed: selectedOrder.qualityGrade !== "C",
-                    },
-                    {
-                      name: "Damage Assessment",
-                      score: selectedOrder.qualityGrade === "A" ? 20 : selectedOrder.qualityGrade === "B" ? 17 : 14,
-                      maxScore: 20,
-                      feedback:
-                        selectedOrder.qualityGrade === "A"
-                          ? "No visible damage or defects"
-                          : selectedOrder.qualityGrade === "B"
-                          ? "Minimal damage, within acceptable limits"
-                          : "Some damage present",
-                      passed: true,
-                    },
-                    {
-                      name: "Cleanliness",
-                      score: selectedOrder.qualityGrade === "A" ? 18 : selectedOrder.qualityGrade === "B" ? 16 : 14,
-                      maxScore: 20,
-                      feedback:
-                        selectedOrder.qualityGrade === "A"
-                          ? "Very clean, properly sorted"
-                          : selectedOrder.qualityGrade === "B"
-                          ? "Generally clean with minor soil"
-                          : "Some soil present",
-                      passed: true,
-                    },
-                    {
-                      name: "Freshness",
-                      score: selectedOrder.qualityGrade === "A" ? 17 : selectedOrder.qualityGrade === "B" ? 14 : 12,
-                      maxScore: 20,
-                      feedback:
-                        selectedOrder.qualityGrade === "A"
-                          ? "Excellent freshness, recently harvested"
-                          : selectedOrder.qualityGrade === "B"
-                          ? "Good freshness, acceptable condition"
-                          : "Adequate freshness",
-                      passed: true,
-                    },
-                  ]}
-                  feedbackNotes={
-                    selectedOrder.qualityGrade === "A"
-                      ? "Outstanding quality produce. Continue following recommended practices."
-                      : selectedOrder.qualityGrade === "B"
-                      ? "Good quality produce. Minor improvements in sorting could help achieve Grade A."
-                      : "Adequate quality for processing. Focus on better sorting and handling to improve grade."
-                  }
-                  inspectorName="Quality Officer"
-                  inspectionDate={selectedOrder.createdAt}
-                />
-              )}
-
-              {/* Traceability View */}
-              {selectedOrder.status !== "order_placed" && selectedOrder.status !== "rejected" && (
-                <TraceabilityView
-                  orderId={selectedOrder.id}
-                  variety={selectedOrder.variety}
-                  quantity={selectedOrder.quantity}
-                  qualityGrade={selectedOrder.qualityGrade}
-                  steps={[
-                    {
-                      stage: "Harvest",
-                      location: "Your Farm",
-                      timestamp: selectedOrder.createdAt,
-                      actor: "You",
-                      status: "completed",
-                      notes: "OFSP roots harvested according to recommended practices",
-                    },
-                    {
-                      stage: "On-Farm Sorting",
-                      location: "Your Farm",
-                      timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-                      actor: "You",
-                      status: "completed",
-                      notes: "Damaged and spoiled produce removed",
-                    },
-                    {
-                      stage: "Loading",
-                      location: "Your Farm",
-                      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-                      actor: "You",
-                      status: selectedOrder.status === "in_transit" || selectedOrder.status === "at_aggregation" || selectedOrder.status === "quality_approved" || selectedOrder.status === "out_for_delivery" || selectedOrder.status === "delivered" || selectedOrder.status === "completed" ? "completed" : "current",
-                      notes: "Root tubers loaded for transport",
-                    },
-                    {
-                      stage: "In Transit",
-                      location: "En Route",
-                      timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-                      actor: "Transport Provider",
-                      status: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
-                      notes: "Produce in transit to aggregation center",
-                    },
-                    {
-                      stage: "At Aggregation Center",
-                      location: selectedOrder.deliveryLocation || "Aggregation Center",
-                      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-                      actor: "Aggregation Manager",
-                      status: ["at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
-                      notes: "Produce received at aggregation center",
-                    },
-                    {
-                      stage: "Quality Check",
-                      location: selectedOrder.deliveryLocation || "Aggregation Center",
-                      timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-                      actor: "Quality Officer",
-                      status: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
-                      notes: `Quality grade: ${selectedOrder.qualityGrade}`,
-                    },
-                    {
-                      stage: "Delivery",
-                      location: selectedOrder.deliveryLocation || "Buyer Location",
-                      timestamp: new Date().toISOString(),
-                      actor: "Buyer",
-                      status: ["delivered", "completed"].includes(selectedOrder.status) ? "completed" : "pending",
-                      notes: "Produce delivered to buyer",
-                    },
-                  ]}
-                />
-              )}
-
-              {/* Digital Receipt for Completed/Delivered Orders */}
-              {(selectedOrder.status === "delivered" || selectedOrder.status === "completed") && (
-                <DigitalReceipt
-                  orderId={selectedOrder.id}
-                  farmerName="You" // TODO: Get from user context
-                  buyerName={selectedOrder.buyerName}
-                  buyerPhone={selectedOrder.buyerPhone}
-                  variety={selectedOrder.variety}
-                  qualityGrade={selectedOrder.qualityGrade}
-                  quantity={selectedOrder.quantity}
-                  pricePerKg={selectedOrder.pricePerKg}
-                  totalAmount={selectedOrder.totalAmount}
-                  deliveryLocation={selectedOrder.deliveryLocation || "N/A"}
-                  deliveryDate={selectedOrder.createdAt}
-                  transactionId={selectedOrder.paymentStatus === "released" ? `TXN-${selectedOrder.id}` : undefined}
-                  paymentMethod="M-PESA"
-                />
-              )}
-
-              {/* Action Buttons */}
-              {selectedOrder.status === "order_placed" && (
-                <DialogFooter className="flex-col sm:flex-row gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleUpdateStatus(selectedOrder.id, "rejected")}
-                    disabled={updatingStatus === selectedOrder.id}
-                    className="w-full sm:w-auto"
-                  >
-                    {updatingStatus === selectedOrder.id ? (
-                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <IconX className="mr-2 h-4 w-4" />
-                    )}
-                    Reject Order
-                  </Button>
-                  <Button
-                    onClick={() => handleUpdateStatus(selectedOrder.id, "order_accepted")}
-                    disabled={updatingStatus === selectedOrder.id}
-                    className="w-full sm:w-auto"
-                  >
-                    {updatingStatus === selectedOrder.id ? (
-                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <IconCheck className="mr-2 h-4 w-4" />
-                    )}
-                    Accept Order
-                  </Button>
-                </DialogFooter>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

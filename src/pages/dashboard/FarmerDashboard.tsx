@@ -91,8 +91,10 @@ export function FarmerDashboard() {
   const { 
     leaderboards,
     trends,
+    farmerAnalytics,
     fetchLeaderboard,
     fetchTrends,
+    fetchFarmerAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -104,6 +106,7 @@ export function FarmerDashboard() {
       fetchRatingSummary(user.id);
       fetchLeaderboard("revenue", "month");
       fetchTrends({ timeRange: "month" });
+      fetchFarmerAnalytics({ timeRange: "month" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);

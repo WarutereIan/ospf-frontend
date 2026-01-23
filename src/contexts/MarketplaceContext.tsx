@@ -6,7 +6,7 @@
  * - Marketplace orders
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   ProduceListing,
   MarketplaceOrder,
@@ -39,6 +39,8 @@ import {
   getSourcingRequestById,
   createSourcingRequest,
   updateSourcingRequest,
+  publishSourcingRequest,
+  closeSourcingRequest,
   submitSupplierOffer,
   acceptSupplierOffer,
   getRecurringOrders,
@@ -126,8 +128,10 @@ interface MarketplaceContextType {
   // Sourcing Request Actions
   fetchSourcingRequests: (filters?: SourcingRequestFilters) => Promise<void>;
   fetchSourcingRequestById: (id: string) => Promise<void>;
-  createSourcingRequest: (request: Partial<SourcingRequest>) => Promise<void>;
+  createSourcingRequest: (request: Partial<SourcingRequest>) => Promise<SourcingRequest | null>;
   updateSourcingRequest: (id: string, request: Partial<SourcingRequest>) => Promise<void>;
+  publishSourcingRequest: (id: string) => Promise<void>;
+  closeSourcingRequest: (id: string) => Promise<void>;
   submitSupplierOffer: (requestId: string, offer: Partial<SupplierOffer>) => Promise<void>;
   acceptSupplierOffer: (offerId: string) => Promise<void>;
   setSourcingRequestFilters: (filters: SourcingRequestFilters) => void;
@@ -135,7 +139,7 @@ interface MarketplaceContextType {
   
   // Recurring Order Actions
   fetchRecurringOrders: () => Promise<void>;
-  createRecurringOrder: (order: Partial<RecurringOrder>) => Promise<void>;
+  createRecurringOrder: (order: Partial<RecurringOrder> & { buyerId: string; farmerId: string }) => Promise<void>;
   updateRecurringOrder: (id: string, order: Partial<RecurringOrder>) => Promise<void>;
   cancelRecurringOrder: (id: string) => Promise<void>;
   
@@ -397,16 +401,18 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const createSourcingRequestAction = useCallback(async (request: Partial<SourcingRequest>) => {
+  const createSourcingRequestAction = useCallback(async (request: Partial<SourcingRequest>): Promise<SourcingRequest | null> => {
     setIsLoading(true);
     setError(null);
     try {
-      await createSourcingRequest(request);
-      // Refresh sourcing requests - call service function directly to avoid circular dependency
+      const result = await createSourcingRequest(request);
+      const created = result.data ?? null;
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
+      return created;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create sourcing request");
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -417,7 +423,6 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       await updateSourcingRequest(id, request);
-      // Refresh sourcing requests - call service function directly
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
     } catch (err) {
@@ -426,6 +431,38 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [sourcingRequestFilters]);
+
+  const publishSourcingRequestAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await publishSourcingRequest(id);
+      const data = await getSourcingRequests(sourcingRequestFilters);
+      setSourcingRequests(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to publish sourcing request");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sourcingRequestFilters]);
+
+  const closeSourcingRequestAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await closeSourcingRequest(id);
+      const data = await getSourcingRequests(sourcingRequestFilters);
+      setSourcingRequests(data);
+      // Refresh selected request if it's the one being closed
+      if (selectedSourcingRequest?.id === id) {
+        await fetchSourcingRequestById(id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to close sourcing request");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sourcingRequestFilters, selectedSourcingRequest]);
 
   const submitSupplierOfferAction = useCallback(async (requestId: string, offer: Partial<SupplierOffer>) => {
     setIsLoading(true);
@@ -488,7 +525,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const createRecurringOrderAction = useCallback(async (order: Partial<RecurringOrder>) => {
+  const createRecurringOrderAction = useCallback(async (order: Partial<RecurringOrder> & { buyerId: string; farmerId: string }) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -769,9 +806,17 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const data = await getRFQResponses(rfqId, filters);
-      // Update selected RFQ with responses
+      // Update selected RFQ with responses only if it's the same RFQ and responses actually changed
       if (selectedRFQ?.id === rfqId) {
-        setSelectedRFQ({ ...selectedRFQ, responses: data });
+        const currentResponseIds = new Set(selectedRFQ.responses?.map(r => r.id) || []);
+        const newResponseIds = new Set(data.map(r => r.id));
+        const responsesChanged = 
+          currentResponseIds.size !== newResponseIds.size ||
+          [...currentResponseIds].some(id => !newResponseIds.has(id));
+        
+        if (responsesChanged) {
+          setSelectedRFQ(prev => prev ? { ...prev, responses: data } : null);
+        }
       }
       return data;
     } catch (err) {
@@ -780,7 +825,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRFQ]);
+  }, [selectedRFQ?.id]); // Only depend on the ID, not the entire selectedRFQ object
 
   const submitRFQResponseAction = useCallback(async (rfqId: string, response: Partial<RFQResponse>) => {
     setIsLoading(true);
@@ -790,7 +835,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       // Refresh RFQ responses - call service function directly
       const data = await getRFQResponses(rfqId);
       if (selectedRFQ?.id === rfqId) {
-        setSelectedRFQ({ ...selectedRFQ, responses: data });
+        // Always update when submitting a new response
+        setSelectedRFQ(prev => prev ? { ...prev, responses: data } : null);
       }
       // Refresh RFQs list
       const rfqsData = await getRFQs(rfqFilters);
@@ -800,26 +846,29 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRFQ, rfqFilters]);
+  }, [selectedRFQ?.id, rfqFilters]); // Only depend on the ID
 
   const fetchRFQResponseById = useCallback(async (rfqId: string, responseId: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const response = await getRFQResponseById(rfqId, responseId);
-      // Update selected RFQ with the response
+      // Update selected RFQ with the response only if it actually changed
       if (selectedRFQ?.id === rfqId && response) {
-        const updatedResponses = selectedRFQ.responses?.map(r => 
-          r.id === responseId ? response : r
-        ) || [response];
-        setSelectedRFQ({ ...selectedRFQ, responses: updatedResponses });
+        const currentResponse = selectedRFQ.responses?.find(r => r.id === responseId);
+        if (!currentResponse || JSON.stringify(currentResponse) !== JSON.stringify(response)) {
+          const updatedResponses = selectedRFQ.responses?.map(r => 
+            r.id === responseId ? response : r
+          ) || [response];
+          setSelectedRFQ(prev => prev ? { ...prev, responses: updatedResponses } : null);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch RFQ response");
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRFQ]);
+  }, [selectedRFQ?.id]); // Only depend on the ID
 
   const updateRFQResponseStatusAction = useCallback(async (rfqId: string, responseId: string, status: RFQResponse["status"]) => {
     setIsLoading(true);
@@ -829,7 +878,19 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       // Refresh RFQ responses - call service function directly
       const data = await getRFQResponses(rfqId);
       if (selectedRFQ?.id === rfqId) {
-        setSelectedRFQ({ ...selectedRFQ, responses: data });
+        const currentResponseIds = new Set(selectedRFQ.responses?.map(r => r.id) || []);
+        const newResponseIds = new Set(data.map(r => r.id));
+        const responsesChanged = 
+          currentResponseIds.size !== newResponseIds.size ||
+          [...currentResponseIds].some(id => !newResponseIds.has(id)) ||
+          data.some(r => {
+            const current = selectedRFQ.responses?.find(cr => cr.id === r.id);
+            return !current || current.status !== r.status;
+          });
+        
+        if (responsesChanged) {
+          setSelectedRFQ(prev => prev ? { ...prev, responses: data } : null);
+        }
       }
       // Refresh RFQs list
       const rfqsData = await getRFQs(rfqFilters);
@@ -839,7 +900,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedRFQ, rfqFilters]);
+  }, [selectedRFQ?.id, rfqFilters]); // Only depend on the ID
 
   const awardRFQAction = useCallback(async (rfqId: string, responseIds: string[]) => {
     setIsLoading(true);
@@ -912,16 +973,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const filteredListings = listings; // Filtering handled by service
   const filteredOrders = orders; // Filtering handled by service
 
-  useEffect(() => {
-    fetchListings();
-    fetchOrders();
-    fetchSourcingRequests();
-    fetchRecurringOrders();
-    fetchNegotiations();
-    fetchRFQs();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (BuyerRequests → RFQs + sourcing;
+  // RFQList → RFQs; ProduceManagement → listings; etc.). Avoids duplicate/unnecessary calls.
 
   const value: MarketplaceContextType = {
     listings,
@@ -962,6 +1015,8 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     fetchSourcingRequestById,
     createSourcingRequest: createSourcingRequestAction,
     updateSourcingRequest: updateSourcingRequestAction,
+    publishSourcingRequest: publishSourcingRequestAction,
+    closeSourcingRequest: closeSourcingRequestAction,
     submitSupplierOffer: submitSupplierOfferAction,
     acceptSupplierOffer: acceptSupplierOfferAction,
     setSourcingRequestFilters,

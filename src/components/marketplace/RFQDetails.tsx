@@ -31,6 +31,10 @@ interface RFQDetailsProps {
   onPublish?: (id: string) => Promise<void>;
   onClose?: (id: string) => Promise<void>;
   onCancel?: (id: string) => Promise<void>;
+  isFarmerView?: boolean;
+  farmerResponseId?: string;
+  farmerUserId?: string;
+  hideSubmitButton?: boolean;
 }
 
 export function RFQDetails({
@@ -39,6 +43,10 @@ export function RFQDetails({
   onPublish,
   onClose,
   onCancel,
+  isFarmerView = false,
+  farmerResponseId,
+  farmerUserId,
+  hideSubmitButton = false,
 }: RFQDetailsProps) {
   const navigate = useNavigate();
   const {
@@ -58,11 +66,23 @@ export function RFQDetails({
 
   useEffect(() => {
     if (rfq.id) {
-      fetchRFQResponses(rfq.id).then((data) => {
-        setResponses(data);
+      let cancelled = false;
+      // If farmer view, fetch only their responses using supplierId filter
+      const fetchPromise = isFarmerView && farmerUserId
+        ? fetchRFQResponses(rfq.id, { supplierId: farmerUserId })
+        : fetchRFQResponses(rfq.id);
+      
+      fetchPromise.then((data) => {
+        if (!cancelled) {
+          setResponses(data);
+        }
       });
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [rfq.id, fetchRFQResponses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rfq.id, isFarmerView, farmerUserId]); // Removed fetchRFQResponses from dependencies to prevent infinite loop
 
   const handleSubmitResponse = async (response: Partial<RFQResponse>) => {
     if (!rfq.id) return;
@@ -290,12 +310,12 @@ export function RFQDetails({
                   : "Review and manage submitted quotes"}
               </CardDescription>
             </div>
-            {rfq.rfqStatus === "published" && canSubmitResponse && (
+            {rfq.rfqStatus === "published" && canSubmitResponse && !hideSubmitButton && (
               <Button onClick={() => setShowResponseForm(true)}>
                 Submit Quote
               </Button>
             )}
-            {responses.length > 1 && (
+            {responses.length > 1 && !isFarmerView && (
               <div className="flex gap-2">
                 <Button
                   variant={viewMode === "list" ? "default" : "outline"}
@@ -336,6 +356,7 @@ export function RFQDetails({
                 selectedResponseIds={selectedResponseIds}
                 onUpdateStatus={handleUpdateResponseStatus}
                 onConvertToOrder={handleConvertToOrder}
+                isFarmerView={isFarmerView}
               />
             ) : (
               <div className="space-y-4">
@@ -346,6 +367,7 @@ export function RFQDetails({
                     rfq={rfq}
                     onUpdateStatus={handleUpdateResponseStatus}
                     onConvertToOrder={handleConvertToOrder}
+                    isFarmerView={isFarmerView}
                   />
                 ))}
               </div>

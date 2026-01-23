@@ -6,7 +6,7 @@
  * - Alerts
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   Notification,
   Alert,
@@ -194,12 +194,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const filteredNotifications = notifications;
   const unreadCount = notifications.filter(n => n.status === "unread").length;
 
-  useEffect(() => {
-    fetchNotifications();
-    fetchAlerts();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: pages that need notifications/alerts call fetchNotifications, fetchAlerts, fetchStats.
 
   const value: NotificationContextType = {
     notifications,

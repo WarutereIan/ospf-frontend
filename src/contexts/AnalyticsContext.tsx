@@ -1,11 +1,19 @@
 /**
  * Analytics Context
  * 
- * Provides global state management for analytics and reporting:
+ * Provides global state management for analytics and reporting.
+ * This context consumes the analyticsService and provides:
  * - Dashboard statistics
  * - Reports
  * - Trends
  * - Performance metrics
+ * - Role-specific analytics (farmer, buyer, staff, etc.)
+ * - Market information
+ * - Leaderboards
+ * - Advisories
+ * 
+ * Components should use the useAnalytics() hook to access analytics data
+ * and fetch functions. All data flows through this context from the service.
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
@@ -38,6 +46,15 @@ import {
   updateAdvisory,
   deleteAdvisory,
   getAnalyticsStats,
+  getFarmerAnalytics,
+  getBuyerAnalytics,
+  getStaffAnalytics,
+  getCountyOfficerAnalytics,
+  getInputProviderAnalytics,
+  getTransportProviderAnalytics,
+  getAggregationManagerAnalytics,
+  getMarketInfo,
+  refreshAnalyticsViews,
 } from "@/services/analyticsService";
 
 interface AnalyticsContextType {
@@ -56,6 +73,16 @@ interface AnalyticsContextType {
   isLoading: boolean;
   error: string | null;
   
+  // Role-specific analytics data
+  farmerAnalytics: any | null;
+  buyerAnalytics: any | null;
+  staffAnalytics: any | null;
+  countyOfficerAnalytics: any | null;
+  inputProviderAnalytics: any | null;
+  transportProviderAnalytics: any | null;
+  aggregationManagerAnalytics: any | null;
+  marketInfo: any | null;
+  
   fetchDashboardStats: (filters?: AnalyticsFilters) => Promise<void>;
   fetchTrends: (filters?: AnalyticsFilters) => Promise<void>;
   fetchPerformanceMetrics: (filters?: AnalyticsFilters) => Promise<void>;
@@ -69,7 +96,20 @@ interface AnalyticsContextType {
   clearSelectedReport: () => void;
   
   // Leaderboard Actions
-  fetchLeaderboard: (metric: string, period: string) => Promise<void>;
+  fetchLeaderboard: (metric: string, period: string, filters?: { limit?: number; subcounty?: string; county?: string; userId?: string }) => Promise<void>;
+  
+  // Market Info Actions
+  fetchMarketInfo: (filters?: { location?: string; variety?: string; timeRange?: string; startDate?: string; endDate?: string }) => Promise<void>;
+  
+  // Role-Specific Analytics Actions
+  fetchFarmerAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchBuyerAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchStaffAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchCountyOfficerAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchInputProviderAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchTransportProviderAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  fetchAggregationManagerAnalytics: (filters?: AnalyticsFilters) => Promise<void>;
+  refreshViews: () => Promise<void>;
   
   // Advisory Actions
   fetchAdvisories: (filters?: AdvisoryFilters) => Promise<void>;
@@ -98,6 +138,16 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
   const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Role-specific analytics state
+  const [farmerAnalytics, setFarmerAnalytics] = useState<any | null>(null);
+  const [buyerAnalytics, setBuyerAnalytics] = useState<any | null>(null);
+  const [staffAnalytics, setStaffAnalytics] = useState<any | null>(null);
+  const [countyOfficerAnalytics, setCountyOfficerAnalytics] = useState<any | null>(null);
+  const [inputProviderAnalytics, setInputProviderAnalytics] = useState<any | null>(null);
+  const [transportProviderAnalytics, setTransportProviderAnalytics] = useState<any | null>(null);
+  const [aggregationManagerAnalytics, setAggregationManagerAnalytics] = useState<any | null>(null);
+  const [marketInfo, setMarketInfo] = useState<any | null>(null);
 
   const fetchDashboardStats = useCallback(async (newFilters?: AnalyticsFilters) => {
     setIsLoading(true);
@@ -242,14 +292,142 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
   };
 
   // Leaderboard Actions
-  const fetchLeaderboard = useCallback(async (metric: string, period: string) => {
+  const fetchLeaderboard = useCallback(async (
+    metric: string,
+    period: string,
+    filters?: { limit?: number; subcounty?: string; county?: string; userId?: string }
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
-      const leaderboard = await getLeaderboard(metric, period);
+      const leaderboard = await getLeaderboard(metric, period, filters);
       setLeaderboards([leaderboard]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch leaderboard");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  
+  // Market Info Actions
+  const fetchMarketInfo = useCallback(async (filters?: {
+    location?: string;
+    variety?: string;
+    timeRange?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getMarketInfo(filters);
+      setMarketInfo(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch market info");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  
+  // Role-Specific Analytics Actions
+  const fetchFarmerAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getFarmerAnalytics(newFilters || filters);
+      setFarmerAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch farmer analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchBuyerAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getBuyerAnalytics(newFilters || filters);
+      setBuyerAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch buyer analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchStaffAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getStaffAnalytics(newFilters || filters);
+      setStaffAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch staff analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchCountyOfficerAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getCountyOfficerAnalytics(newFilters || filters);
+      setCountyOfficerAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch county officer analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchInputProviderAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getInputProviderAnalytics(newFilters || filters);
+      setInputProviderAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch input provider analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchTransportProviderAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getTransportProviderAnalytics(newFilters || filters);
+      setTransportProviderAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch transport provider analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const fetchAggregationManagerAnalytics = useCallback(async (newFilters?: AnalyticsFilters) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await getAggregationManagerAnalytics(newFilters || filters);
+      setAggregationManagerAnalytics(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch aggregation manager analytics");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filters]);
+  
+  const refreshViews = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await refreshAnalyticsViews();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to refresh analytics views");
     } finally {
       setIsLoading(false);
     }
@@ -339,15 +517,8 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     setSelectedAdvisory(null);
   };
 
-  useEffect(() => {
-    fetchDashboardStats();
-    fetchTrends();
-    fetchPerformanceMetrics();
-    fetchReportTemplates();
-    fetchReports();
-    fetchAdvisories();
-    fetchStats();
-  }, []);
+  // Note: Components should call fetch functions as needed
+  // We don't fetch everything on mount to avoid unnecessary API calls
 
   const value: AnalyticsContextType = {
     dashboardStats,
@@ -364,6 +535,14 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     stats,
     isLoading,
     error,
+    farmerAnalytics,
+    buyerAnalytics,
+    staffAnalytics,
+    countyOfficerAnalytics,
+    inputProviderAnalytics,
+    transportProviderAnalytics,
+    aggregationManagerAnalytics,
+    marketInfo,
     fetchDashboardStats,
     fetchTrends,
     fetchPerformanceMetrics,
@@ -376,6 +555,15 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     setFilters,
     clearSelectedReport,
     fetchLeaderboard,
+    fetchMarketInfo,
+    fetchFarmerAnalytics,
+    fetchBuyerAnalytics,
+    fetchStaffAnalytics,
+    fetchCountyOfficerAnalytics,
+    fetchInputProviderAnalytics,
+    fetchTransportProviderAnalytics,
+    fetchAggregationManagerAnalytics,
+    refreshViews,
     fetchAdvisories,
     fetchAdvisoryById,
     createAdvisory: createAdvisoryAction,

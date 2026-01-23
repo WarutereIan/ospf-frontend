@@ -80,8 +80,10 @@ export function BuyerDashboard() {
   const { 
     trends,
     dashboardStats,
+    buyerAnalytics,
     fetchTrends,
     fetchDashboardStats,
+    fetchBuyerAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -94,6 +96,7 @@ export function BuyerDashboard() {
       fetchPaymentHistory({ userId: user.id });
       fetchTrends({ timeRange: "quarter" });
       fetchDashboardStats({ timeRange: "quarter" });
+      fetchBuyerAnalytics({ timeRange: "quarter" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);

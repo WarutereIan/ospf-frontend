@@ -38,21 +38,49 @@ import {
 } from "@tabler/icons-react";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import type { SourcingRequest, SupplierOffer, SourcingRequestFilters } from "@/types/marketplace";
+import { OFSPVariety, OFSP_VARIETY_LABELS, OFSP_VARIETY_VALUES } from "@/types/shared/enums";
+import { showSuccess, showError, formatApiError } from "@/lib/toast";
 
 // Types imported from marketplace.ts
 
-type TabType = "active" | "drafts" | "history";
+type TabType = "active" | "drafts" | "completed";
 type ViewType = "list" | "create" | "manage";
+
+/** Product type options matching backend CreateSourcingRequestDto enum */
+const PRODUCT_TYPE_OPTIONS = [
+  { value: "FRESH_ROOTS", label: "Fresh OFSP Roots" },
+  { value: "PROCESS_GRADE", label: "OFSP Flour" },
+  { value: "PLANTING_VINES", label: "Planting Vines" },
+  { value: "OFSP", label: "OFSP (General)" },
+] as const;
+
+/** Variety options matching backend OFSPVariety enum */
+const VARIETY_OPTIONS = OFSP_VARIETY_VALUES.map(value => ({
+  value,
+  label: OFSP_VARIETY_LABELS[value as OFSPVariety],
+}));
+
+function frontendProductTypeToEnum(
+  v: SourcingRequest["productType"]
+): (typeof PRODUCT_TYPE_OPTIONS)[number]["value"] {
+  const map: Record<string, (typeof PRODUCT_TYPE_OPTIONS)[number]["value"]> = {
+    fresh_roots: "FRESH_ROOTS",
+    process_grade: "PROCESS_GRADE",
+    planting_vines: "PLANTING_VINES",
+  };
+  return map[v] ?? "FRESH_ROOTS";
+}
 
 interface CreateRequestForm {
   productType: string;
+  variety: string;
   quantity: string;
   quantityUnit: "kg" | "tons" | "bags";
   qualityGrade: string;
   priceMin: string;
   priceMax: string;
   deadline: string;
-  deliveryRegion: string;
+  deliveryLocation: string;
   additionalRequirements: string;
   isRecurring: boolean;
   recurringFrequency: "weekly" | "biweekly" | "monthly" | "quarterly" | "custom";
@@ -64,9 +92,14 @@ export function SourcingRequests() {
   const { 
     sourcingRequests, 
     fetchSourcingRequests, 
+    fetchSourcingRequestById,
     createSourcingRequest: createRequest,
     updateSourcingRequest: updateRequest,
+    publishSourcingRequest: publishRequest,
+    closeSourcingRequest: closeRequest,
     acceptSupplierOffer,
+    clearSelectedSourcingRequest,
+    selectedSourcingRequest,
     isLoading,
     sourcingRequestFilters,
     setSourcingRequestFilters,
@@ -75,41 +108,37 @@ export function SourcingRequests() {
   const [view, setView] = useState<ViewType>("list");
   const [activeTab, setActiveTab] = useState<TabType>("active");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<SourcingRequest | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<SupplierOffer | null>(null);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isAcceptingOffer, setIsAcceptingOffer] = useState(false);
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
+  const [closeConfirmDialogOpen, setCloseConfirmDialogOpen] = useState(false);
+  const [isClosingRequest, setIsClosingRequest] = useState(false);
+  const [publishingRequestId, setPublishingRequestId] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateRequestForm>({
-    productType: "",
+    productType: "FRESH_ROOTS",
+    variety: OFSPVariety.KENYA,
     quantity: "",
     quantityUnit: "kg",
     qualityGrade: "",
     priceMin: "",
     priceMax: "",
     deadline: "",
-    deliveryRegion: "",
+    deliveryLocation: "",
     additionalRequirements: "",
     isRecurring: false,
     recurringFrequency: "weekly",
     recurringEndDate: "",
   });
 
-  // Fetch sourcing requests on mount and when tab changes
+  // Fetch all sourcing requests on mount (no status filter). Tabs filter client-side.
   useEffect(() => {
-    const filters: SourcingRequestFilters = {};
-    if (activeTab === "drafts") {
-      filters.status = "draft";
-    } else if (activeTab === "history") {
-      filters.status = "closed";
-    } else {
-      filters.status = "open";
-    }
-    fetchSourcingRequests(filters);
+    setSourcingRequestFilters({ status: "all" });
+    fetchSourcingRequests({ status: "all" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, []);
 
   const getProductIcon = (type: SourcingRequest["productType"]) => {
     switch (type) {
@@ -168,6 +197,37 @@ export function SourcingRequests() {
     }
   };
 
+  const getOfferStatusBadge = (status?: string) => {
+    if (!status) return null;
+    switch (status.toLowerCase()) {
+      case "accepted":
+        return (
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-medium px-2 py-1">
+            Accepted
+          </Badge>
+        );
+      case "rejected":
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-100 text-[10px] font-medium px-2 py-1">
+            Rejected
+          </Badge>
+        );
+      case "converted":
+        return (
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-medium px-2 py-1">
+            Converted
+          </Badge>
+        );
+      case "pending":
+      default:
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-medium px-2 py-1">
+            Pending
+          </Badge>
+        );
+    }
+  };
+
   const getProgressColor = (percentage: number, status: SourcingRequest["status"]) => {
     if (status === "urgent" && percentage < 20) {
       return "bg-red-500";
@@ -181,28 +241,93 @@ export function SourcingRequests() {
     return "bg-orange-500";
   };
 
-  const formatQuantity = (value: number, unit: string) => {
-    if (unit === "tons") {
-      return `${value.toFixed(1)}t`;
+  const formatQuantity = (value: number | undefined | null, unit?: string) => {
+    const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
+    const u = unit ?? "kg";
+    if (u === "tons") {
+      return `${n.toFixed(1)}t`;
     }
-    if (unit === "kg") {
-      return `${value.toLocaleString()} kg`;
+    if (u === "kg") {
+      return `${n.toLocaleString()} kg`;
     }
-    if (unit === "units") {
-      if (value >= 1000) {
-        return `${(value / 1000).toFixed(0)}k units`;
+    if (u === "units") {
+      if (n >= 1000) {
+        return `${(n / 1000).toFixed(0)}k units`;
       }
-      return `${value.toLocaleString()} units`;
+      return `${n.toLocaleString()} units`;
     }
-    return `${value} ${unit}`;
+    return `${n} ${u}`;
   };
 
-  // Filter requests based on active tab (already filtered by context)
-  const filteredRequests = sourcingRequests;
+  const formatDeadline = (iso: string | undefined | null) => {
+    if (!iso || typeof iso !== "string") return "—";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("en-KE", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return "—";
+    }
+  };
+
+  const formatPrice = (r: {
+    priceRange?: { min: number; max: number };
+    pricePerUnit?: number;
+    priceUnit?: string;
+  }) => {
+    if (r.priceRange != null && typeof r.priceRange.min === "number" && typeof r.priceRange.max === "number") {
+      return `KES ${r.priceRange.min.toLocaleString()} – ${r.priceRange.max.toLocaleString()}`;
+    }
+    if (typeof r.pricePerUnit === "number" && Number.isFinite(r.pricePerUnit)) {
+      return `KES ${r.pricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+    }
+    return "—";
+  };
+
+  const formatRelativeTime = (iso: string | undefined | null) => {
+    if (!iso || typeof iso !== "string") return "—";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins} min ago`;
+      if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+      if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
+      return formatDeadline(iso);
+    } catch {
+      return "—";
+    }
+  };
+
+  // Client-side filter by tab; sort by newest first (createdAt desc)
+  const filteredRequests = (() => {
+    let list: SourcingRequest[];
+    if (activeTab === "active") {
+      list = sourcingRequests.filter((r) => r.status === "open" || r.status === "urgent");
+    } else if (activeTab === "drafts") {
+      list = sourcingRequests.filter((r) => r.status === "draft");
+    } else {
+      list = sourcingRequests.filter((r) => r.status === "closed" || r.status === "fulfilled");
+    }
+    return [...list].sort((a, b) => {
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tB - tA;
+    });
+  })();
 
   const activeCount = sourcingRequests.filter((r) => r.status === "open" || r.status === "urgent").length;
   const draftsCount = sourcingRequests.filter((r) => r.status === "draft").length;
-  const historyCount = sourcingRequests.filter((r) => r.status === "closed").length;
+  const completedCount = sourcingRequests.filter((r) => r.status === "closed" || r.status === "fulfilled").length;
 
   const handleCreateRequest = () => {
     setView("create");
@@ -210,17 +335,17 @@ export function SourcingRequests() {
 
   const handleCancel = () => {
     setView("list");
-    setSelectedRequest(null);
     // Reset form
     setFormData({
-      productType: "",
+      productType: "FRESH_ROOTS",
+      variety: OFSPVariety.KENYA,
       quantity: "",
       quantityUnit: "kg",
       qualityGrade: "",
       priceMin: "",
       priceMax: "",
       deadline: "",
-      deliveryRegion: "",
+      deliveryLocation: "",
       additionalRequirements: "",
       isRecurring: false,
       recurringFrequency: "weekly",
@@ -229,35 +354,78 @@ export function SourcingRequests() {
   };
 
   const handleBackToList = () => {
+    clearSelectedSourcingRequest();
     setView("list");
-    setSelectedRequest(null);
+  };
+
+  const handleManage = async (request: SourcingRequest) => {
+    try {
+      await fetchSourcingRequestById(request.id);
+      setView("manage");
+    } catch {
+      setView("list");
+    }
+  };
+
+  const formQualityToGrade = (s: string): "A" | "B" | "C" | undefined => {
+    if (!s) return undefined;
+    const lower = s.toLowerCase();
+    if (lower.includes("grade a") || lower.includes("premium")) return "A";
+    if (lower.includes("grade b") || lower.includes("standard")) return "B";
+    if (lower.includes("processing")) return "C";
+    if (s === "A" || s === "B" || s === "C") return s;
+    return undefined;
+  };
+
+  const buildCreatePayload = (opts?: { publishImmediately?: boolean }) => {
+    const productType = formData.productType || "FRESH_ROOTS";
+    // Ensure variety is a valid OFSPVariety enum value
+    const varietyValue = formData.variety || OFSPVariety.KENYA;
+    const variety: OFSPVariety = OFSP_VARIETY_VALUES.includes(varietyValue) 
+      ? (varietyValue as OFSPVariety) 
+      : OFSPVariety.KENYA;
+    const unit = formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg";
+    const quantity = parseFloat(formData.quantity) || 0;
+    const deadline = formData.deadline || new Date().toISOString().split("T")[0];
+    const qualityGrade = formQualityToGrade(formData.qualityGrade);
+    const label = PRODUCT_TYPE_OPTIONS.find((o) => o.value === productType)?.label ?? "New Request";
+    
+    // Build price information
+    const priceMin = formData.priceMin ? parseFloat(formData.priceMin) : undefined;
+    const priceMax = formData.priceMax ? parseFloat(formData.priceMax) : undefined;
+    const priceUnit = unit === "kg" ? "kg" : unit === "units" ? "unit" : "kg";
+    
+    return {
+      title: label,
+      productType,
+      variety,
+      total: quantity,
+      unit,
+      deadline,
+      ...(qualityGrade && { qualityGrade }),
+      deliveryLocation: formData.deliveryLocation || undefined,
+      additionalRequirements: formData.additionalRequirements || undefined,
+      ...(priceMin !== undefined && priceMax !== undefined && { 
+        priceRange: { min: priceMin, max: priceMax },
+        priceRangeMin: priceMin,
+        priceRangeMax: priceMax,
+        priceUnit,
+      }),
+      ...(opts?.publishImmediately && { publishImmediately: true }),
+    };
   };
 
   const handleSaveDraft = async () => {
     setIsSubmitting(true);
     try {
-      const newRequest: Partial<SourcingRequest> = {
-        title: formData.productType || "Draft Request",
-        productType: formData.productType === "Fresh OFSP Roots" ? "fresh_roots" : formData.productType === "OFSP Flour" ? "process_grade" : "planting_vines",
-        status: "draft",
-        fulfilled: 0,
-        total: parseFloat(formData.quantity) || 0,
-        unit: formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg",
-        priceRange: formData.priceMin && formData.priceMax ? { min: parseFloat(formData.priceMin), max: parseFloat(formData.priceMax) } : undefined,
-        priceUnit: "kg",
-        deadline: formData.deadline || new Date().toISOString().split("T")[0],
-        suppliers: [],
-        isRecurring: formData.isRecurring,
-        recurringFrequency: formData.isRecurring ? formData.recurringFrequency : undefined,
-        recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
-        nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
-      };
-      await createRequest(newRequest);
+      await createRequest(buildCreatePayload() as Partial<SourcingRequest>);
+      showSuccess("Draft saved successfully", "Your sourcing request has been saved as a draft");
       setIsSubmitting(false);
       setView("list");
       setActiveTab("drafts");
     } catch (error) {
       console.error("Failed to save draft:", error);
+      showError("Failed to save draft", formatApiError(error));
       setIsSubmitting(false);
     }
   };
@@ -266,29 +434,15 @@ export function SourcingRequests() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const newRequest: Partial<SourcingRequest> = {
-        title: formData.productType || "New Request",
-        productType: formData.productType === "Fresh OFSP Roots" ? "fresh_roots" : formData.productType === "OFSP Flour" ? "process_grade" : "planting_vines",
-        status: "open",
-        fulfilled: 0,
-        total: parseFloat(formData.quantity) || 0,
-        unit: formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg",
-        priceRange: formData.priceMin && formData.priceMax ? { min: parseFloat(formData.priceMin), max: parseFloat(formData.priceMax) } : undefined,
-        priceUnit: "kg",
-        deadline: formData.deadline || new Date().toISOString().split("T")[0],
-        suppliers: [],
-        isRecurring: formData.isRecurring,
-        recurringFrequency: formData.isRecurring ? formData.recurringFrequency : undefined,
-        recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
-        nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
-      };
-      await createRequest(newRequest);
-      setIsSubmitting(false);
+      await createRequest(buildCreatePayload({ publishImmediately: true }) as Partial<SourcingRequest>);
+      showSuccess("Request published successfully", "Your sourcing request is now visible to suppliers");
       setView("list");
       setActiveTab("active");
       handleCancel();
     } catch (error) {
       console.error("Failed to publish request:", error);
+      showError("Failed to publish request", formatApiError(error));
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -299,161 +453,198 @@ export function SourcingRequests() {
   };
 
   const handleAcceptOffer = async (offer: SupplierOffer) => {
+    if (!offer.id || !selectedSourcingRequest) return;
+    
+    // Prevent accepting already accepted, rejected, or converted offers
+    const offerStatus = offer.status?.toLowerCase();
+    if (offerStatus === 'accepted' || offerStatus === 'rejected' || offerStatus === 'converted') {
+      showError("Cannot accept offer", `This offer has already been ${offerStatus}`);
+      return;
+    }
+    
     setIsAcceptingOffer(true);
     try {
-      if (offer.id && selectedRequest) {
-        await acceptSupplierOffer(offer.id);
-        // Refresh sourcing requests
-        await fetchSourcingRequests(sourcingRequestFilters);
-        setIsAcceptingOffer(false);
-        setReviewDialogOpen(false);
-        setSelectedOffer(null);
-      }
+      await acceptSupplierOffer(offer.id);
+      showSuccess(
+        "Offer accepted and order created", 
+        `The offer from ${offer.supplierName} has been accepted and automatically converted to an order`
+      );
+      await fetchSourcingRequests(sourcingRequestFilters);
+      await fetchSourcingRequestById(selectedSourcingRequest.id);
+      setIsAcceptingOffer(false);
+      setReviewDialogOpen(false);
+      setSelectedOffer(null);
     } catch (error) {
       console.error("Failed to accept offer:", error);
+      showError("Failed to accept offer", formatApiError(error));
       setIsAcceptingOffer(false);
     }
   };
 
   const handleRejectOffer = async (offer: SupplierOffer) => {
     // TODO: Replace with actual API call
+    showSuccess("Offer rejected", `You have rejected the offer from ${offer.supplierName}`);
     setReviewDialogOpen(false);
     setSelectedOffer(null);
   };
 
   const handleEditDetails = () => {
-    if (selectedRequest) {
-      // Pre-populate form with existing request data
+    if (selectedSourcingRequest) {
+      const raw = selectedSourcingRequest.deadline ?? selectedSourcingRequest.nextDeliveryDate ?? "";
+      const deadlineYmd = typeof raw === "string" && raw.includes("T") ? (raw.split("T")[0] ?? "") : raw;
+      const recEnd = selectedSourcingRequest.recurringEndDate;
+      const recurringEndYmd =
+        typeof recEnd === "string" && recEnd.includes("T") ? (recEnd.split("T")[0] ?? "") : (recEnd ?? "");
       setFormData({
-        productType: selectedRequest.title,
-        quantity: selectedRequest.total.toString(),
-        quantityUnit: selectedRequest.unit === "tons" ? "tons" : selectedRequest.unit === "units" ? "bags" : "kg",
-        qualityGrade: "",
-        priceMin: selectedRequest.priceRange?.min.toString() || "",
-        priceMax: selectedRequest.priceRange?.max.toString() || "",
-        deadline: selectedRequest.deadline,
-        deliveryRegion: "",
-        additionalRequirements: "",
-        isRecurring: selectedRequest.isRecurring || false,
-        recurringFrequency: selectedRequest.recurringFrequency || "weekly",
-        recurringEndDate: selectedRequest.recurringEndDate || "",
+        productType: frontendProductTypeToEnum(selectedSourcingRequest.productType),
+        variety: (selectedSourcingRequest.variety?.toUpperCase() as OFSPVariety) || OFSPVariety.KENYA,
+        quantity: selectedSourcingRequest.total.toString(),
+        quantityUnit: selectedSourcingRequest.unit === "tons" ? "tons" : selectedSourcingRequest.unit === "units" ? "bags" : "kg",
+        qualityGrade: selectedSourcingRequest.qualityGrade || "",
+        priceMin: selectedSourcingRequest.priceRange?.min.toString() || "",
+        priceMax: selectedSourcingRequest.priceRange?.max.toString() || "",
+        deadline: deadlineYmd || "",
+        deliveryLocation: selectedSourcingRequest.deliveryLocation ?? selectedSourcingRequest.deliveryRegion ?? "",
+        additionalRequirements: selectedSourcingRequest.additionalRequirements ?? "",
+        isRecurring: selectedSourcingRequest.isRecurring || false,
+        recurringFrequency: selectedSourcingRequest.recurringFrequency || "weekly",
+        recurringEndDate: recurringEndYmd || "",
       });
       setEditDialogOpen(true);
     }
   };
 
   const handleSaveEdit = async () => {
+    if (!selectedSourcingRequest) return;
     setIsSubmitting(true);
     try {
-      if (selectedRequest) {
+      const isPublishedRequest = selectedSourcingRequest.status === "open" || selectedSourcingRequest.status === "urgent";
+      
+      let updatedRequest: Partial<SourcingRequest>;
+      
+      if (isPublishedRequest) {
+        // For published requests, only send allowed fields: deadline, deliveryLocation, additionalRequirements
+        updatedRequest = {
+          deadline: formData.deadline || selectedSourcingRequest.deadline,
+          deliveryLocation: formData.deliveryLocation || selectedSourcingRequest.deliveryLocation,
+          additionalRequirements: formData.additionalRequirements || selectedSourcingRequest.additionalRequirements,
+        };
+      } else {
+        // For draft requests, send all fields
         const unit: "kg" | "tons" | "units" =
           formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg";
-        const updatedRequest: SourcingRequest = {
-          ...selectedRequest,
-          title: formData.productType || selectedRequest.title,
-          total: parseFloat(formData.quantity) || selectedRequest.total,
+        const title =
+          PRODUCT_TYPE_OPTIONS.find((o) => o.value === formData.productType)?.label ?? selectedSourcingRequest.title;
+        // Convert backend enum to frontend format
+        const productTypeMap: Record<string, SourcingRequest["productType"]> = {
+          "FRESH_ROOTS": "fresh_roots",
+          "PROCESS_GRADE": "process_grade",
+          "PLANTING_VINES": "planting_vines",
+        };
+        // Build price information
+        const priceMin = formData.priceMin ? parseFloat(formData.priceMin) : undefined;
+        const priceMax = formData.priceMax ? parseFloat(formData.priceMax) : undefined;
+        const priceUnit = unit === "kg" ? "kg" : unit === "units" ? "unit" : "kg";
+        
+        updatedRequest = {
+          ...selectedSourcingRequest,
+          title,
+          productType: productTypeMap[formData.productType] || selectedSourcingRequest.productType,
+          variety: (formData.variety as OFSPVariety) || selectedSourcingRequest.variety || OFSPVariety.KENYA,
+          total: parseFloat(formData.quantity) || selectedSourcingRequest.total,
           unit,
-          priceRange: formData.priceMin && formData.priceMax
-            ? { min: parseFloat(formData.priceMin), max: parseFloat(formData.priceMax) }
-            : selectedRequest.priceRange,
-          deadline: formData.deadline || selectedRequest.deadline,
+          qualityGrade: formQualityToGrade(formData.qualityGrade) || selectedSourcingRequest.qualityGrade,
+          priceRange: priceMin !== undefined && priceMax !== undefined
+            ? { min: priceMin, max: priceMax }
+            : selectedSourcingRequest.priceRange,
+          priceRangeMin: priceMin,
+          priceRangeMax: priceMax,
+          priceUnit,
+          deadline: formData.deadline || selectedSourcingRequest.deadline,
+          deliveryRegion: formData.deliveryLocation || selectedSourcingRequest.deliveryRegion,
+          deliveryLocation: formData.deliveryLocation || selectedSourcingRequest.deliveryLocation,
+          additionalRequirements: formData.additionalRequirements || selectedSourcingRequest.additionalRequirements,
           isRecurring: formData.isRecurring,
           recurringFrequency: formData.isRecurring ? formData.recurringFrequency : undefined,
           recurringEndDate: formData.isRecurring ? formData.recurringEndDate : undefined,
           nextDeliveryDate: formData.isRecurring && formData.deadline ? formData.deadline : undefined,
         };
-        await updateRequest(selectedRequest.id, updatedRequest);
-        await fetchSourcingRequests(sourcingRequestFilters);
       }
+      
+      await updateRequest(selectedSourcingRequest.id, updatedRequest);
+      showSuccess(
+        "Request updated successfully",
+        isPublishedRequest 
+          ? "Deadline, delivery location, and description have been updated"
+          : "Sourcing request details have been updated"
+      );
+      await fetchSourcingRequests(sourcingRequestFilters);
+      await fetchSourcingRequestById(selectedSourcingRequest.id);
       setEditDialogOpen(false);
     } catch (error) {
       console.error("Failed to update sourcing request:", error);
+      showError("Failed to update request", formatApiError(error));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Show manage request view
-  if (view === "manage" && selectedRequest) {
-    // Mock supplier offers data
-    const supplierOffers: SupplierOffer[] = [
-      {
-        id: "1",
-        sourcingRequestId: selectedRequest.id,
-        farmerId: "farmer-1",
-        supplierName: "Green Valley Coop",
-        rating: 4.8,
-        quantity: 1200,
-        quantityUnit: "kg",
-        pricePerKg: 35.0,
-        grade: "A",
-        batchId: "BATCH-2023-004",
-        qrCode: "QR-BATCH-2023-004",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "2",
-        sourcingRequestId: selectedRequest.id,
-        farmerId: "farmer-2",
-        supplierName: "James Mutua",
-        isNewSupplier: true,
-        quantity: 500,
-        quantityUnit: "kg",
-        pricePerKg: 34.5,
-        grade: "B",
-        batchId: "BATCH-2023-005",
-        qrCode: "QR-BATCH-2023-005",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "3",
-        sourcingRequestId: selectedRequest.id,
-        farmerId: "farmer-3",
-        supplierName: "Mary Wanjiku",
-        rating: 4.5,
-        quantity: 800,
-        quantityUnit: "kg",
-        pricePerKg: 36.0,
-        grade: "A",
-        batchId: "BATCH-2023-006",
-        qrCode: "QR-BATCH-2023-006",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "4",
-        sourcingRequestId: selectedRequest.id,
-        farmerId: "farmer-4",
-        supplierName: "Peter Kamau",
-        rating: 4.2,
-        quantity: 600,
-        quantityUnit: "kg",
-        pricePerKg: 37.5,
-        grade: "A",
-        batchId: "BATCH-2023-007",
-        qrCode: "QR-BATCH-2023-007",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "5",
-        sourcingRequestId: selectedRequest.id,
-        farmerId: "farmer-5",
-        supplierName: "Jane Wambui",
-        rating: 4.9,
-        quantity: 100,
-        quantityUnit: "kg",
-        pricePerKg: 35.5,
-        grade: "A",
-        batchId: "BATCH-2023-008",
-        qrCode: "QR-BATCH-2023-008",
-        createdAt: new Date().toISOString(),
-      },
-    ];
+  const handlePublishDraft = async (requestId: string) => {
+    setPublishingRequestId(requestId);
+    try {
+      await publishRequest(requestId);
+      showSuccess(
+        "Request published successfully",
+        "Your sourcing request is now visible to suppliers"
+      );
+      await fetchSourcingRequests(sourcingRequestFilters);
+      setActiveTab("active");
+    } catch (error) {
+      console.error("Failed to publish request:", error);
+      showError("Failed to publish request", formatApiError(error));
+    } finally {
+      setPublishingRequestId(null);
+    }
+  };
 
-    const totalFulfilled = supplierOffers.reduce((sum, offer) => {
-      const kg = offer.quantityUnit === "tons" ? offer.quantity * 1000 : offer.quantity;
-      return sum + kg;
-    }, 0);
-    const totalRequired = selectedRequest.unit === "tons" ? selectedRequest.total * 1000 : selectedRequest.total;
+  const handleCloseRequest = async () => {
+    if (!selectedSourcingRequest) return;
+    
+    // Prevent closing already closed or fulfilled requests
+    if (selectedSourcingRequest.status === "closed" || selectedSourcingRequest.status === "fulfilled") {
+      showError("Cannot close request", "This request is already closed or fulfilled");
+      return;
+    }
+    
+    setIsClosingRequest(true);
+    try {
+      await closeRequest(selectedSourcingRequest.id);
+      showSuccess(
+        "Request closed successfully",
+        `Sourcing request ${selectedSourcingRequest.requestId} has been closed. No new offers will be accepted.`
+      );
+      await fetchSourcingRequests(sourcingRequestFilters);
+      await fetchSourcingRequestById(selectedSourcingRequest.id);
+      setCloseConfirmDialogOpen(false);
+      setView("list");
+      setActiveTab("completed");
+    } catch (error) {
+      console.error("Failed to close sourcing request:", error);
+      showError("Failed to close request", formatApiError(error));
+    } finally {
+      setIsClosingRequest(false);
+    }
+  };
+
+  // Show manage request view
+  if (view === "manage" && selectedSourcingRequest) {
+    const supplierOffers: SupplierOffer[] = selectedSourcingRequest.offers ?? [];
+    const totalFulfilled = typeof selectedSourcingRequest.fulfilled === "number" && Number.isFinite(selectedSourcingRequest.fulfilled)
+      ? selectedSourcingRequest.fulfilled
+      : 0;
+    const totalRequired = typeof selectedSourcingRequest.total === "number" && Number.isFinite(selectedSourcingRequest.total)
+      ? selectedSourcingRequest.total
+      : 0;
     const fulfillmentPercentage = totalRequired > 0 ? (totalFulfilled / totalRequired) * 100 : 0;
     const avgOfferPrice = supplierOffers.length > 0
       ? supplierOffers.reduce((sum, offer) => sum + offer.pricePerKg, 0) / supplierOffers.length
@@ -472,13 +663,6 @@ export function SourcingRequests() {
       }
     };
 
-    const formatQuantity = (value: number, unit: string) => {
-      if (unit === "tons") {
-        return `${value.toFixed(1)}t`;
-      }
-      return `${value.toLocaleString()} ${unit}`;
-    };
-
     return (
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
@@ -494,9 +678,9 @@ export function SourcingRequests() {
             </Button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-stone-900">{selectedRequest.title}</h1>
-                {getStatusBadge(selectedRequest.status)}
-                {selectedRequest.isRecurring && (
+                <h1 className="text-2xl font-bold tracking-tight text-stone-900">{selectedSourcingRequest.title}</h1>
+                {getStatusBadge(selectedSourcingRequest.status)}
+                {selectedSourcingRequest.isRecurring && (
                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-medium px-2 py-1 flex items-center gap-1">
                     <IconRepeat className="h-3 w-3" />
                     Recurring
@@ -504,16 +688,36 @@ export function SourcingRequests() {
                 )}
               </div>
               <p className="text-stone-500 text-sm mt-0.5 font-mono">
-                {selectedRequest.requestId} • Created 2 days ago
-                {selectedRequest.isRecurring && selectedRequest.recurringFrequency && (
+                {selectedSourcingRequest.requestId} • Created {formatRelativeTime(selectedSourcingRequest.createdAt)}
+                {selectedSourcingRequest.isRecurring && selectedSourcingRequest.recurringFrequency && (
                   <span className="ml-2 text-stone-400">
-                    • {selectedRequest.recurringFrequency.charAt(0).toUpperCase() + selectedRequest.recurringFrequency.slice(1)}
+                    • {selectedSourcingRequest.recurringFrequency.charAt(0).toUpperCase() + selectedSourcingRequest.recurringFrequency.slice(1)}
                   </span>
                 )}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
+            {selectedSourcingRequest.status === "draft" && (
+              <Button
+                onClick={() => handlePublishDraft(selectedSourcingRequest.id)}
+                disabled={publishingRequestId === selectedSourcingRequest.id || isLoading}
+                size="sm"
+                className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                {publishingRequestId === selectedSourcingRequest.id ? (
+                  <>
+                    <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Publishing...
+                  </>
+                ) : (
+                  <>
+                    <IconArrowRight className="h-4 w-4 mr-2" />
+                    Publish Request
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -526,6 +730,8 @@ export function SourcingRequests() {
               variant="outline"
               size="sm"
               className="px-3 py-2 bg-white border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => setCloseConfirmDialogOpen(true)}
+              disabled={selectedSourcingRequest.status === "closed" || selectedSourcingRequest.status === "fulfilled"}
             >
               Close Request
             </Button>
@@ -542,15 +748,15 @@ export function SourcingRequests() {
               </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-stone-900">
-                  {formatQuantity(selectedRequest.fulfilled, selectedRequest.unit).split(" ")[0]}
+                  {formatQuantity(selectedSourcingRequest.fulfilled, selectedSourcingRequest.unit).split(" ")[0]}
                 </span>
                 <span className="text-sm text-stone-500">
-                  / {formatQuantity(selectedRequest.total, selectedRequest.unit)}
+                  / {formatQuantity(selectedSourcingRequest.total, selectedSourcingRequest.unit)}
                 </span>
               </div>
               <div className="mt-3 h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${getProgressColor(fulfillmentPercentage, selectedRequest.status)} transition-all`}
+                  className={`h-full ${getProgressColor(fulfillmentPercentage, selectedSourcingRequest.status)} transition-all`}
                   style={{ width: `${fulfillmentPercentage}%` }}
                 />
               </div>
@@ -597,10 +803,14 @@ export function SourcingRequests() {
                 Avg Offer Price
               </p>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-stone-900">KES {avgOfferPrice.toFixed(2)}</span>
-                <span className="text-sm text-stone-500">/ kg</span>
+                <span className="text-2xl font-bold text-stone-900">
+                  {supplierOffers.length > 0 ? `KES ${avgOfferPrice.toFixed(2)}` : "—"}
+                </span>
+                {supplierOffers.length > 0 && <span className="text-sm text-stone-500">/ kg</span>}
               </div>
-              <p className="text-xs text-emerald-600 mt-2">Within budget range</p>
+              {supplierOffers.length > 0 && (
+                <p className="text-xs text-emerald-600 mt-2">Within budget range</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -626,45 +836,57 @@ export function SourcingRequests() {
                   <th className="px-6 py-3">Quantity</th>
                   <th className="px-6 py-3">Price/Kg</th>
                   <th className="px-6 py-3">Grade</th>
+                  <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {supplierOffers.map((offer) => (
-                  <tr key={offer.id} className="hover:bg-stone-50 group">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-stone-900">{offer.supplierName}</div>
-                      {offer.rating ? (
-                        <div className="text-xs text-stone-500 flex items-center gap-1">
-                          <IconStar className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          {offer.rating} Rating
-                        </div>
-                      ) : offer.isNewSupplier ? (
-                        <div className="text-xs text-stone-500">New Supplier</div>
-                      ) : null}
-                    </td>
-                    <td className="px-6 py-4">{formatQuantity(offer.quantity, offer.quantityUnit)}</td>
-                    <td className="px-6 py-4 font-medium">KES {offer.pricePerKg.toFixed(2)}</td>
-                    <td className="px-6 py-4">
-                      <Badge
-                        variant="outline"
-                        className={`px-2 py-1 rounded text-xs font-bold ${getGradeColor(offer.grade)} border-0`}
-                      >
-                        {offer.grade}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleReviewOffer(offer)}
-                        className="text-stone-500 hover:text-orange-600 font-medium text-xs border-stone-200 rounded px-3 py-1.5 bg-white hover:bg-orange-50"
-                      >
-                        Review
-                      </Button>
+                {supplierOffers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-stone-500 text-sm">
+                      No supplier offers yet
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  supplierOffers.map((offer) => (
+                    <tr key={offer.id} className="hover:bg-stone-50 group">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-stone-900">{offer.supplierName}</div>
+                        {offer.rating != null ? (
+                          <div className="text-xs text-stone-500 flex items-center gap-1">
+                            <IconStar className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            {offer.rating} Rating
+                          </div>
+                        ) : offer.isNewSupplier ? (
+                          <div className="text-xs text-stone-500">New Supplier</div>
+                        ) : null}
+                      </td>
+                      <td className="px-6 py-4">{formatQuantity(offer.quantity, offer.quantityUnit)}</td>
+                      <td className="px-6 py-4 font-medium">KES {offer.pricePerKg.toFixed(2)}</td>
+                      <td className="px-6 py-4">
+                        <Badge
+                          variant="outline"
+                          className={`px-2 py-1 rounded text-xs font-bold ${getGradeColor(offer.grade)} border-0`}
+                        >
+                          {offer.grade}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getOfferStatusBadge(offer.status || 'pending')}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReviewOffer(offer)}
+                          className="text-stone-500 hover:text-orange-600 font-medium text-xs border-stone-200 rounded px-3 py-1.5 bg-white hover:bg-orange-50"
+                        >
+                          Review
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -750,11 +972,17 @@ export function SourcingRequests() {
                         <span className="text-xs font-semibold uppercase tracking-wider">Total Amount</span>
                       </div>
                       <p className="text-base sm:text-lg font-bold text-stone-900 break-words">
-                        KES {(
-                          selectedOffer.quantity *
-                          (selectedOffer.quantityUnit === "tons" ? 1000 : 1) *
-                          selectedOffer.pricePerKg
-                        ).toLocaleString()}
+                        KES {(() => {
+                          // Convert offer quantity to kg for calculation
+                          let quantityInKg = selectedOffer.quantity;
+                          if (selectedOffer.quantityUnit === "tons") {
+                            quantityInKg = selectedOffer.quantity * 1000;
+                          } else if (selectedOffer.quantityUnit === "units") {
+                            // Assume 1 unit = 50kg for bags (common for sweet potatoes)
+                            quantityInKg = selectedOffer.quantity * 50;
+                          }
+                          return (quantityInKg * selectedOffer.pricePerKg).toLocaleString();
+                        })()}
                       </p>
                     </CardContent>
                   </Card>
@@ -810,32 +1038,55 @@ export function SourcingRequests() {
               </div>
             )}
             <DialogFooter className="px-6 pb-6 pt-4 flex-shrink-0 border-t border-stone-100 flex-col sm:flex-row gap-2 sm:gap-0">
-              <Button
-                variant="outline"
-                onClick={() => handleRejectOffer(selectedOffer!)}
-                disabled={isAcceptingOffer}
-                className="w-full sm:w-auto"
-              >
-                <IconX className="h-4 w-4 mr-2" />
-                Reject Offer
-              </Button>
-              <Button
-                onClick={() => handleAcceptOffer(selectedOffer!)}
-                disabled={isAcceptingOffer}
-                className="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                {isAcceptingOffer ? (
+              {selectedOffer && (() => {
+                const offerStatus = selectedOffer.status?.toLowerCase() || 'pending';
+                const isAccepted = offerStatus === 'accepted' || offerStatus === 'converted';
+                const isRejected = offerStatus === 'rejected';
+                
+                return (
                   <>
-                    <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Accepting...
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRejectOffer(selectedOffer!)}
+                      disabled={isAcceptingOffer || isRejected || isAccepted}
+                      className={`w-full sm:w-auto ${
+                        isRejected || isAccepted 
+                          ? 'bg-stone-100 text-stone-400 cursor-not-allowed border-stone-200' 
+                          : ''
+                      }`}
+                    >
+                      <IconX className="h-4 w-4 mr-2" />
+                      Reject Offer
+                    </Button>
+                    <Button
+                      onClick={() => handleAcceptOffer(selectedOffer!)}
+                      disabled={isAcceptingOffer || isAccepted || isRejected}
+                      className={`w-full sm:w-auto ${
+                        isAccepted || isRejected
+                          ? 'bg-stone-400 text-white cursor-not-allowed' 
+                          : 'bg-orange-500 hover:bg-orange-600 text-white'
+                      }`}
+                    >
+                      {isAcceptingOffer ? (
+                        <>
+                          <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Accepting...
+                        </>
+                      ) : isAccepted ? (
+                        <>
+                          <IconCheck className="h-4 w-4 mr-2" />
+                          Accepted
+                        </>
+                      ) : (
+                        <>
+                          <IconCheck className="h-4 w-4 mr-2" />
+                          Accept Offer
+                        </>
+                      )}
+                    </Button>
                   </>
-                ) : (
-                  <>
-                    <IconCheck className="h-4 w-4 mr-2" />
-                    Accept Offer
-                  </>
-                )}
-              </Button>
+                );
+              })()}
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -845,168 +1096,200 @@ export function SourcingRequests() {
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Sourcing Request</DialogTitle>
-              <DialogDescription>Update the details of your sourcing request</DialogDescription>
+              <DialogDescription>
+                {selectedSourcingRequest && (selectedSourcingRequest.status === "open" || selectedSourcingRequest.status === "urgent") 
+                  ? "Only deadline, delivery location, and description can be updated for published requests."
+                  : "Update the details of your sourcing request"}
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Product Type */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-productType" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Product Type
-                  </Label>
-                  <Select
-                    value={formData.productType}
-                    onValueChange={(value) => setFormData({ ...formData, productType: value })}
-                  >
-                    <SelectTrigger
-                      id="edit-productType"
-                      className="w-full rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto bg-white"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Fresh OFSP Roots">Fresh OFSP Roots</SelectItem>
-                      <SelectItem value="OFSP Flour">OFSP Flour</SelectItem>
-                      <SelectItem value="Planting Vines">Planting Vines</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            {selectedSourcingRequest && (() => {
+              const isPublishedRequest = selectedSourcingRequest.status === "open" || selectedSourcingRequest.status === "urgent";
+              const disabledClassName = isPublishedRequest ? "bg-stone-50 text-stone-400 cursor-not-allowed border-stone-200" : "";
+              
+              return (
+                <>
+                  <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Product Type */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-productType" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Product Type
+                      </Label>
+                      <Select
+                        value={formData.productType}
+                        onValueChange={(value) => setFormData({ ...formData, productType: value })}
+                        disabled={isPublishedRequest}
+                      >
+                        <SelectTrigger
+                          id="edit-productType"
+                          className={`w-full rounded-lg border text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto ${isPublishedRequest ? disabledClassName : "bg-white border-stone-200"}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg border-stone-200">
+                          {PRODUCT_TYPE_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                {/* Required Quantity */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-quantity" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Required Quantity
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="edit-quantity"
-                      type="number"
-                      placeholder="e.g. 5000"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                      className="rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    />
-                    <Select
-                      value={formData.quantityUnit}
-                      onValueChange={(value: "kg" | "tons" | "bags") => setFormData({ ...formData, quantityUnit: value })}
-                    >
-                      <SelectTrigger className="w-24 rounded-lg border border-stone-200 text-sm bg-stone-50 py-2.5 h-auto">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-lg border-stone-200">
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="tons">tons</SelectItem>
-                        <SelectItem value="bags">bags</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Variety */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-variety" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Variety
+                      </Label>
+                      <Select
+                        value={formData.variety}
+                        onValueChange={(value) => setFormData({ ...formData, variety: value })}
+                        disabled={isPublishedRequest}
+                      >
+                        <SelectTrigger
+                          id="edit-variety"
+                          className={`w-full rounded-lg border text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto ${isPublishedRequest ? disabledClassName : "bg-white border-stone-200"}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg border-stone-200">
+                          {VARIETY_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Required Quantity */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-quantity" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Required Quantity
+                      </Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="edit-quantity"
+                          type="number"
+                          placeholder="e.g. 5000"
+                          value={formData.quantity}
+                          onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                          disabled={isPublishedRequest}
+                          className={`rounded-lg border text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${isPublishedRequest ? disabledClassName : "border-stone-200"}`}
+                        />
+                        <Select
+                          value={formData.quantityUnit}
+                          onValueChange={(value: "kg" | "tons" | "bags") => setFormData({ ...formData, quantityUnit: value })}
+                          disabled={isPublishedRequest}
+                        >
+                          <SelectTrigger className={`w-24 rounded-lg border text-sm py-2.5 h-auto ${isPublishedRequest ? disabledClassName : "bg-stone-50 border-stone-200"}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-lg border-stone-200">
+                            <SelectItem value="kg">kg</SelectItem>
+                            <SelectItem value="tons">tons</SelectItem>
+                            <SelectItem value="bags">bags</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Quality Grade */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-qualityGrade" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Quality Grade
+                      </Label>
+                      <Select
+                        value={formData.qualityGrade}
+                        onValueChange={(value) => setFormData({ ...formData, qualityGrade: value })}
+                        disabled={isPublishedRequest}
+                      >
+                        <SelectTrigger
+                          id="edit-qualityGrade"
+                          className={`w-full rounded-lg border text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto ${isPublishedRequest ? disabledClassName : "bg-white border-stone-200"}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg border-stone-200">
+                          <SelectItem value="Grade A (Premium)">Grade A (Premium)</SelectItem>
+                          <SelectItem value="Grade B (Standard)">Grade B (Standard)</SelectItem>
+                          <SelectItem value="Processing Grade">Processing Grade</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Target Price */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Target Price (KES/unit)
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Min"
+                          value={formData.priceMin}
+                          onChange={(e) => setFormData({ ...formData, priceMin: e.target.value })}
+                          disabled={isPublishedRequest}
+                          className={`rounded-lg border text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${isPublishedRequest ? disabledClassName : "border-stone-200"}`}
+                        />
+                        <span className="text-stone-400">-</span>
+                        <Input
+                          type="number"
+                          placeholder="Max"
+                          value={formData.priceMax}
+                          onChange={(e) => setFormData({ ...formData, priceMax: e.target.value })}
+                          disabled={isPublishedRequest}
+                          className={`rounded-lg border text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${isPublishedRequest ? disabledClassName : "border-stone-200"}`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Deadline */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-deadline" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Deadline
+                      </Label>
+                      <Input
+                        id="edit-deadline"
+                        type="date"
+                        value={formData.deadline}
+                        onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                        className="w-full rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      />
+                    </div>
+
+                    {/* Delivery Location */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-deliveryLocation" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                        Delivery Location
+                      </Label>
+                      <Input
+                        id="edit-deliveryLocation"
+                        type="text"
+                        placeholder="e.g. Nairobi Hub, Kisumu Hub"
+                        value={formData.deliveryLocation}
+                        onChange={(e) => setFormData({ ...formData, deliveryLocation: e.target.value })}
+                        className="w-full rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Quality Grade */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-qualityGrade" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Quality Grade
-                  </Label>
-                  <Select
-                    value={formData.qualityGrade}
-                    onValueChange={(value) => setFormData({ ...formData, qualityGrade: value })}
-                  >
-                    <SelectTrigger
-                      id="edit-qualityGrade"
-                      className="w-full rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto bg-white"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Grade A (Premium)">Grade A (Premium)</SelectItem>
-                      <SelectItem value="Grade B (Standard)">Grade B (Standard)</SelectItem>
-                      <SelectItem value="Processing Grade">Processing Grade</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Target Price */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Target Price (KES/unit)
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Min"
-                      value={formData.priceMin}
-                      onChange={(e) => setFormData({ ...formData, priceMin: e.target.value })}
-                      className="rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    />
-                    <span className="text-stone-400">-</span>
-                    <Input
-                      type="number"
-                      placeholder="Max"
-                      value={formData.priceMax}
-                      onChange={(e) => setFormData({ ...formData, priceMax: e.target.value })}
-                      className="rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  {/* Additional Requirements */}
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-additionalRequirements" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                      Additional Requirements
+                    </Label>
+                    <Textarea
+                      id="edit-additionalRequirements"
+                      placeholder="Describe packaging requirements, specific varieties, etc."
+                      value={formData.additionalRequirements}
+                      onChange={(e) => setFormData({ ...formData, additionalRequirements: e.target.value })}
+                      className="w-full rounded-lg border border-stone-200 text-sm h-24 p-3 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
                     />
                   </div>
-                </div>
 
-                {/* Deadline */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-deadline" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Deadline
-                  </Label>
-                  <Input
-                    id="edit-deadline"
-                    type="date"
-                    value={formData.deadline}
-                    onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                    className="w-full rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  />
-                </div>
-
-                {/* Delivery Region */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-deliveryRegion" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Delivery Region
-                  </Label>
-                  <Select
-                    value={formData.deliveryRegion}
-                    onValueChange={(value) => setFormData({ ...formData, deliveryRegion: value })}
-                  >
-                    <SelectTrigger
-                      id="edit-deliveryRegion"
-                      className="w-full rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto bg-white"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Nairobi HQ">Nairobi HQ</SelectItem>
-                      <SelectItem value="Kisumu Hub">Kisumu Hub</SelectItem>
-                      <SelectItem value="Mombasa Depot">Mombasa Depot</SelectItem>
-                      <SelectItem value="Kangundo">Kangundo</SelectItem>
-                      <SelectItem value="Kathiani">Kathiani</SelectItem>
-                      <SelectItem value="Masinga">Masinga</SelectItem>
-                      <SelectItem value="Yatta">Yatta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Additional Requirements */}
-              <div className="space-y-2">
-                <Label htmlFor="edit-additionalRequirements" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                  Additional Requirements
-                </Label>
-                <Textarea
-                  id="edit-additionalRequirements"
-                  placeholder="Describe packaging requirements, specific varieties, etc."
-                  value={formData.additionalRequirements}
-                  onChange={(e) => setFormData({ ...formData, additionalRequirements: e.target.value })}
-                  className="w-full rounded-lg border border-stone-200 text-sm h-24 p-3 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
-                />
-              </div>
-
-              {/* Recurring Order Section */}
-              <div className="pt-4 border-t border-stone-200 space-y-4">
+                  {/* Recurring Order Section */}
+                  <div className="pt-4 border-t border-stone-200 space-y-4">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -1062,22 +1345,68 @@ export function SourcingRequests() {
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
+                  </div>
+                </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveEdit} disabled={isSubmitting} className="bg-stone-900 hover:bg-stone-800 text-white">
+                      {isSubmitting ? (
+                        <>
+                          <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <IconCheck className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Close Request Confirmation Dialog */}
+        <Dialog open={closeConfirmDialogOpen} onOpenChange={setCloseConfirmDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Close Sourcing Request</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to close this sourcing request? This will prevent suppliers from submitting new offers.
+                {selectedSourcingRequest && selectedSourcingRequest.offers && selectedSourcingRequest.offers.length > 0 && (
+                  <span className="block mt-2 text-sm text-stone-600">
+                    {selectedSourcingRequest.offers.length} offer{selectedSourcingRequest.offers.length !== 1 ? "s" : ""} already submitted will remain visible.
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSubmitting}>
+              <Button
+                variant="outline"
+                onClick={() => setCloseConfirmDialogOpen(false)}
+                disabled={isClosingRequest}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleSaveEdit} disabled={isSubmitting} className="bg-stone-900 hover:bg-stone-800 text-white">
-                {isSubmitting ? (
+              <Button
+                onClick={handleCloseRequest}
+                disabled={isClosingRequest}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isClosingRequest ? (
                   <>
                     <IconLoader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    Closing...
                   </>
                 ) : (
                   <>
-                    <IconCheck className="h-4 w-4 mr-2" />
-                    Save Changes
+                    <IconX className="h-4 w-4 mr-2" />
+                    Close Request
                   </>
                 )}
               </Button>
@@ -1132,9 +1461,36 @@ export function SourcingRequests() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Fresh OFSP Roots">Fresh OFSP Roots</SelectItem>
-                      <SelectItem value="OFSP Flour">OFSP Flour</SelectItem>
-                      <SelectItem value="Planting Vines">Planting Vines</SelectItem>
+                      {PRODUCT_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Variety */}
+                <div className="space-y-2">
+                  <Label htmlFor="variety" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                    Variety
+                  </Label>
+                  <Select
+                    value={formData.variety}
+                    onValueChange={(value) => setFormData({ ...formData, variety: value })}
+                  >
+                    <SelectTrigger 
+                      id="variety" 
+                      className="w-full rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto bg-white"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg border-stone-200">
+                      {VARIETY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1230,31 +1586,19 @@ export function SourcingRequests() {
                   />
                 </div>
 
-                {/* Delivery Region */}
+                {/* Delivery Location */}
                 <div className="space-y-2">
-                  <Label htmlFor="deliveryRegion" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                    Delivery Region
+                  <Label htmlFor="deliveryLocation" className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+                    Delivery Location
                   </Label>
-                  <Select
-                    value={formData.deliveryRegion}
-                    onValueChange={(value) => setFormData({ ...formData, deliveryRegion: value })}
-                  >
-                    <SelectTrigger 
-                      id="deliveryRegion" 
-                      className="w-full rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 py-2.5 h-auto bg-white"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Nairobi HQ">Nairobi HQ</SelectItem>
-                      <SelectItem value="Kisumu Hub">Kisumu Hub</SelectItem>
-                      <SelectItem value="Mombasa Depot">Mombasa Depot</SelectItem>
-                      <SelectItem value="Kangundo">Kangundo</SelectItem>
-                      <SelectItem value="Kathiani">Kathiani</SelectItem>
-                      <SelectItem value="Masinga">Masinga</SelectItem>
-                      <SelectItem value="Yatta">Yatta</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="deliveryLocation"
+                    type="text"
+                    placeholder="e.g. Nairobi Hub, Kisumu Hub"
+                    value={formData.deliveryLocation}
+                    onChange={(e) => setFormData({ ...formData, deliveryLocation: e.target.value })}
+                    className="w-full rounded-lg border border-stone-200 text-sm py-2.5 h-auto focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  />
                 </div>
               </div>
 
@@ -1346,14 +1690,14 @@ export function SourcingRequests() {
           Drafts ({draftsCount})
         </button>
         <button
-          onClick={() => setActiveTab("history")}
+          onClick={() => setActiveTab("completed")}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === "history"
+            activeTab === "completed"
               ? "text-orange-600 border-b-2 border-orange-500"
               : "text-stone-500 hover:text-stone-700"
           }`}
         >
-          History
+          Completed ({completedCount})
         </button>
       </div>
 
@@ -1371,7 +1715,9 @@ export function SourcingRequests() {
       ) : filteredRequests.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredRequests.map((request) => {
-            const percentage = (request.fulfilled / request.total) * 100;
+            const total = typeof request.total === "number" && Number.isFinite(request.total) ? request.total : 0;
+            const fulfilled = typeof request.fulfilled === "number" && Number.isFinite(request.fulfilled) ? request.fulfilled : 0;
+            const percentage = total > 0 ? (fulfilled / total) * 100 : 0;
             const progressColor = getProgressColor(percentage, request.status);
 
             return (
@@ -1412,7 +1758,7 @@ export function SourcingRequests() {
                       <div className="flex justify-between text-xs mb-1.5">
                         <span className="text-stone-500">Fulfilled</span>
                         <span className="font-medium text-stone-900">
-                          {formatQuantity(request.fulfilled, request.unit)} / {formatQuantity(request.total, request.unit)}
+                          {formatQuantity(fulfilled, request.unit)} / {formatQuantity(total, request.unit)}
                         </span>
                       </div>
                       <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
@@ -1427,12 +1773,10 @@ export function SourcingRequests() {
                     <div className="grid grid-cols-2 gap-3 py-3 border-t border-b border-stone-50">
                       <div>
                         <p className="text-[10px] text-stone-400 uppercase tracking-wider">
-                          Price/{request.priceUnit === "kg" ? "Kg" : "Unit"}
+                          Price/{request.priceUnit === "unit" ? "Unit" : "Kg"}
                         </p>
                         <p className="text-sm font-semibold text-stone-700">
-                          {request.priceRange
-                            ? `KES ${request.priceRange.min} - ${request.priceRange.max}`
-                            : `KES ${request.pricePerUnit?.toFixed(1)}`}
+                          {formatPrice(request)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -1442,49 +1786,98 @@ export function SourcingRequests() {
                             request.isPastDue || request.status === "urgent" ? "text-red-600" : "text-stone-700"
                           }`}
                         >
-                          {request.deadline}
+                          {formatDeadline(request.deadline)}
                         </p>
                       </div>
                     </div>
 
-                    {/* Suppliers and Manage Button */}
+                    {/* Suppliers and Action Buttons */}
                     <div className="flex justify-between items-center">
-                      {request.suppliers.length > 0 ? (
-                        <div className="flex -space-x-2">
-                          {request.suppliers.map((supplier, idx) => (
-                            <div
-                              key={supplier.id || idx}
-                              className={`w-7 h-7 rounded-full ${supplier.color} border-2 border-white flex items-center justify-center text-[10px] font-bold ${
-                                supplier.initials.startsWith("+")
-                                  ? "text-stone-400 bg-stone-50"
-                                  : supplier.color.includes("blue")
-                                  ? "text-blue-600"
-                                  : supplier.color.includes("purple")
-                                  ? "text-purple-600"
-                                  : supplier.color.includes("yellow")
-                                  ? "text-yellow-600"
-                                  : supplier.color.includes("green")
-                                  ? "text-green-600"
-                                  : "text-stone-600"
-                              }`}
-                            >
-                              {supplier.initials}
-                            </div>
-                          ))}
-                        </div>
+                      {request.status === "draft" ? (
+                        // For drafts, show publish button
+                        <div className="flex-1" />
                       ) : (
-                        <span className="text-xs text-stone-400 italic">No suppliers yet</span>
+                        // For published requests, show supplier count
+                        (() => {
+                          // Use offers as source of truth for counting submissions
+                          const offers = Array.isArray(request.offers) ? request.offers : [];
+                          const uniqueSupplierIds = new Set(offers.map(offer => offer.farmerId).filter(Boolean));
+                          const offerCount = uniqueSupplierIds.size;
+                          
+                          // Fallback to suppliers array if offers not available
+                          const suppliersList = Array.isArray(request.suppliers) ? request.suppliers : [];
+                          const supplierRefs = suppliersList.filter(
+                            (s): s is { id: string; initials: string; color: string } =>
+                              typeof s === "object" && s != null && "id" in s && "initials" in s
+                          );
+                          
+                          // Use offers count if available, otherwise use supplier refs
+                          const displayCount = offerCount > 0 ? offerCount : supplierRefs.length;
+                          
+                          return supplierRefs.length > 0 ? (
+                            <div className="flex -space-x-2">
+                              {supplierRefs.slice(0, 3).map((supplier, idx) => (
+                                <div
+                                  key={supplier.id || idx}
+                                  className={`w-7 h-7 rounded-full ${supplier.color} border-2 border-white flex items-center justify-center text-[10px] font-bold ${
+                                    supplier.initials.startsWith("+")
+                                      ? "text-stone-400 bg-stone-50"
+                                      : supplier.color?.includes("blue")
+                                      ? "text-blue-600"
+                                      : supplier.color?.includes("purple")
+                                      ? "text-purple-600"
+                                      : supplier.color?.includes("yellow")
+                                      ? "text-yellow-600"
+                                      : supplier.color?.includes("green")
+                                      ? "text-green-600"
+                                      : "text-stone-600"
+                                  }`}
+                                >
+                                  {supplier.initials}
+                                </div>
+                              ))}
+                              {displayCount > 3 && (
+                                <div className="w-7 h-7 rounded-full bg-stone-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
+                                  +{displayCount - 3}
+                                </div>
+                              )}
+                            </div>
+                          ) : displayCount > 0 ? (
+                            <span className="text-xs text-stone-500">{displayCount} supplier{displayCount !== 1 ? "s" : ""}</span>
+                          ) : (
+                            <span className="text-xs text-stone-400 italic">No suppliers yet</span>
+                          );
+                        })()
                       )}
-                      <button
-                        onClick={() => {
-                          setSelectedRequest(request);
-                          setView("manage");
-                        }}
-                        className="text-xs font-medium text-stone-600 group-hover:text-orange-600 flex items-center gap-1 transition-colors"
-                      >
-                        Manage
-                        <IconArrowRight className="h-3 w-3" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {request.status === "draft" ? (
+                          <Button
+                            onClick={() => handlePublishDraft(request.id)}
+                            disabled={publishingRequestId === request.id || isLoading}
+                            size="sm"
+                            className="text-xs px-3 py-1.5 h-auto bg-orange-500 hover:bg-orange-600 text-white"
+                          >
+                            {publishingRequestId === request.id ? (
+                              <>
+                                <IconLoader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                Publishing...
+                              </>
+                            ) : (
+                              <>
+                                <IconArrowRight className="h-3 w-3 mr-1.5" />
+                                Publish
+                              </>
+                            )}
+                          </Button>
+                        ) : null}
+                        <button
+                          onClick={() => handleManage(request)}
+                          className="text-xs font-medium text-stone-600 group-hover:text-orange-600 flex items-center gap-1 transition-colors"
+                        >
+                          Manage
+                          <IconArrowRight className="h-3 w-3" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

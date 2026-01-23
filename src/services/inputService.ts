@@ -38,6 +38,7 @@ import type {
 } from "@/types/input";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/lib/api-client";
+import { showSuccess } from "@/lib/toast";
 
 // ==================== Enum Transformation Utilities ====================
 
@@ -146,16 +147,87 @@ export async function getInputById(id: string): Promise<Input | null> {
 }
 
 /**
+ * Backend CreateInputDto shape (POST /inputs).
+ */
+interface CreateInputDto {
+  name: string;
+  category: 'Planting Material' | 'Fertilizer' | 'Soil Amendment' | 'Tools & Equipment' | 'Training Materials';
+  description: string;
+  price: number;
+  unit: string;
+  stock: number;
+  minimumStock?: number;
+  images?: string[];
+  location: string;
+  status?: 'active' | 'inactive' | 'out_of_stock';
+}
+
+/**
+ * Map frontend input to backend CreateInputDto.
+ */
+function toCreateInputDto(input: Partial<Input>): CreateInputDto {
+  return {
+    name: input.name || '',
+    category: (input.category as CreateInputDto['category']) || 'Planting Material',
+    description: input.description || '',
+    price: typeof input.price === 'number' ? input.price : 0,
+    unit: input.unit || '',
+    stock: typeof input.stock === 'number' ? input.stock : 0,
+    minimumStock: input.minimumStock,
+    images: input.images,
+    location: input.location || '',
+    status: input.status as CreateInputDto['status'],
+  };
+}
+
+/**
  * Create input
  * Backend: POST /api/v1/inputs
  */
 export async function createInput(input: Partial<Input>): Promise<ApiResponse<Input>> {
   try {
-    const created = await apiPost<Input>('/inputs', input);
+    const dto = toCreateInputDto(input);
+    const created = await apiPost<Input>('/inputs', dto);
+    showSuccess("Input created successfully");
     return { data: created, message: "Input created successfully" };
   } catch (error: any) {
+    // Error toast is automatically shown by api-client
     return { data: null as any, error: error.message || "Failed to create input" };
   }
+}
+
+/**
+ * Backend UpdateInputDto shape (PUT /inputs/:id).
+ */
+interface UpdateInputDto {
+  name?: string;
+  category?: 'Planting Material' | 'Fertilizer' | 'Soil Amendment' | 'Tools & Equipment' | 'Training Materials';
+  description?: string;
+  price?: number;
+  unit?: string;
+  stock?: number;
+  minimumStock?: number;
+  images?: string[];
+  location?: string;
+  status?: 'active' | 'inactive' | 'out_of_stock';
+}
+
+/**
+ * Map frontend input to backend UpdateInputDto.
+ */
+function toUpdateInputDto(input: Partial<Input>): UpdateInputDto {
+  const dto: UpdateInputDto = {};
+  if (input.name !== undefined) dto.name = input.name;
+  if (input.category !== undefined) dto.category = input.category as UpdateInputDto['category'];
+  if (input.description !== undefined) dto.description = input.description;
+  if (input.price !== undefined) dto.price = input.price;
+  if (input.unit !== undefined) dto.unit = input.unit;
+  if (input.stock !== undefined) dto.stock = input.stock;
+  if (input.minimumStock !== undefined) dto.minimumStock = input.minimumStock;
+  if (input.images !== undefined) dto.images = input.images;
+  if (input.location !== undefined) dto.location = input.location;
+  if (input.status !== undefined) dto.status = input.status as UpdateInputDto['status'];
+  return dto;
 }
 
 /**
@@ -164,7 +236,8 @@ export async function createInput(input: Partial<Input>): Promise<ApiResponse<In
  */
 export async function updateInput(id: string, input: Partial<Input>): Promise<ApiResponse<Input>> {
   try {
-    const updated = await apiPut<any>(`/inputs/${id}`, input);
+    const dto = toUpdateInputDto(input);
+    const updated = await apiPut<any>(`/inputs/${id}`, dto);
     return { data: transformInput(updated), message: "Input updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update input" };
@@ -227,12 +300,39 @@ export async function getInputOrderById(id: string): Promise<InputOrder | null> 
 }
 
 /**
+ * Backend CreateInputOrderDto shape (POST /inputs/orders).
+ */
+interface CreateInputOrderDto {
+  inputId: string;
+  quantity: number;
+  requiresTransport?: boolean;
+  transportFee?: number;
+  deliveryDate?: string;
+  notes?: string;
+}
+
+/**
+ * Map frontend input order to backend CreateInputOrderDto.
+ */
+function toCreateInputOrderDto(order: Partial<InputOrder>): CreateInputOrderDto {
+  return {
+    inputId: order.inputId || '',
+    quantity: typeof order.quantity === 'number' ? order.quantity : 0,
+    requiresTransport: order.requiresTransport,
+    transportFee: order.transportFee,
+    deliveryDate: order.deliveryDate,
+    notes: order.notes,
+  };
+}
+
+/**
  * Create input order
  * Backend: POST /api/v1/inputs/orders
  */
 export async function createInputOrder(order: Partial<InputOrder>): Promise<ApiResponse<InputOrder>> {
   try {
-    const created = await apiPost<any>('/inputs/orders', order);
+    const dto = toCreateInputOrderDto(order);
+    const created = await apiPost<any>('/inputs/orders', dto);
     return { data: transformInputOrder(created), message: "Input order created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create input order" };

@@ -47,7 +47,11 @@ import type { TransportRequest } from "@/types/transport";
 export default function CompletedDeliveries() {
   const { requests, fetchRequests, isLoading } = useTransport();
   const { user } = useAuth();
-  
+
+  useEffect(() => {
+    if (user?.id) fetchRequests({ providerId: user.id });
+  }, [user?.id, fetchRequests]);
+
   // Get completed deliveries (filtered by status)
   const deliveries = requests.filter(req => req.status === "delivered" || req.status === "completed");
 

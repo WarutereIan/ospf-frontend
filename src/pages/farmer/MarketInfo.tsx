@@ -163,16 +163,17 @@ const marketPrices: MarketPrice[] = [
 
 export function MarketInfo() {
   const { stats, fetchStats, listings } = useMarketplace();
-  const { performanceMetrics, fetchPerformanceMetrics } = useAnalytics();
+  const { performanceMetrics, fetchPerformanceMetrics, marketInfo, fetchMarketInfo } = useAnalytics();
   
   const [selectedLocation, setSelectedLocation] = useState("all");
   const [selectedVariety, setSelectedVariety] = useState("all");
 
-  // Fetch marketplace stats and analytics on mount
+  // Fetch marketplace stats, analytics, and market info on mount
   useEffect(() => {
     fetchStats();
     fetchPerformanceMetrics();
-  }, [fetchStats, fetchPerformanceMetrics]);
+    fetchMarketInfo({ timeRange: "month" });
+  }, [fetchStats, fetchPerformanceMetrics, fetchMarketInfo]);
 
   // Calculate market prices from listings
   const marketPrices: MarketPrice[] = (() => {

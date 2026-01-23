@@ -29,7 +29,7 @@ import {
 } from "@tabler/icons-react";
 import { useTransport } from "@/contexts/TransportContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { allAggregationCenters } from "@/data/aggregationCenters";
+import { useAggregation } from "@/contexts/AggregationContext";
 import { cn } from "@/lib/utils";
 import type { FarmPickupSchedule, PickupLocation } from "@/types/transport";
 
@@ -46,6 +46,7 @@ export function PickupScheduleManagement() {
     fetchAggregationCenterCapacity,
     isLoading,
   } = useTransport();
+  const { centers: aggregationCenters, fetchCenters } = useAggregation();
 
   const [view, setView] = useState<"list" | "create" | "edit">("list");
   const [selectedSchedule, setSelectedSchedule] = useState<FarmPickupSchedule | null>(null);
@@ -74,6 +75,12 @@ export function PickupScheduleManagement() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  useEffect(() => {
+    // Fetch real aggregation centers from backend
+    fetchCenters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredSchedules = pickupSchedules.filter(
     (schedule) => filterStatus === "all" || schedule.status === filterStatus
@@ -145,12 +152,12 @@ export function PickupScheduleManagement() {
 
     setIsSubmitting(true);
     try {
-      const center = allAggregationCenters.find(c => c.value === formData.aggregationCenterId);
+      const center = aggregationCenters.find(c => c.id === formData.aggregationCenterId);
       const scheduleData: Partial<FarmPickupSchedule> = {
         providerId: user?.id || "",
         providerName: user?.name || "",
         aggregationCenterId: formData.aggregationCenterId,
-        aggregationCenterName: center?.label || "",
+        aggregationCenterName: center?.name || "",
         route: formData.route,
         scheduledDate: formData.scheduledDate,
         scheduledTime: `${formData.scheduledDate}T${formData.scheduledTime}:00`,
@@ -232,7 +239,7 @@ export function PickupScheduleManagement() {
   };
 
   if (view === "create" || view === "edit") {
-    const selectedCenter = allAggregationCenters.find(c => c.value === formData.aggregationCenterId);
+    const selectedCenter = aggregationCenters.find(c => c.id === formData.aggregationCenterId);
     const centerCapacity = selectedCenter ? centerCapacities.get(formData.aggregationCenterId) : null;
 
     return (
@@ -268,11 +275,15 @@ export function PickupScheduleManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {allAggregationCenters.map((center) => (
-                      <SelectItem key={center.value} value={center.value}>
-                        {center.label}
-                      </SelectItem>
-                    ))}
+                    {aggregationCenters.length > 0 ? (
+                      aggregationCenters.map((center) => (
+                        <SelectItem key={center.id} value={center.id}>
+                          {center.name} {center.location ? `- ${center.location}` : ''}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>Loading centers...</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {centerCapacity && (

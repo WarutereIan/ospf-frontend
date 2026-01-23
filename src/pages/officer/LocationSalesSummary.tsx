@@ -58,7 +58,7 @@ interface MonthlyLocationData {
 }
 
 export function LocationSalesSummary() {
-  const { centers, transactions, inventory, isLoading: aggregationLoading } = useAggregation();
+  const { centers, transactions, inventory, fetchCenters, fetchTransactions, fetchInventory, isLoading: aggregationLoading } = useAggregation();
   const { dashboardStats, trends, fetchDashboardStats, fetchTrends, isLoading: analyticsLoading } = useAnalytics();
   
   const [reportType, setReportType] = useState<"sales" | "stock">("sales");
@@ -66,10 +66,13 @@ export function LocationSalesSummary() {
 
   const isLoading = aggregationLoading || analyticsLoading;
 
-  // Fetch data on mount
   useEffect(() => {
-    // Data is already fetched by contexts
-  }, []);
+    fetchCenters();
+    fetchTransactions();
+    fetchInventory();
+    fetchDashboardStats({ timeRange: "year" });
+    fetchTrends({ timeRange: "year" });
+  }, [fetchCenters, fetchTransactions, fetchInventory, fetchDashboardStats, fetchTrends]);
 
   // Calculate location sales from transactions and analytics
   const locationSales: LocationSales[] = []; // TODO: Calculate from transactions grouped by location

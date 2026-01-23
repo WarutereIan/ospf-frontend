@@ -36,6 +36,7 @@ import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { RFQDetails } from "@/components/marketplace/RFQDetails";
 import { RFQResponseForm } from "@/components/marketplace/RFQResponseForm";
 import { SupplierOfferForm } from "@/components/marketplace/SupplierOfferForm";
+import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import type { RFQ, SourcingRequest, SourcingProductType, SupplierOffer } from "@/types/marketplace";
 
 type RequestType = "all" | "rfq" | "sourcing";
@@ -48,7 +49,10 @@ interface BuyerRequestCard {
   productType: SourcingProductType;
   quantity: number;
   unit: string;
+  fulfilled?: number; // For sourcing requests
   priceRange?: { min: number; max: number };
+  pricePerUnit?: number;
+  priceUnit?: "kg" | "unit";
   deadline: string;
   location?: string;
   buyerName?: string;
@@ -114,7 +118,10 @@ export function BuyerRequests() {
       productType: sr.productType,
       quantity: sr.total,
       unit: sr.unit,
+      fulfilled: sr.fulfilled,
       priceRange: sr.priceRange,
+      pricePerUnit: sr.pricePerUnit,
+      priceUnit: sr.priceUnit,
       deadline: sr.deadline,
       location: sr.deliveryRegion,
       buyerName: sr.buyerName || "Buyer",
@@ -216,6 +223,36 @@ export function BuyerRequests() {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const formatQuantity = (value: number | undefined | null, unit?: string) => {
+    const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
+    const u = unit ?? "kg";
+    if (u === "tons") {
+      return `${n.toFixed(1)}t`;
+    }
+    if (u === "kg") {
+      return `${n.toLocaleString()} kg`;
+    }
+    if (u === "units") {
+      if (n >= 1000) {
+        return `${(n / 1000).toFixed(0)}k units`;
+      }
+      return `${n.toLocaleString()} units`;
+    }
+    return `${n} ${u}`;
+  };
+
+  const formatPrice = (card: BuyerRequestCard) => {
+    if (card.priceRange && typeof card.priceRange.min === "number" && typeof card.priceRange.max === "number") {
+      const unitLabel = card.priceUnit === "unit" ? "unit" : card.unit === "kg" ? "kg" : card.unit;
+      return `KES ${card.priceRange.min.toLocaleString()} – ${card.priceRange.max.toLocaleString()}/${unitLabel}`;
+    }
+    if (card.pricePerUnit && typeof card.pricePerUnit === "number" && Number.isFinite(card.pricePerUnit)) {
+      const unitLabel = card.priceUnit === "unit" ? "unit" : card.unit === "kg" ? "kg" : card.unit;
+      return `KES ${card.pricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/${unitLabel}`;
+    }
+    return null;
   };
 
   const getDaysUntilDeadline = (deadline: string) => {
@@ -454,14 +491,25 @@ export function BuyerRequests() {
                     <div className="flex items-center justify-between">
                       <span className="text-stone-500">Quantity:</span>
                       <span className="font-semibold text-stone-900">
-                        {card.quantity.toLocaleString()} {card.unit}
+                        {formatQuantity(card.quantity, card.unit)}
                       </span>
                     </div>
-                    {card.priceRange && (
+                    {card.type === "sourcing" && card.fulfilled !== undefined && card.fulfilled !== null && (
                       <div className="flex items-center justify-between">
-                        <span className="text-stone-500">Price Range:</span>
+                        <span className="text-stone-500">Fulfilled:</span>
                         <span className="font-semibold text-stone-900">
-                          KES {card.priceRange.min} - {card.priceRange.max}/{card.unit === "kg" ? "kg" : "unit"}
+                          {formatQuantity(card.fulfilled, card.unit)}
+                        </span>
+                      </div>
+                    )}
+                    {formatPrice(card) && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-stone-500 flex items-center gap-1">
+                          <IconCurrency className="h-3.5 w-3.5" />
+                          Price:
+                        </span>
+                        <span className="font-semibold text-stone-900">
+                          {formatPrice(card)}
                         </span>
                       </div>
                     )}
@@ -642,10 +690,19 @@ export function BuyerRequests() {
             <SupplierOfferForm
               sourcingRequest={selectedRequest.data as SourcingRequest}
               onSubmit={async (offer) => {
-                await submitSupplierOffer(selectedRequest.id, offer);
-                setOfferFormOpen(false);
-                // Refresh sourcing requests
-                fetchSourcingRequests({ status: "open" });
+                try {
+                  await submitSupplierOffer(selectedRequest.id, offer);
+                  showSuccess(
+                    "Offer submitted successfully",
+                    `Your offer for ${selectedRequest.title} has been submitted`
+                  );
+                  setOfferFormOpen(false);
+                  // Refresh sourcing requests
+                  fetchSourcingRequests({ status: "open" });
+                } catch (error) {
+                  console.error("Failed to submit offer:", error);
+                  showError("Failed to submit offer", formatApiError(error));
+                }
               }}
               onCancel={() => setOfferFormOpen(false)}
             />

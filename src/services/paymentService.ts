@@ -28,6 +28,7 @@ import type {
 } from "@/types/payment";
 import type { ApiResponse } from "@/types/inputCustomer";
 import { apiGet, apiPost, apiPut } from "@/lib/api-client";
+import { showSuccess } from "@/lib/toast";
 
 // ==================== Payments ====================
 
@@ -68,12 +69,54 @@ export async function getPaymentById(id: string): Promise<Payment | null> {
 }
 
 /**
+ * Backend CreatePaymentDto shape (POST /payments).
+ */
+interface CreatePaymentDto {
+  orderId?: string;
+  transportId?: string;
+  inputOrderId?: string;
+  amount: number;
+  currency?: string;
+  method: 'MPESA' | 'BANK_TRANSFER' | 'CASH' | 'CREDIT';
+  payerId: string;
+  payeeId: string;
+  transactionReference?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Map frontend payment to backend CreatePaymentDto.
+ */
+function toCreatePaymentDto(payment: Partial<Payment>): CreatePaymentDto {
+  const method = payment.method 
+    ? (payment.method === 'mpesa' ? 'MPESA' :
+       payment.method === 'bank_transfer' ? 'BANK_TRANSFER' :
+       payment.method === 'cash' ? 'CASH' :
+       payment.method === 'credit' ? 'CREDIT' : 'MPESA')
+    : 'MPESA';
+  
+  return {
+    orderId: payment.orderId,
+    transportId: payment.transportId,
+    inputOrderId: payment.inputOrderId,
+    amount: typeof payment.amount === 'number' ? payment.amount : 0,
+    currency: payment.currency || 'KES',
+    method: method as CreatePaymentDto['method'],
+    payerId: payment.payerId || '',
+    payeeId: payment.payeeId || '',
+    transactionReference: payment.transactionReference,
+    metadata: payment.metadata,
+  };
+}
+
+/**
  * Create payment
  * Backend: POST /api/v1/payments
  */
 export async function createPayment(payment: Partial<Payment>): Promise<ApiResponse<Payment>> {
   try {
-    const created = await apiPost<Payment>('/payments', payment);
+    const dto = toCreatePaymentDto(payment);
+    const created = await apiPost<Payment>('/payments', dto);
     return { data: created, message: "Payment initiated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create payment" };
@@ -150,12 +193,20 @@ export async function releaseEscrow(id: string): Promise<ApiResponse<EscrowTrans
 }
 
 /**
+ * Backend DisputeEscrowDto shape (PUT /payments/escrow/:id/dispute).
+ */
+interface DisputeEscrowDto {
+  reason: string;
+}
+
+/**
  * Dispute escrow
  * Backend: PUT /api/v1/payments/escrow/:id/dispute
  */
 export async function disputeEscrow(id: string, reason: string): Promise<ApiResponse<EscrowTransaction>> {
   try {
-    const disputed = await apiPut<EscrowTransaction>(`/payments/escrow/${id}/dispute`, { reason });
+    const dto: DisputeEscrowDto = { reason };
+    const disputed = await apiPut<EscrowTransaction>(`/payments/escrow/${id}/dispute`, dto);
     return { data: disputed, message: "Escrow disputed" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to dispute escrow" };

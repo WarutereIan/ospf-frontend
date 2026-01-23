@@ -90,7 +90,9 @@ export function AggregationManagerDashboard() {
   
   const { 
     trends,
+    aggregationManagerAnalytics,
     fetchTrends,
+    fetchAggregationManagerAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -102,6 +104,7 @@ export function AggregationManagerDashboard() {
     fetchQualityChecks();
     fetchStats();
     fetchTrends({ timeRange: "week" });
+    fetchAggregationManagerAnalytics({ timeRange: "week" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -7,7 +7,7 @@
  * - Payment history
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   Payment,
   EscrowTransaction,
@@ -234,13 +234,8 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
 
   const filteredPayments = payments;
 
-  useEffect(() => {
-    fetchPayments();
-    fetchEscrowTransactions();
-    fetchPaymentHistory();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (e.g. PaymentHistory → fetchPaymentHistory;
+  // BuyerDashboard → fetchPaymentHistory; BuyerOrderDetails → fetchPayments).
 
   const value: PaymentContextType = {
     payments,

@@ -7,7 +7,7 @@
  * - Delivery tracking
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   TransportRequest,
   ActiveDelivery,
@@ -62,6 +62,7 @@ interface TransportContextType {
   selectedSchedule: FarmPickupSchedule | null;
   scheduleFilters: PickupScheduleFilters;
   centerCapacities: Map<string, AggregationCenterCapacity>;
+  farmerBookings: PickupSlotBooking[];
   
   fetchRequests: (filters?: TransportFilters) => Promise<void>;
   fetchRequestById: (id: string) => Promise<void>;
@@ -93,12 +94,11 @@ interface TransportContextType {
   // Farmer booking actions
   fetchFarmerBookings: (farmerId: string) => Promise<void>;
   confirmPickup: (bookingId: string, data: {
-    batchId: string;
     variety: string;
     qualityGrade: "A" | "B" | "C";
     photos?: string[];
     notes?: string;
-  }) => Promise<PickupReceipt | null>;
+  }) => Promise<PickupSlotBooking | null>;
   fetchPickupReceipt: (bookingId: string) => Promise<PickupReceipt | null>;
   
   filteredRequests: TransportRequest[];
@@ -450,8 +450,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   }, [scheduleFilters]);
 
   const fetchAggregationCenterCapacityAction = useCallback(async (centerId: string): Promise<AggregationCenterCapacity | null> => {
-    setIsLoading(true);
-    setError(null);
+    // Don't set loading state for capacity fetches to avoid blocking UI
     try {
       const capacity = await getAggregationCenterCapacity(centerId);
       if (capacity) {
@@ -459,10 +458,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       }
       return capacity;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch center capacity");
+      console.error('Error fetching center capacity:', err);
       return null;
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
@@ -500,13 +497,12 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const confirmPickupAction = useCallback(async (
     bookingId: string,
     data: {
-      batchId: string;
       variety: string;
       qualityGrade: "A" | "B" | "C";
       photos?: string[];
       notes?: string;
     }
-  ): Promise<PickupReceipt | null> => {
+  ): Promise<PickupSlotBooking | null> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -518,8 +514,10 @@ export function TransportProvider({ children }: { children: ReactNode }) {
             ? { ...b, ...result.data!, pickupConfirmed: true, status: "picked_up" as const }
             : b
         ));
-        // Store receipt
-        setPickupReceipts(prev => new Map(prev).set(bookingId, result.data!));
+        // Store receipt if available
+        if (result.data.pickupReceipt) {
+          setPickupReceipts(prev => new Map(prev).set(bookingId, result.data!.pickupReceipt));
+        }
         return result.data;
       }
       return null;
@@ -551,12 +549,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const filteredRequests = requests; // Filtering handled by service
   const filteredSchedules = pickupSchedules; // Filtering handled by service
 
-  useEffect(() => {
-    fetchRequests();
-    fetchActiveDeliveries();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (e.g. TransportRequests → fetchRequests;
+  // ActiveDeliveries → fetchActiveDeliveries; PickupScheduleManagement → fetchPickupSchedules).
 
   const value: TransportContextType = {
     requests,
@@ -571,6 +565,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     selectedSchedule,
     scheduleFilters,
     centerCapacities,
+    farmerBookings,
     fetchRequests,
     fetchRequestById,
     createRequest,

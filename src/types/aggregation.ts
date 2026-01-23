@@ -31,6 +31,11 @@ export type QualityGrade = "A" | "B" | "C";
 export type StockTransactionType = "stock_in" | "stock_out" | "transfer" | "wastage" | "adjustment";
 
 /**
+ * Stock transaction status
+ */
+export type StockTransactionStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED";
+
+/**
  * Stock status
  */
 export type StockStatus = "fresh" | "aging" | "critical";
@@ -91,6 +96,10 @@ export interface StockTransaction {
   createdBy: string; // User ID
   batchId?: string; // Batch ID for traceability
   qrCode?: string; // QR code
+  status?: StockTransactionStatus; // Transaction confirmation status
+  confirmedBy?: string; // User ID who confirmed/rejected
+  confirmedAt?: string; // ISO 8601 - When confirmed/rejected
+  rejectionReason?: string; // Reason if rejected
 }
 
 /**
@@ -201,6 +210,7 @@ export interface StockFilters {
   farmerId?: string;
   buyerId?: string;
   searchQuery?: string;
+  status?: StockTransactionStatus | "all";
 }
 
 /**

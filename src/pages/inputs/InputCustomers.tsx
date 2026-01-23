@@ -30,10 +30,17 @@ export default function InputCustomers() {
   const {
     filteredCustomers,
     customerStats: stats,
+    fetchCustomers,
+    fetchCustomerStats,
     isLoading,
     customerFilters: filters,
     setCustomerFilters: setFilters,
   } = useInput();
+
+  useEffect(() => {
+    fetchCustomers();
+    fetchCustomerStats();
+  }, [fetchCustomers, fetchCustomerStats]);
 
   const handleSearchChange = (searchQuery: string) => {
     setFilters({ ...filters, searchQuery });

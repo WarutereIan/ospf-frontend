@@ -12,6 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
+import { PaymentConfirmationDialog } from "@/components/payments/PaymentConfirmationDialog";
 import { RateFarmer } from "./RateFarmer";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
@@ -24,6 +25,7 @@ export function BuyerOrderDetails() {
   const { payments, fetchPayments } = usePayment();
   
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
 
   // Fetch order details on mount
   useEffect(() => {
@@ -80,6 +82,17 @@ export function BuyerOrderDetails() {
             <p className="text-sm text-muted-foreground mt-1">Order #{order.id}</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Show Confirm Payment button for orders awaiting payment */}
+            {(order.status === "order_placed" || order.status === "order_accepted") &&
+             order.paymentStatus === "pending" && (
+              <Button
+                onClick={() => setPaymentConfirmationOpen(true)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <IconClipboardCheck className="mr-2 h-4 w-4" />
+                Confirm Payment
+              </Button>
+            )}
             {order.canRate && (
               <Button
                 variant="outline"
@@ -127,9 +140,16 @@ export function BuyerOrderDetails() {
               {
                 stage: "payment_secured",
                 timestamp: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 10 * 60 * 1000).toISOString()
+                  ? payment?.confirmedAt || new Date(Date.now() - 10 * 60 * 1000).toISOString()
                   : undefined,
                 completed: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "payment_confirmed_by_farmer",
+                timestamp: (payment && (payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER"))
+                  ? payment?.farmerConfirmedAt || payment?.confirmedAt || new Date(Date.now() - 8 * 60 * 1000).toISOString()
+                  : undefined,
+                completed: (payment && (payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER")) || ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "in_transit",
@@ -335,13 +355,31 @@ export function BuyerOrderDetails() {
           </CardHeader>
           <CardContent>
             <EscrowStatus
-              status={payment.status as EscrowStatusType}
+              status={(payment.status || '').toLowerCase() as EscrowStatusType}
               amount={payment.amount || order.totalAmount}
               orderId={order.id}
+              createdAt={payment.confirmedAt}
+              releasedAt={payment.releasedAt}
             />
           </CardContent>
         </Card>
       )}
+
+      {/* Payment Confirmation Dialog */}
+      <PaymentConfirmationDialog
+        open={paymentConfirmationOpen}
+        onOpenChange={setPaymentConfirmationOpen}
+        orderId={order.id}
+        orderNumber={order.orderNumber || order.id}
+        amount={order.totalAmount}
+        onPaymentConfirmed={() => {
+          // Refresh order data
+          if (id) {
+            fetchOrderById(id);
+            fetchPayments({ orderId: id });
+          }
+        }}
+      />
 
       {/* Rating Dialog */}
       {order.canRate && (

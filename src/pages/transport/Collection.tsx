@@ -47,7 +47,14 @@ import type { TransportRequest } from "@/types/transport";
 export default function Collection() {
   const { requests, activeDeliveries, fetchRequests, fetchActiveDeliveries, updateRequestStatus, isLoading } = useTransport();
   const { user } = useAuth();
-  
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchRequests({ providerId: user.id });
+      fetchActiveDeliveries();
+    }
+  }, [user?.id, fetchRequests, fetchActiveDeliveries]);
+
   // Get accepted requests that need collection
   const baseCollections = requests.filter(req => 
     req.status === "accepted" || req.status === "in_transit"

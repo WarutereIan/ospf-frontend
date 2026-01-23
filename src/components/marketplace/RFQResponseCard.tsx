@@ -17,6 +17,7 @@ interface RFQResponseCardProps {
   rfq: RFQ;
   onUpdateStatus?: (responseId: string, status: RFQResponseStatus) => Promise<void>;
   onConvertToOrder?: (responseId: string) => Promise<void>;
+  isFarmerView?: boolean;
 }
 
 export function RFQResponseCard({
@@ -24,6 +25,7 @@ export function RFQResponseCard({
   rfq,
   onUpdateStatus,
   onConvertToOrder,
+  isFarmerView = false,
 }: RFQResponseCardProps) {
   const getStatusBadge = (status: RFQResponseStatus) => {
     const variants: Record<RFQResponseStatus, { className: string; label: string }> = {
@@ -67,18 +69,24 @@ export function RFQResponseCard({
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-sm font-bold text-primary">
-                  {response.supplierName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase()
-                    .slice(0, 2)}
+                  {isFarmerView 
+                    ? "MY"
+                    : response.supplierName
+                    ? response.supplierName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)
+                    : "SU"}
                 </span>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold">{response.supplierName}</p>
-                  {response.supplierRating && (
+                  <p className="font-semibold">
+                    {isFarmerView ? "My Response" : (response.supplierName || "Unknown Supplier")}
+                  </p>
+                  {!isFarmerView && response.supplierRating && (
                     <div className="flex items-center gap-1">
                       <IconStar className="h-3 w-3 fill-yellow-400 text-yellow-400" />
                       <span className="text-xs">{response.supplierRating}</span>
@@ -97,23 +105,35 @@ export function RFQResponseCard({
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Quantity</p>
                 <p className="font-semibold">
-                  {response.quantity} {response.quantityUnit}
+                  {response.quantity ?? 0} {response.quantityUnit || "kg"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Price per {response.priceUnit}</p>
-                <p className="font-semibold">KES {response.pricePerUnit}</p>
+                <p className="text-xs text-muted-foreground mb-1">Price per {response.priceUnit || "kg"}</p>
+                <p className="font-semibold">
+                  KES {(() => {
+                    const price = typeof response.pricePerUnit === 'number' 
+                      ? response.pricePerUnit 
+                      : parseFloat(String(response.pricePerUnit || 0));
+                    return isNaN(price) ? "0" : price.toLocaleString();
+                  })()}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Total Amount</p>
                 <p className="font-bold text-primary">
-                  KES {response.totalAmount.toLocaleString()}
+                  KES {(() => {
+                    const amount = typeof response.totalAmount === 'number' 
+                      ? response.totalAmount 
+                      : parseFloat(String(response.totalAmount || 0));
+                    return isNaN(amount) ? "0" : amount.toLocaleString();
+                  })()}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Quality Grade</p>
                 <Badge variant="outline" className="text-xs">
-                  Grade {response.qualityGrade}
+                  Grade {response.qualityGrade || "N/A"}
                 </Badge>
               </div>
             </div>
@@ -156,7 +176,7 @@ export function RFQResponseCard({
           </div>
 
           {/* Actions */}
-          {canManage && (
+          {canManage && !isFarmerView && (
             <div className="flex flex-col gap-2">
               {response.status === "submitted" || response.status === "under_review" ? (
                 <>

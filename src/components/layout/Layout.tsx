@@ -1,10 +1,11 @@
-import { Outlet, Navigate } from "react-router-dom";
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import { Header } from "./Header";
 import { RoleBasedSidebar } from "./RoleBasedSidebar";
 import { ProSidebarProvider } from "react-pro-sidebar";
 import { useProSidebar } from "react-pro-sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/contexts/SidebarContext";
+import { getAllowedRolesForPath } from "@/lib/route-config";
 import { useEffect, useState } from "react";
 
 function MainContent() {
@@ -39,7 +40,8 @@ function MainContent() {
 }
 
 export function Layout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const { pathname } = useLocation();
 
   if (isLoading) {
     return (
@@ -54,6 +56,11 @@ export function Layout() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  const allowedRoles = getAllowedRolesForPath(pathname);
+  if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (

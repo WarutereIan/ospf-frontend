@@ -50,9 +50,24 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
     // Check if quantity exceeds request requirement
     const reqQuantity = sourcingRequest.total;
     const reqUnit = sourcingRequest.unit;
-    // Simple conversion (can be enhanced)
-    const qtyInKg = quantityUnit === "tons" ? qty * 1000 : qty;
-    const reqQtyInKg = reqUnit === "tons" ? reqQuantity * 1000 : reqQuantity;
+    
+    // Convert offer quantity to kg for comparison
+    let qtyInKg = qty;
+    if (quantityUnit === "tons") {
+      qtyInKg = qty * 1000;
+    } else if (quantityUnit === "units") {
+      // Assume 1 unit = 50kg for bags (common for sweet potatoes)
+      qtyInKg = qty * 50;
+    }
+    
+    // Convert request quantity to kg for comparison
+    let reqQtyInKg = reqQuantity;
+    if (reqUnit === "tons") {
+      reqQtyInKg = reqQuantity * 1000;
+    } else if (reqUnit === "units") {
+      // Assume 1 unit = 50kg for bags (common for sweet potatoes)
+      reqQtyInKg = reqQuantity * 50;
+    }
 
     if (qtyInKg > reqQtyInKg) {
       setError(`Quantity cannot exceed request requirement (${reqQuantity} ${reqUnit})`);
@@ -87,7 +102,17 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
   };
 
   const totalAmount = quantity && pricePerKg
-    ? (parseFloat(quantity) * (quantityUnit === "tons" ? 1000 : 1) * parseFloat(pricePerKg)).toLocaleString()
+    ? (() => {
+        // Convert offer quantity to kg for calculation
+        let quantityInKg = parseFloat(quantity);
+        if (quantityUnit === "tons") {
+          quantityInKg = parseFloat(quantity) * 1000;
+        } else if (quantityUnit === "units") {
+          // Assume 1 unit = 50kg for bags (common for sweet potatoes)
+          quantityInKg = parseFloat(quantity) * 50;
+        }
+        return (quantityInKg * parseFloat(pricePerKg)).toLocaleString();
+      })()
     : "0";
 
   return (

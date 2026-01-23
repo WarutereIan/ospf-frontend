@@ -8,7 +8,7 @@
  * - Quality checks
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   AggregationCenter,
   StockTransaction,
@@ -294,14 +294,8 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
   const filteredCenters = centers;
   const filteredTransactions = transactions;
 
-  useEffect(() => {
-    fetchCenters();
-    fetchTransactions();
-    fetchInventory();
-    fetchQualityChecks();
-    fetchStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (e.g. StockInForm → fetchCenters;
+  // InventoryManagement → fetchCenters, fetchInventory; Reports → fetchTransactions, fetchStats, fetchQualityChecks).
 
   const value: AggregationContextType = {
     centers,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   IconUpload,
   IconCheck,
@@ -16,13 +17,16 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
+import { GradingMatrixGuide } from "@/components/quality/GradingMatrixGuide";
 import { useAggregation } from "@/contexts/AggregationContext";
-import { useProfile } from "@/contexts/ProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { searchBatches, confirmStockTransaction, rejectStockTransaction, getStockTransactions } from "@/services/aggregationService";
+import { showSuccess, showError } from "@/lib/toast";
+import type { StockTransaction } from "@/types/aggregation";
+import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 
 interface StockInEntry {
-  farmerId: string;
-  farmerName: string;
+  batchId?: string;
   orderId?: string;
   variety: string;
   quantity: number; // kg
@@ -51,12 +55,10 @@ const qualityGrades = [
 
 export function StockInForm() {
   const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
-  const { profiles, fetchProfiles, filteredProfiles } = useProfile();
   const { user } = useAuth();
   
   const [formData, setFormData] = useState<Partial<StockInEntry>>({
-    farmerId: "",
-    farmerName: "",
+    batchId: "",
     orderId: "",
     variety: "",
     quantity: 0,
@@ -69,7 +71,7 @@ export function StockInForm() {
     photos: [],
     notes: "",
   });
-  const [searchTerm, setSearchTerm] = useState("");
+  const [batchSearchTerm, setBatchSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -77,20 +79,159 @@ export function StockInForm() {
   const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
   const [generatedBatchId, setGeneratedBatchId] = useState<string>("");
   const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
+  const [foundBatch, setFoundBatch] = useState<StockTransaction | null>(null);
+  const [batchSearchResults, setBatchSearchResults] = useState<StockTransaction[]>([]);
+  const [isSearchingBatch, setIsSearchingBatch] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<StockTransaction[]>([]);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+  const [confirmingTransactionId, setConfirmingTransactionId] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedTransactionForReject, setSelectedTransactionForReject] = useState<StockTransaction | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
-  // Fetch centers and farmers on mount
+  // Fetch centers and pending transactions on mount
   useEffect(() => {
     fetchCenters();
-    fetchProfiles({ role: "farmer" });
-  }, [fetchCenters, fetchProfiles]);
+    fetchPendingTransactions();
+  }, [fetchCenters, selectedCenter]);
 
-  // Filter farmers based on search term
-  const filteredFarmers = filteredProfiles.filter(
-    (farmer) =>
-      farmer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      farmer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      farmer.phone.includes(searchTerm)
-  );
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchResultsRef.current && !searchResultsRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    if (showSearchResults) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showSearchResults]);
+
+  // Fetch pending transactions
+  const fetchPendingTransactions = async () => {
+    if (!selectedCenter?.id) return;
+    setIsLoadingPending(true);
+    try {
+      const transactions = await getStockTransactions({
+        centerId: selectedCenter.id,
+        type: "stock_in",
+        status: "PENDING_CONFIRMATION",
+      });
+      setPendingTransactions(transactions);
+    } catch (error) {
+      console.error("Error fetching pending transactions:", error);
+    } finally {
+      setIsLoadingPending(false);
+    }
+  };
+
+  // Handle confirm transaction
+  const handleConfirmTransaction = async (transactionId: string) => {
+    setConfirmingTransactionId(transactionId);
+    try {
+      const result = await confirmStockTransaction(transactionId);
+      if (result.data) {
+        showSuccess("Transaction Confirmed", "Stock transaction has been confirmed and inventory updated");
+        await fetchPendingTransactions(); // Refresh list
+      } else {
+        showError("Failed to confirm", result.error || "An error occurred");
+      }
+    } catch (error) {
+      showError("Failed to confirm", "An error occurred while confirming the transaction");
+    } finally {
+      setConfirmingTransactionId(null);
+    }
+  };
+
+  // Handle reject transaction
+  const handleRejectTransaction = async () => {
+    if (!selectedTransactionForReject || !rejectionReason.trim()) {
+      showError("Validation Error", "Please provide a rejection reason");
+      return;
+    }
+
+    try {
+      const result = await rejectStockTransaction(selectedTransactionForReject.id, rejectionReason);
+      if (result.data) {
+        showSuccess("Transaction Rejected", "Stock transaction has been rejected");
+        setRejectDialogOpen(false);
+        setSelectedTransactionForReject(null);
+        setRejectionReason("");
+        await fetchPendingTransactions(); // Refresh list
+      } else {
+        showError("Failed to reject", result.error || "An error occurred");
+      }
+    } catch (error) {
+      showError("Failed to reject", "An error occurred while rejecting the transaction");
+    }
+  };
+
+  // Search for batches using PostgreSQL full-text search
+  useEffect(() => {
+    const searchBatch = async () => {
+      if (batchSearchTerm.trim().length >= 2) {
+        setIsSearchingBatch(true);
+        setShowSearchResults(true);
+        try {
+          // Use the specialized batch search endpoint with full-text search
+          const results = await searchBatches(batchSearchTerm, 10);
+          
+          setBatchSearchResults(results);
+          
+          if (results.length > 0) {
+            // Use the most recent transaction (already sorted by rank and date)
+            const latestBatch = results[0];
+            setFoundBatch(latestBatch);
+            // Auto-fill batch ID if exact match
+            if (latestBatch.batchId?.toLowerCase() === batchSearchTerm.toLowerCase()) {
+              setFormData((prev) => ({ ...prev, batchId: latestBatch.batchId }));
+            }
+          } else {
+            setFoundBatch(null);
+          }
+        } catch (error) {
+          console.error("Error searching for batch:", error);
+          setFoundBatch(null);
+          setBatchSearchResults([]);
+        } finally {
+          setIsSearchingBatch(false);
+        }
+      } else {
+        setFoundBatch(null);
+        setBatchSearchResults([]);
+        setShowSearchResults(false);
+        if (batchSearchTerm.trim().length === 0) {
+          setFormData((prev) => ({ ...prev, batchId: "" }));
+        }
+        setIsSearchingBatch(false);
+      }
+    };
+
+    const timeoutId = setTimeout(searchBatch, 500); // Debounce search
+    return () => clearTimeout(timeoutId);
+  }, [batchSearchTerm]);
+
+  // Handle clicking on a search result to fill the form
+  const handleSelectBatch = (batch: StockTransaction) => {
+    setFormData((prev) => ({
+      ...prev,
+      batchId: batch.batchId || "",
+      variety: batch.variety || prev.variety,
+      quantity: batch.quantity || prev.quantity,
+      qualityGrade: batch.qualityGrade || prev.qualityGrade,
+      orderId: batch.orderId || prev.orderId,
+    }));
+    setFoundBatch(batch);
+    setBatchSearchTerm(batch.batchId || "");
+    setShowSearchResults(false);
+  };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -128,7 +269,7 @@ export function StockInForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.farmerId || !formData.variety || !formData.quantity || !formData.qualityGrade) {
+    if (!formData.variety || !formData.quantity || !formData.qualityGrade) {
       return;
     }
 
@@ -140,7 +281,8 @@ export function StockInForm() {
     setIsSubmitting(true);
     
     try {
-      const batchId = generateBatchId();
+      // Use existing batchId if found, otherwise generate new one
+      const batchId = formData.batchId || generateBatchId();
       const qrCode = generateQRCode(batchId);
       
       // Prepare stock transaction data
@@ -148,8 +290,9 @@ export function StockInForm() {
         centerId: selectedCenter?.id || centers[0]?.id || "",
         centerName: selectedCenter?.name || centers[0]?.name || "",
         type: "stock_in" as const,
-        farmerId: formData.farmerId,
-        farmerName: formData.farmerName || "",
+        // Include farmer info from found batch if available
+        farmerId: foundBatch?.farmerId,
+        farmerName: foundBatch?.farmerName,
         orderId: formData.orderId,
         variety: formData.variety,
         quantity: formData.quantity || 0,
@@ -172,7 +315,7 @@ export function StockInForm() {
         receiptId: `REC-${Date.now()}`,
         type: "stock_in" as const,
         date: new Date().toISOString(),
-        farmerName: formData.farmerName,
+        farmerName: foundBatch?.farmerName || "N/A",
         variety: formData.variety,
         quantity: formData.quantity,
         qualityGrade: formData.qualityGrade,
@@ -186,16 +329,17 @@ export function StockInForm() {
 
       // Reset form after showing receipt
       setFormData({
-        farmerId: "",
-        farmerName: "",
-        orderId: "",
+        batchId: "",
         variety: "",
         quantity: 0,
         qualityGrade: undefined,
         photos: [],
         notes: "",
       });
-      setSearchTerm("");
+      setBatchSearchTerm("");
+      setFoundBatch(null);
+      setBatchSearchResults([]);
+      setShowSearchResults(false);
     } catch (error) {
       console.error("Failed to record stock in:", error);
       // Error handling is done by context
@@ -216,78 +360,222 @@ export function StockInForm() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Farmer Selection */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Farmer Information</CardTitle>
-                <CardDescription>Select or search for the farmer</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Search Farmer</Label>
-                  <Input
-                    placeholder="Search by name, ID, or phone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                  {searchTerm && filteredFarmers.length > 0 && (
-                    <div className="border rounded-lg mt-2 max-h-48 overflow-y-auto">
-                      {filteredFarmers.map((farmer) => (
-                        <button
-                          key={farmer.id}
-                          type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              farmerId: farmer.id,
-                              farmerName: farmer.name,
-                            }));
-                            setSearchTerm("");
-                          }}
-                          className="w-full text-left p-3 hover:bg-muted transition-colors border-b last:border-b-0"
-                        >
-                          <div className="font-medium">{farmer.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {farmer.id} • {farmer.phone}
-                            {farmer.location && ` • ${farmer.location}`}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {formData.farmerName && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{formData.farmerName}</p>
-                        <p className="text-sm text-muted-foreground">ID: {formData.farmerId}</p>
+      {/* Pending Confirmations Section */}
+      {pendingTransactions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Confirmations</CardTitle>
+            <CardDescription>
+              Stock transactions created at pickup confirmation, awaiting your approval
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingTransactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="p-4 border rounded-lg bg-yellow-50 border-yellow-200"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                          Pending
+                        </Badge>
+                        {transaction.batchId && (
+                          <span className="text-sm font-mono text-muted-foreground">
+                            {transaction.batchId}
+                          </span>
+                        )}
                       </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Farmer:</span>
+                          <p className="font-medium">{transaction.farmerName || "N/A"}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Variety:</span>
+                          <p className="font-medium">{transaction.variety}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Quantity:</span>
+                          <p className="font-medium">{transaction.quantity} kg</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Grade:</span>
+                          <Badge variant="outline" className={qualityGrades.find(g => g.value === transaction.qualityGrade)?.color}>
+                            Grade {transaction.qualityGrade}
+                          </Badge>
+                        </div>
+                      </div>
+                      {transaction.notes && (
+                        <p className="text-xs text-muted-foreground mt-2">{transaction.notes}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 ml-4">
                       <Button
-                        type="button"
-                        variant="ghost"
                         size="sm"
+                        onClick={() => handleConfirmTransaction(transaction.id)}
+                        disabled={confirmingTransactionId === transaction.id}
+                      >
+                        {confirmingTransactionId === transaction.id ? (
+                          <>
+                            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Confirming...
+                          </>
+                        ) : (
+                          <>
+                            <IconCheck className="mr-2 h-4 w-4" />
+                            Confirm
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
                         onClick={() => {
-                          setFormData((prev) => ({ ...prev, farmerId: "", farmerName: "" }));
+                          setSelectedTransactionForReject(transaction);
+                          setRejectDialogOpen(true);
                         }}
                       >
-                        <IconX className="h-4 w-4" />
+                        <IconX className="mr-2 h-4 w-4" />
+                        Reject
                       </Button>
                     </div>
                   </div>
-                )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+          {/* Main Form */}
+          <div className="lg:col-span-2 space-y-6 overflow-visible">
+            {/* Batch ID Selection */}
+            <Card className="relative">
+              <CardHeader>
+                <CardTitle>Batch Information</CardTitle>
+                <CardDescription>Search for existing batch ID or leave blank to generate a new one</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 overflow-visible">
                 <div className="space-y-2">
-                  <Label htmlFor="orderId">Order ID (Optional)</Label>
-                  <Input
-                    id="orderId"
-                    placeholder="ORD-001"
-                    value={formData.orderId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, orderId: e.target.value }))}
-                  />
+                  <Label>Batch ID (Optional)</Label>
+                  <div className="relative z-10">
+                    <Input
+                      placeholder="Search for existing batch ID (e.g., BATCH-1234567890-123)..."
+                      value={batchSearchTerm}
+                      onChange={(e) => {
+                        setBatchSearchTerm(e.target.value);
+                        setFormData((prev) => ({ ...prev, batchId: e.target.value }));
+                        setShowSearchResults(true);
+                      }}
+                      onFocus={() => {
+                        if (batchSearchResults.length > 0) {
+                          setShowSearchResults(true);
+                        }
+                      }}
+                    />
+                    {/* Search Results Dropdown */}
+                    {showSearchResults && batchSearchResults.length > 0 && batchSearchTerm.trim().length >= 2 && (
+                      <div 
+                        ref={searchResultsRef}
+                        className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                        style={{ position: 'absolute', top: '100%' }}
+                      >
+                        <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
+                          Select a batch to auto-fill form:
+                        </div>
+                        {batchSearchResults.map((batch) => (
+                          <button
+                            key={batch.id}
+                            type="button"
+                            onClick={() => handleSelectBatch(batch)}
+                            className="w-full text-left p-3 hover:bg-blue-50 transition-colors border-b last:border-b-0"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-mono text-sm font-medium text-primary">
+                                    {batch.batchId}
+                                  </span>
+                                  {batch.status === "PENDING_CONFIRMATION" && (
+                                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs">
+                                      Pending
+                                    </Badge>
+                                  )}
+                                </div>
+                                {batch.farmerName && (
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    Farmer: {batch.farmerName}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span>Variety: {batch.variety}</span>
+                                  <span>•</span>
+                                  <span>Quantity: {batch.quantity} kg</span>
+                                  <span>•</span>
+                                  <Badge variant="outline" className={qualityGrades.find(g => g.value === batch.qualityGrade)?.color}>
+                                    Grade {batch.qualityGrade}
+                                  </Badge>
+                                </div>
+                                {batch.orderId && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Order: {batch.orderId}
+                                  </p>
+                                )}
+                              </div>
+                              <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {isSearchingBatch && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
+                      Searching for batch...
+                    </div>
+                  )}
+                  {foundBatch && !showSearchResults && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">Selected Batch</p>
+                          <p className="text-sm text-muted-foreground">Batch ID: {foundBatch.batchId}</p>
+                          {foundBatch.farmerName && (
+                            <p className="text-sm text-muted-foreground">Farmer: {foundBatch.farmerName}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            Variety: {foundBatch.variety} • Quantity: {foundBatch.quantity} kg • Grade: {foundBatch.qualityGrade}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setBatchSearchTerm("");
+                            setFormData((prev) => ({ ...prev, batchId: "" }));
+                            setFoundBatch(null);
+                            setBatchSearchResults([]);
+                          }}
+                        >
+                          <IconX className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {batchSearchTerm && !foundBatch && !isSearchingBatch && batchSearchTerm.length >= 2 && batchSearchResults.length === 0 && (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        Batch not found. A new batch ID will be generated when you submit.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -442,9 +730,17 @@ export function StockInForm() {
               <CardContent className="space-y-4">
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Farmer</span>
-                    <span className="font-medium">{formData.farmerName || "Not selected"}</span>
+                    <span className="text-muted-foreground">Batch ID</span>
+                    <span className="font-medium font-mono text-xs">
+                      {formData.batchId || (foundBatch?.batchId) || "Will be generated"}
+                    </span>
                   </div>
+                  {foundBatch && foundBatch.farmerName && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Farmer</span>
+                      <span className="font-medium">{foundBatch.farmerName}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Variety</span>
                     <span className="font-medium">
@@ -473,7 +769,7 @@ export function StockInForm() {
                     <>
                       <div className="border-t pt-4 mt-4 space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Batch ID:</span>
+                          <span className="text-muted-foreground">Generated Batch ID:</span>
                           <span className="font-mono font-medium text-xs">{generatedBatchId}</span>
                         </div>
                         {generatedQRCode && (
@@ -494,7 +790,6 @@ export function StockInForm() {
                     type="submit"
                     className="w-full"
                     disabled={
-                      !formData.farmerId ||
                       !formData.variety ||
                       !formData.quantity ||
                       !formData.qualityGrade ||
@@ -526,11 +821,12 @@ export function StockInForm() {
               </CardHeader>
               <CardContent>
                 <ul className="text-xs text-muted-foreground space-y-2">
+                  <li>• Search for existing batch ID if available</li>
+                  <li>• New batch ID will be generated automatically if not found</li>
                   <li>• Weigh the produce before recording</li>
                   <li>• Assess quality and assign appropriate grade</li>
                   <li>• Take clear photos for documentation</li>
-                  <li>• Generate receipt for farmer</li>
-                  <li>• SMS confirmation will be sent automatically</li>
+                  <li>• Generate receipt with batch information</li>
                 </ul>
               </CardContent>
             </Card>
@@ -565,6 +861,56 @@ export function StockInForm() {
           </DialogHeader>
           <div className="overflow-x-auto">
             <GradingMatrixGuide />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Transaction Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Stock Transaction</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this transaction. The farmer will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedTransactionForReject && (
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                <p><strong>Batch ID:</strong> {selectedTransactionForReject.batchId || "N/A"}</p>
+                <p><strong>Farmer:</strong> {selectedTransactionForReject.farmerName || "N/A"}</p>
+                <p><strong>Quantity:</strong> {selectedTransactionForReject.quantity} kg</p>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="rejectionReason">Rejection Reason *</Label>
+              <Textarea
+                id="rejectionReason"
+                placeholder="Enter reason for rejection..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setRejectDialogOpen(false);
+                  setSelectedTransactionForReject(null);
+                  setRejectionReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRejectTransaction}
+                disabled={!rejectionReason.trim()}
+              >
+                Reject Transaction
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

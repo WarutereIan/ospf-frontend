@@ -140,6 +140,9 @@ export function RFQList() {
   };
 
   if (view === "details" && selectedRFQ) {
+    const myResponse = getMyResponseStatus(selectedRFQ.id);
+    const isViewingMyResponse = activeTab === "my_responses" || !!myResponse;
+    
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -153,7 +156,13 @@ export function RFQList() {
             Back to List
           </Button>
         </div>
-        <RFQDetails rfq={selectedRFQ} />
+        <RFQDetails 
+          rfq={selectedRFQ} 
+          isFarmerView={true}
+          farmerResponseId={myResponse?.id}
+          farmerUserId={user?.id}
+          hideSubmitButton={isViewingMyResponse}
+        />
       </div>
     );
   }
@@ -306,7 +315,7 @@ export function RFQList() {
                     <div className="flex flex-col gap-2">
                       <Button onClick={() => handleViewRFQ(rfq.id)}>
                         <IconFileText className="mr-2 h-4 w-4" />
-                        View & Respond
+                        {activeTab === "my_responses" || myResponse ? "View" : "View & Respond"}
                       </Button>
                     </div>
                   </div>

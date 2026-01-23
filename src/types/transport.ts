@@ -66,11 +66,21 @@ export interface TransportRequest {
   distance: number; // km
   scheduledTime: string; // ISO 8601
   scheduledPickupTime?: string; // Alias for scheduledTime (used in some contexts)
+  requestedPickupDate?: string; // ISO 8601 - Requested pickup date
+  requestedDeliveryDate?: string; // ISO 8601 - Requested delivery date
+  pickupCounty?: string; // County for pickup location
+  deliveryCounty?: string; // County for delivery location
+  pickupCoordinates?: string; // Coordinates as string (lat,lng format)
+  deliveryCoordinates?: string; // Coordinates as string (lat,lng format)
   weight: number; // kg
+  quantity?: number; // Quantity (alternative to weight in some contexts)
   description: string;
+  specialInstructions?: string; // Special instructions for transport
   amount: number; // Transport fee
   estimatedCost?: number; // Estimated transport cost (alias for amount or separate estimate)
   status: TransportRequestStatus;
+  orderId?: string; // Related marketplace order ID
+  inputOrderId?: string; // Related input order ID
   collectionStatus?: CollectionStatus; // Status for collection phase
   collectedBy?: string; // User ID who collected
   collectedAt?: string; // ISO 8601

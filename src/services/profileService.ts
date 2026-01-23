@@ -154,18 +154,75 @@ export async function getProfiles(filters?: ProfileFilters): Promise<Profile[]> 
 }
 
 /**
+ * Backend UpdateProfileDto shape (PUT /profiles/:id).
+ */
+interface UpdateProfileDto {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  county?: string;
+  subcounty?: string;
+  ward?: string;
+  location?: string;
+  businessName?: string;
+  businessRegistrationNumber?: string;
+  bio?: string;
+  profilePicture?: string;
+}
+
+/**
+ * Map frontend profile to backend UpdateProfileDto.
+ */
+function toUpdateProfileDto(updates: Partial<Profile>): UpdateProfileDto {
+  const dto: UpdateProfileDto = {};
+  if (updates.firstName !== undefined) dto.firstName = updates.firstName;
+  if (updates.lastName !== undefined) dto.lastName = updates.lastName;
+  if (updates.phone !== undefined) dto.phoneNumber = updates.phone;
+  if (updates.county !== undefined) dto.county = updates.county;
+  if (updates.subCounty !== undefined) dto.subcounty = updates.subCounty;
+  if (updates.ward !== undefined) dto.ward = updates.ward;
+  if (updates.location !== undefined) dto.location = updates.location;
+  if ((updates as any).businessName !== undefined) dto.businessName = (updates as any).businessName;
+  if ((updates as any).businessRegistrationNumber !== undefined) dto.businessRegistrationNumber = (updates as any).businessRegistrationNumber;
+  if ((updates as any).bio !== undefined) dto.bio = (updates as any).bio;
+  if ((updates as any).profilePicture !== undefined) dto.profilePicture = (updates as any).profilePicture;
+  return dto;
+}
+
+/**
  * Update profile
  * 
  * Backend: PUT /api/v1/profiles/:id
  */
 export async function updateProfile(id: string, updates: Partial<Profile>): Promise<Profile> {
   try {
-    const updated = await apiPut<any>(`/profiles/${id}`, updates);
+    const dto = toUpdateProfileDto(updates);
+    const updated = await apiPut<any>(`/profiles/${id}`, dto);
     return transformProfile(updated);
   } catch (error) {
     console.error('Error updating profile:', error);
     throw error;
   }
+}
+
+/**
+ * Backend CreateRatingDto shape (POST /profiles/:id/ratings).
+ */
+interface CreateRatingDto {
+  rating: number;
+  comment?: string;
+  orderId?: string;
+}
+
+/**
+ * Map frontend rating to backend CreateRatingDto.
+ */
+function toCreateRatingDto(rating: Partial<Rating>): CreateRatingDto {
+  return {
+    rating: typeof rating.rating === 'number' ? rating.rating : 0,
+    comment: rating.comment,
+    orderId: rating.orderId,
+  };
 }
 
 /**
@@ -176,7 +233,8 @@ export async function updateProfile(id: string, updates: Partial<Profile>): Prom
 export async function submitRating(rating: Partial<Rating> & { ratedUserId: string }): Promise<ApiResponse<Rating>> {
   try {
     const { ratedUserId, ...ratingData } = rating;
-    const createdRating = await apiPost<Rating>(`/profiles/${ratedUserId}/ratings`, ratingData);
+    const dto = toCreateRatingDto(ratingData);
+    const createdRating = await apiPost<Rating>(`/profiles/${ratedUserId}/ratings`, dto);
     return { data: createdRating, message: "Rating submitted successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to submit rating" };

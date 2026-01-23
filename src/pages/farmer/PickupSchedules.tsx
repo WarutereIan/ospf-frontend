@@ -26,14 +26,13 @@ import {
 import { useTransport } from "@/contexts/TransportContext";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { allAggregationCenters } from "@/data/aggregationCenters";
 import { cn } from "@/lib/utils";
 import type { FarmPickupSchedule, PickupSlotBooking, AggregationCenterCapacity } from "@/types/transport";
 
 export function PickupSchedules() {
   const { user } = useAuth();
   const { pickupSchedules, centerCapacities, fetchAvailablePickupSchedules, bookPickupSlot, isLoading } = useTransport();
-  const { centers } = useAggregation();
+  const { centers, fetchCenters, isLoading: centersLoading } = useAggregation();
 
   const [selectedCenter, setSelectedCenter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
@@ -47,6 +46,9 @@ export function PickupSchedules() {
   const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => {
+    // Fetch aggregation centers
+    fetchCenters();
+    
     // Fetch available schedules for next 30 days
     const endDate = new Date();
     endDate.setDate(endDate.getDate() + 30);
@@ -95,9 +97,21 @@ export function PickupSchedules() {
   };
 
   const formatTime = (time: string) => {
+    if (!time) return '';
     try {
+      // If time is in HH:mm format, format it directly
+      if (time.match(/^\d{2}:\d{2}/)) {
+        const [hours, minutes] = time.split(':');
+        const date = new Date();
+        date.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0);
+        return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      }
+      // If time is an ISO datetime string, parse it
       const date = new Date(time);
-      return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      }
+      return time;
     } catch {
       return time;
     }
@@ -191,11 +205,17 @@ export function PickupSchedules() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Aggregation Centers</SelectItem>
-              {allAggregationCenters.map((center) => (
-                <SelectItem key={center.value} value={center.value}>
-                  {center.label}
-                </SelectItem>
-              ))}
+              {centersLoading ? (
+                <SelectItem value="loading" disabled>Loading centers...</SelectItem>
+              ) : centers.length === 0 ? (
+                <SelectItem value="no-centers" disabled>No centers available</SelectItem>
+              ) : (
+                centers.map((center) => (
+                  <SelectItem key={center.id} value={center.id}>
+                    {center.name}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>

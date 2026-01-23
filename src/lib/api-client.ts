@@ -2,11 +2,30 @@
  * API Client Utility
  * 
  * Centralized API client for making authenticated requests to the backend.
- * Handles authentication, error handling, and response transformation.
+ * Uses HttpOnly cookies for secure token storage - tokens are automatically
+ * sent with requests via `credentials: 'include'`.
+ * 
+ * Automatically shows toast notifications for errors.
  */
+
+import { showError, formatApiError } from './toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || 'api/v1';
+
+/**
+ * Configuration for API requests
+ */
+export interface ApiRequestOptions {
+  /**
+   * Whether to show toast notifications for errors (default: true)
+   */
+  showErrorToast?: boolean;
+  /**
+   * Custom error message to show in toast (overrides API error message)
+   */
+  errorMessage?: string;
+}
 
 export interface ApiError {
   message: string;
@@ -23,142 +42,271 @@ export interface ApiResponse<T> {
 }
 
 /**
- * Get stored access token from localStorage
+ * Session invalidation flag - prevents retry loops when refresh token is invalid
+ * Also persisted to sessionStorage to survive page refreshes
  */
-function getAccessToken(): string | null {
+let sessionInvalidated = typeof window !== 'undefined' 
+  ? sessionStorage.getItem('session_invalidated') === 'true' 
+  : false;
+
+/**
+ * Set session as invalidated (persists across page refreshes)
+ */
+function setSessionInvalidated(value: boolean): void {
+  sessionInvalidated = value;
+  if (typeof window !== 'undefined') {
+    if (value) {
+      sessionStorage.setItem('session_invalidated', 'true');
+    } else {
+      sessionStorage.removeItem('session_invalidated');
+    }
+  }
+}
+
+/**
+ * Reset session invalidation flag (used after successful login)
+ */
+export function resetSessionInvalidation(): void {
+  setSessionInvalidated(false);
+  isRefreshing = false;
+  refreshPromise = null;
+}
+
+/**
+ * Clear local user data (cookies are HttpOnly, cleared by backend on logout)
+ * Does NOT reset session invalidation - that's only reset on successful login
+ */
+export function clearLocalAuth(): void {
+  localStorage.removeItem('ofsp_user');
+  // Don't reset sessionInvalidated here - we want it to persist
+  // until the user successfully logs in again
+  isRefreshing = false;
+  refreshPromise = null;
+}
+
+/**
+ * Store minimal user info in localStorage (for quick access, not auth)
+ * Actual auth tokens are in HttpOnly cookies managed by backend
+ */
+export function storeLocalUser(user: Record<string, unknown>): void {
   try {
-    const authData = localStorage.getItem('ofsp_auth');
-    if (authData) {
-      const parsed = JSON.parse(authData);
-      return parsed.accessToken || null;
+    localStorage.setItem('ofsp_user', JSON.stringify(user));
+  } catch (error) {
+    console.error('Error storing user info:', error);
+  }
+}
+
+/**
+ * Get locally stored user info
+ */
+export function getLocalUser(): Record<string, unknown> | null {
+  try {
+    const userData = localStorage.getItem('ofsp_user');
+    if (userData) {
+      return JSON.parse(userData);
     }
   } catch (error) {
-    console.error('Error reading access token:', error);
+    console.error('Error reading user info:', error);
   }
   return null;
 }
 
 /**
- * Get stored refresh token from localStorage
+ * Refresh token lock to prevent multiple simultaneous refresh attempts
  */
-function getRefreshToken(): string | null {
-  try {
-    const authData = localStorage.getItem('ofsp_auth');
-    if (authData) {
-      const parsed = JSON.parse(authData);
-      return parsed.refreshToken || null;
-    }
-  } catch (error) {
-    console.error('Error reading refresh token:', error);
-  }
-  return null;
-}
+let refreshPromise: Promise<boolean> | null = null;
+let isRefreshing = false;
 
 /**
- * Store tokens in localStorage
+ * Refresh access token using refresh token cookie
+ * The backend reads the refresh_token from HttpOnly cookie
+ * Uses a lock mechanism to prevent multiple simultaneous refresh attempts
  */
-export function storeTokens(accessToken: string, refreshToken: string, user: any): void {
-  try {
-    localStorage.setItem('ofsp_auth', JSON.stringify({
-      accessToken,
-      refreshToken,
-      user,
-    }));
-  } catch (error) {
-    console.error('Error storing tokens:', error);
-  }
-}
-
-/**
- * Clear stored tokens
- */
-export function clearTokens(): void {
-  localStorage.removeItem('ofsp_auth');
-}
-
-/**
- * Refresh access token using refresh token
- */
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    return null;
+async function refreshAccessToken(): Promise<boolean> {
+  // If session is already known to be invalid, don't try to refresh
+  if (sessionInvalidated) {
+    return false;
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/${API_PREFIX}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
+  // If already refreshing, wait for the existing refresh to complete
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
 
-    if (!response.ok) {
-      return null;
-    }
+  // Start new refresh attempt
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const refreshUrl = API_BASE_URL 
+        ? `${API_BASE_URL}/${API_PREFIX}/auth/refresh`
+        : `/${API_PREFIX}/auth/refresh`;
+      const response = await fetch(refreshUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Send cookies
+      });
 
-    const data: ApiResponse<{ accessToken: string; refreshToken: string }> = await response.json();
-    
-    if (data.success && data.data) {
-      // Update stored tokens
-      const authData = localStorage.getItem('ofsp_auth');
-      if (authData) {
-        const parsed = JSON.parse(authData);
-        storeTokens(data.data.accessToken, data.data.refreshToken, parsed.user);
-        return data.data.accessToken;
+      const success = response.ok;
+      
+      // If refresh failed, check the reason
+      if (!success) {
+        // If refresh token is invalid (401), mark session as invalidated
+        // This prevents further retry attempts
+        if (response.status === 401) {
+          setSessionInvalidated(true);
+          // Clear lock immediately - no point retrying
+          isRefreshing = false;
+          refreshPromise = null;
+          // Clear auth and redirect to login
+          clearLocalAuth();
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
+          return false;
+        }
+        
+        // For 429 (rate limit), wait longer before allowing another refresh attempt
+        const delay = response.status === 429 ? 5000 : 1000;
+        setTimeout(() => {
+          isRefreshing = false;
+          refreshPromise = null;
+        }, delay);
+      } else {
+        // Success - clear lock immediately and reset invalidation flag
+        setSessionInvalidated(false);
+        isRefreshing = false;
+        refreshPromise = null;
       }
-    }
 
-    return null;
-  } catch (error) {
-    console.error('Error refreshing token:', error);
-    return null;
-  }
+      return success;
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      // Clear lock on error after delay
+      setTimeout(() => {
+        isRefreshing = false;
+        refreshPromise = null;
+      }, 1000);
+      return false;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 /**
  * Make an authenticated API request
+ * Cookies are automatically sent via `credentials: 'include'`
  */
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { apiOptions?: ApiRequestOptions } = {}
 ): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}/${API_PREFIX}${endpoint}`;
-  const accessToken = getAccessToken();
+  const { apiOptions = {}, ...fetchOptions } = options;
+  const { showErrorToast = true, errorMessage } = apiOptions;
+  // Construct URL: if API_BASE_URL is empty (dev), use relative path for proxy
+  // Otherwise use full URL (production)
+  const url = API_BASE_URL 
+    ? `${API_BASE_URL}/${API_PREFIX}${endpoint}`
+    : `/${API_PREFIX}${endpoint}`;
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...fetchOptions.headers,
   };
 
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
-
   let response = await fetch(url, {
-    ...options,
+    ...fetchOptions,
     headers,
+    credentials: 'include', // Send HttpOnly cookies with request
   });
 
-  // If 401, try to refresh token and retry once
-  if (response.status === 401 && accessToken) {
-    const newAccessToken = await refreshAccessToken();
-    if (newAccessToken) {
-      headers['Authorization'] = `Bearer ${newAccessToken}`;
+  // If 401, try to refresh token and retry once (unless session is already invalidated)
+  if (response.status === 401) {
+    // If session is already known to be invalid, skip refresh and redirect immediately
+    if (sessionInvalidated) {
+      clearLocalAuth();
+      if (showErrorToast) {
+        showError('Session expired', 'Please log in again');
+      }
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 100);
+      throw new Error('Authentication failed');
+    }
+
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      // Retry the original request with new cookies
       response = await fetch(url, {
-        ...options,
+        ...fetchOptions,
         headers,
+        credentials: 'include',
       });
+      
+      // If retry still returns 401, session is truly expired
+      if (response.status === 401) {
+        // Mark session as invalidated to prevent further attempts
+        sessionInvalidated = true;
+        // Clear lock and local data, redirect to login
+        isRefreshing = false;
+        refreshPromise = null;
+        clearLocalAuth();
+        if (showErrorToast) {
+          showError('Session expired', 'Please log in again');
+        }
+        // Use setTimeout to avoid navigation during render
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+        throw new Error('Authentication failed');
+      }
     } else {
-      // Refresh failed, clear tokens and redirect to login
-      clearTokens();
-      window.location.href = '/login';
+      // Refresh failed - refreshAccessToken handles redirect if refresh token is invalid
+      // For other failures (429, network errors), we still need to handle here
+      if (!sessionInvalidated) {
+        // Only handle if refreshAccessToken didn't already redirect
+        isRefreshing = false;
+        refreshPromise = null;
+        clearLocalAuth();
+        if (showErrorToast) {
+          showError('Session expired', 'Please log in again');
+        }
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 100);
+      }
       throw new Error('Authentication failed');
     }
   }
+  
+  // Handle 429 (rate limit) errors gracefully
+  if (response.status === 429) {
+    const error: ApiError = {
+      message: 'Too many requests',
+      statusCode: 429,
+      error: 'Rate limit exceeded',
+    };
+    
+    if (showErrorToast) {
+      showError('Too many requests', 'Please wait a moment and try again');
+    }
+    
+    throw error;
+  }
 
-  const data = await response.json();
+  // Parse response JSON (handle empty responses)
+  let data: any = {};
+  try {
+    const text = await response.text();
+    if (text) {
+      data = JSON.parse(text);
+    }
+  } catch (error) {
+    // Response might not be JSON (e.g., empty body)
+    console.warn('Failed to parse response as JSON:', error);
+  }
 
   if (!response.ok) {
     const error: ApiError = {
@@ -166,6 +314,24 @@ async function apiRequest<T>(
       statusCode: response.status,
       error: data.error,
     };
+    
+    // Don't log 401 errors if we already handled them above (they're expected)
+    if (response.status !== 401) {
+      console.error(
+        `[api-client] ${fetchOptions.method ?? 'GET'} ${url} ${response.status}: ${error.message}`,
+      );
+    }
+    
+    // Show toast notification for errors (unless disabled or already shown)
+    if (showErrorToast && response.status !== 401 && response.status !== 429) {
+      const message = errorMessage || formatApiError(error);
+      const description = response.status >= 500
+        ? 'Server error. Please try again later.'
+        : undefined;
+      
+      showError(message, description);
+    }
+    
     throw error;
   }
 
@@ -174,8 +340,14 @@ async function apiRequest<T>(
 
 /**
  * GET request
+ * By default, GET requests don't show error toasts (they often fail silently in lists)
+ * Set showErrorToast: true in options to enable error toasts for specific GET requests
  */
-export async function apiGet<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+export async function apiGet<T>(
+  endpoint: string, 
+  params?: Record<string, any>,
+  options?: ApiRequestOptions
+): Promise<T> {
   let url = endpoint;
   if (params) {
     const searchParams = new URLSearchParams();
@@ -192,6 +364,10 @@ export async function apiGet<T>(endpoint: string, params?: Record<string, any>):
 
   const response = await apiRequest<T>(url, {
     method: 'GET',
+    apiOptions: {
+      showErrorToast: false, // GET requests don't show errors by default
+      ...options, // Allow override
+    },
   });
 
   return response.data;
@@ -200,10 +376,15 @@ export async function apiGet<T>(endpoint: string, params?: Record<string, any>):
 /**
  * POST request
  */
-export async function apiPost<T>(endpoint: string, body?: any): Promise<T> {
+export async function apiPost<T>(
+  endpoint: string, 
+  body?: any,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
+    apiOptions: options,
   });
 
   return response.data;
@@ -212,10 +393,15 @@ export async function apiPost<T>(endpoint: string, body?: any): Promise<T> {
 /**
  * PUT request
  */
-export async function apiPut<T>(endpoint: string, body?: any): Promise<T> {
+export async function apiPut<T>(
+  endpoint: string, 
+  body?: any,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'PUT',
     body: body ? JSON.stringify(body) : undefined,
+    apiOptions: options,
   });
 
   return response.data;
@@ -224,10 +410,15 @@ export async function apiPut<T>(endpoint: string, body?: any): Promise<T> {
 /**
  * PATCH request
  */
-export async function apiPatch<T>(endpoint: string, body?: any): Promise<T> {
+export async function apiPatch<T>(
+  endpoint: string, 
+  body?: any,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'PATCH',
     body: body ? JSON.stringify(body) : undefined,
+    apiOptions: options,
   });
 
   return response.data;
@@ -236,9 +427,13 @@ export async function apiPatch<T>(endpoint: string, body?: any): Promise<T> {
 /**
  * DELETE request
  */
-export async function apiDelete<T>(endpoint: string): Promise<T> {
+export async function apiDelete<T>(
+  endpoint: string,
+  options?: ApiRequestOptions
+): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'DELETE',
+    apiOptions: options,
   });
 
   return response.data;

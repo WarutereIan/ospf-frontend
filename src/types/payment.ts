@@ -58,11 +58,20 @@ export interface Payment {
   amount: number;
   currency: string; // e.g., "KES"
   method: PaymentMethod;
-  status: PaymentStatus;
+  status: PaymentStatus | string; // Can be "secured", "confirmed_by_farmer", etc. (from backend enum)
   escrowStatus?: EscrowStatus; // For marketplace orders
   transactionReference?: string; // M-PESA, card reference, etc.
+  paymentDate?: string; // ISO 8601 - Date when payment was made
+  paymentDetails?: string; // Additional payment details
+  paymentEvidence?: string; // Evidence URL or base64
+  confirmedBy?: string; // Buyer ID who confirmed payment
+  confirmedAt?: string; // ISO 8601 - When buyer confirmed payment
+  farmerConfirmedBy?: string; // Farmer ID who confirmed receipt
+  farmerConfirmedAt?: string; // ISO 8601 - When farmer confirmed receipt
+  farmerConfirmationNotes?: string; // Notes from farmer
   createdAt: string; // ISO 8601
   completedAt?: string; // ISO 8601
+  releasedAt?: string; // ISO 8601 - When payment was released
   failedAt?: string; // ISO 8601
   failureReason?: string;
   metadata?: Record<string, unknown>; // Additional payment data

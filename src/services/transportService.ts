@@ -119,9 +119,83 @@ function transformTransportRequest(request: any): TransportRequest {
  * Transform pickup schedule from backend format to frontend format
  */
 function transformPickupSchedule(schedule: any): FarmPickupSchedule {
+  // Extract nested relations
+  const aggregationCenter = schedule.aggregationCenter || {};
+  const provider = schedule.provider || {};
+  
+  // Handle scheduledDate - convert Date to ISO string if needed
+  let scheduledDate: string;
+  if (schedule.scheduledDate instanceof Date) {
+    scheduledDate = schedule.scheduledDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  } else if (typeof schedule.scheduledDate === 'string') {
+    scheduledDate = schedule.scheduledDate.split('T')[0]; // Extract date part if ISO string
+  } else {
+    scheduledDate = schedule.scheduledDate || '';
+  }
+  
+  // Handle scheduledTime - keep as time string (HH:mm format) for display
+  // The frontend formatTime function will handle formatting it
+  const scheduledTime = schedule.scheduledTime || '';
+  
+  // Handle estimatedArrivalTime - convert Date to ISO string if needed
+  let estimatedArrivalTime: string | undefined;
+  if (schedule.estimatedArrivalTime) {
+    if (schedule.estimatedArrivalTime instanceof Date) {
+      estimatedArrivalTime = schedule.estimatedArrivalTime.toISOString();
+    } else if (typeof schedule.estimatedArrivalTime === 'string') {
+      estimatedArrivalTime = schedule.estimatedArrivalTime;
+    }
+  }
+  
+  // Calculate capacities if not present
+  const totalCapacity = schedule.totalCapacity || 0;
+  const usedCapacity = schedule.usedCapacity ?? (totalCapacity - (schedule.availableCapacity ?? totalCapacity));
+  const availableCapacity = schedule.availableCapacity ?? (totalCapacity - usedCapacity);
+  
+  // Transform pickup locations if present
+  const pickupLocations = (schedule.pickupLocations || []).map((loc: any) => ({
+    id: loc.id || '',
+    scheduleId: loc.scheduleId || schedule.id,
+    location: loc.location || '',
+    coordinates: loc.coordinates,
+    subCounty: loc.subCounty,
+    ward: loc.ward,
+    estimatedPickupTime: loc.estimatedPickupTime instanceof Date 
+      ? loc.estimatedPickupTime.toISOString() 
+      : (loc.estimatedPickupTime || undefined),
+    order: loc.order || 0,
+  }));
+  
   return {
-    ...schedule,
+    id: schedule.id,
+    scheduleNumber: schedule.scheduleNumber || '',
+    providerId: schedule.providerId || '',
+    providerName: provider?.name || provider?.profileName || schedule.providerName || 'Transport Provider',
+    aggregationCenterId: schedule.aggregationCenterId || aggregationCenter.id || '',
+    aggregationCenterName: aggregationCenter.name || schedule.aggregationCenterName || 'Aggregation Center',
+    route: schedule.route || '',
+    scheduledDate,
+    scheduledTime,
+    estimatedArrivalTime,
+    totalCapacity,
+    usedCapacity,
+    availableCapacity,
+    vehicleId: schedule.vehicleId,
+    vehicleType: schedule.vehicleType,
+    driverId: schedule.driverId,
+    driverName: schedule.driverName,
+    driverPhone: schedule.driverPhone,
     status: mapPickupScheduleStatus(schedule.status),
+    pickupLocations,
+    centerAvailableCapacity: aggregationCenter.availableCapacity,
+    centerTotalCapacity: aggregationCenter.totalCapacity,
+    pricePerKg: schedule.pricePerKg,
+    fixedPrice: schedule.fixedPrice,
+    notes: schedule.notes,
+    createdAt: schedule.createdAt instanceof Date ? schedule.createdAt.toISOString() : (schedule.createdAt || ''),
+    updatedAt: schedule.updatedAt instanceof Date ? schedule.updatedAt.toISOString() : (schedule.updatedAt || ''),
+    publishedAt: schedule.publishedAt instanceof Date ? schedule.publishedAt.toISOString() : (schedule.publishedAt || undefined),
+    completedAt: schedule.completedAt instanceof Date ? schedule.completedAt.toISOString() : (schedule.completedAt || undefined),
   };
 }
 
@@ -144,7 +218,6 @@ function transformPickupSlot(slot: any): PickupSlot {
 export async function getTransportRequests(filters?: TransportFilters): Promise<TransportRequest[]> {
   try {
     const params: Record<string, any> = {};
-    if (filters?.requesterId) params.requesterId = filters.requesterId;
     if (filters?.providerId) params.providerId = filters.providerId;
     // Transform status filter to backend format (UPPER_CASE) if provided
     if (filters?.status && filters.status !== "all") {
@@ -178,14 +251,75 @@ export async function getTransportRequestById(id: string): Promise<TransportRequ
 }
 
 /**
+ * Backend CreateTransportRequestDto shape (POST /transport/requests).
+ */
+interface CreateTransportRequestDto {
+  type: 'PRODUCE_PICKUP' | 'PRODUCE_DELIVERY' | 'INPUT_DELIVERY';
+  description?: string;
+  requesterType?: string;
+  pickupLocation: string;
+  pickupCounty: string;
+  pickupCoordinates?: string;
+  deliveryLocation: string;
+  deliveryCounty: string;
+  deliveryCoordinates?: string;
+  distance?: number;
+  requestedPickupDate?: string;
+  requestedDeliveryDate?: string;
+  weight?: number;
+  quantity?: number;
+  specialInstructions?: string;
+  orderId?: string;
+  inputOrderId?: string;
+  pickupScheduleId?: string;
+  pickupSlotId?: string;
+}
+
+/**
+ * Map frontend transport request to backend CreateTransportRequestDto.
+ */
+function toCreateTransportRequestDto(request: Partial<TransportRequest>): CreateTransportRequestDto {
+  const type = request.type 
+    ? (request.type === 'produce_pickup' ? 'PRODUCE_PICKUP' :
+       request.type === 'produce_delivery' ? 'PRODUCE_DELIVERY' :
+       request.type === 'input_delivery' ? 'INPUT_DELIVERY' : 'PRODUCE_PICKUP')
+    : 'PRODUCE_PICKUP';
+  
+  return {
+    type: type as CreateTransportRequestDto['type'],
+    description: request.description,
+    requesterType: request.requesterType,
+    pickupLocation: request.pickupLocation || '',
+    pickupCounty: request.pickupCounty || '',
+    pickupCoordinates: request.pickupCoordinates,
+    deliveryLocation: request.deliveryLocation || '',
+    deliveryCounty: request.deliveryCounty || '',
+    deliveryCoordinates: request.deliveryCoordinates,
+    distance: request.distance,
+    requestedPickupDate: request.requestedPickupDate,
+    requestedDeliveryDate: request.requestedDeliveryDate,
+    weight: request.weight,
+    quantity: request.quantity,
+    specialInstructions: request.specialInstructions,
+    orderId: request.orderId,
+    inputOrderId: request.inputOrderId,
+    pickupScheduleId: request.pickupScheduleId,
+    pickupSlotId: request.pickupSlotId,
+  };
+}
+
+/**
  * Create a transport request
  * Backend: POST /api/v1/transport/requests
  */
 export async function createTransportRequest(request: Partial<TransportRequest>): Promise<ApiResponse<TransportRequest>> {
   try {
-    const created = await apiPost<any>('/transport/requests', request);
+    const dto = toCreateTransportRequestDto(request);
+    const created = await apiPost<any>('/transport/requests', dto);
+    showSuccess("Transport request created successfully");
     return { data: transformTransportRequest(created), message: "Transport request created successfully" };
   } catch (error: any) {
+    // Error toast is automatically shown by api-client
     return { data: null as any, error: error.message || "Failed to create transport request" };
   }
 }
@@ -255,6 +389,28 @@ export async function getActiveDeliveries(filters?: {
 }
 
 /**
+ * Backend AddTrackingUpdateDto shape (POST /transport/tracking/:requestId).
+ */
+interface AddTrackingUpdateDto {
+  status: string;
+  location?: string;
+  notes?: string;
+  timestamp?: string;
+}
+
+/**
+ * Map frontend tracking update to backend AddTrackingUpdateDto.
+ */
+function toAddTrackingUpdateDto(update: Partial<DeliveryTrackingUpdate>): AddTrackingUpdateDto {
+  return {
+    status: update.status || '',
+    location: update.location,
+    notes: update.notes,
+    timestamp: update.timestamp || new Date().toISOString(),
+  };
+}
+
+/**
  * Add tracking update
  * Backend: POST /api/v1/transport/tracking/:requestId
  */
@@ -263,7 +419,8 @@ export async function addTrackingUpdate(
   update: Partial<DeliveryTrackingUpdate>
 ): Promise<ApiResponse<DeliveryTrackingUpdate>> {
   try {
-    const created = await apiPost<DeliveryTrackingUpdate>(`/transport/tracking/${deliveryId}`, update);
+    const dto = toAddTrackingUpdateDto(update);
+    const created = await apiPost<DeliveryTrackingUpdate>(`/transport/tracking/${deliveryId}`, dto);
     return { data: created, message: "Tracking update added" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to add tracking update" };
@@ -315,7 +472,10 @@ export async function getPickupSchedules(filters?: PickupScheduleFilters): Promi
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
     if (filters?.aggregationCenterId) params.centerId = filters.aggregationCenterId;
-    if (filters?.status && filters.status !== "all") params.status = filters.status;
+    if (filters?.status && filters.status !== "all") {
+      // Transform status to backend format (UPPER_CASE)
+      params.status = filters.status.toUpperCase();
+    }
     if (filters?.dateRange) {
       params.dateFrom = filters.dateRange.start;
       params.dateTo = filters.dateRange.end;
@@ -351,12 +511,59 @@ export async function getPickupScheduleById(id: string): Promise<FarmPickupSched
 }
 
 /**
+ * Backend CreatePickupScheduleDto shape (POST /transport/pickup-schedules).
+ */
+interface CreatePickupScheduleDto {
+  aggregationCenterId: string;
+  route: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  totalCapacity: number;
+  vehicleId?: string;
+  vehicleType?: string;
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  pricePerKg?: number;
+  fixedPrice?: number;
+  notes?: string;
+}
+
+/**
+ * Map frontend pickup schedule to backend CreatePickupScheduleDto.
+ */
+function toCreatePickupScheduleDto(schedule: Partial<FarmPickupSchedule>): CreatePickupScheduleDto {
+  if (!schedule.aggregationCenterId) {
+    throw new Error('Aggregation Center ID is required');
+  }
+  
+  return {
+    aggregationCenterId: schedule.aggregationCenterId,
+    route: schedule.route || '',
+    scheduledDate: schedule.scheduledDate instanceof Date 
+      ? schedule.scheduledDate.toISOString() 
+      : (schedule.scheduledDate || ''),
+    scheduledTime: schedule.scheduledTime || '',
+    totalCapacity: typeof schedule.totalCapacity === 'number' ? schedule.totalCapacity : 0,
+    vehicleId: schedule.vehicleId,
+    vehicleType: schedule.vehicleType,
+    driverId: schedule.driverId,
+    driverName: schedule.driverName,
+    driverPhone: schedule.driverPhone,
+    pricePerKg: schedule.pricePerKg,
+    fixedPrice: schedule.fixedPrice,
+    notes: schedule.notes,
+  };
+}
+
+/**
  * Create farm pickup schedule
  * Backend: POST /api/v1/transport/pickup-schedules
  */
 export async function createPickupSchedule(schedule: Partial<FarmPickupSchedule>): Promise<ApiResponse<FarmPickupSchedule>> {
   try {
-    const created = await apiPost<any>('/transport/pickup-schedules', schedule);
+    const dto = toCreatePickupScheduleDto(schedule);
+    const created = await apiPost<any>('/transport/pickup-schedules', dto);
     return { data: transformPickupSchedule(created), message: "Pickup schedule created successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to create pickup schedule" };
@@ -432,12 +639,50 @@ export async function getPickupSlots(scheduleId: string): Promise<PickupSlot[]> 
 }
 
 /**
+ * Backend BookPickupSlotDto shape (POST /transport/pickup-slots/:id/book).
+ */
+interface BookPickupSlotDto {
+  quantity: number;
+  location: string;
+  coordinates?: string;
+  contactPhone: string;
+  notes?: string;
+  variety?: string;
+  qualityGrade?: 'A' | 'B' | 'C';
+  photos?: string[];
+}
+
+/**
+ * Map frontend booking to backend BookPickupSlotDto.
+ */
+function toBookPickupSlotDto(booking: Partial<PickupSlotBooking>): BookPickupSlotDto {
+  return {
+    quantity: typeof booking.quantity === 'number' ? booking.quantity : 0,
+    location: booking.location || '',
+    coordinates: booking.coordinates,
+    contactPhone: booking.contactPhone || '',
+    notes: booking.notes,
+    variety: booking.variety,
+    qualityGrade: (booking.qualityGrade === 'A' || booking.qualityGrade === 'B' || booking.qualityGrade === 'C')
+      ? booking.qualityGrade
+      : undefined,
+    photos: booking.photos,
+  };
+}
+
+/**
  * Book pickup slot
- * Backend: POST /api/v1/transport/pickup-slots/:id/book
+ * Backend: POST /api/v1/transport/pickup-schedules/:scheduleId/book
+ * Creates a slot dynamically when booking. The slot ID is generated and returned.
+ * DTO allows only: quantity, location, coordinates?, contactPhone, notes?, variety?, qualityGrade?, photos?
+ * farmerId comes from JWT; farmerName, batchId etc. are stripped (forbidNonWhitelisted).
  */
 export async function bookPickupSlot(scheduleId: string, slotId: string, booking: Partial<PickupSlotBooking>): Promise<ApiResponse<PickupSlotBooking>> {
   try {
-    const created = await apiPost<any>(`/transport/pickup-slots/${slotId}/book`, booking);
+    const dto = toBookPickupSlotDto(booking);
+    // Note: slotId parameter is kept for backward compatibility but not used
+    // The backend creates the slot dynamically based on scheduleId
+    const created = await apiPost<any>(`/transport/pickup-schedules/${scheduleId}/book`, dto);
     return { data: created, message: "Slot booked successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to book slot" };
@@ -455,20 +700,49 @@ export async function cancelPickupSlotBooking(bookingId: string): Promise<ApiRes
 
 /**
  * Get aggregation center capacity
- * TODO: Backend needs to implement GET /api/v1/aggregation/centers/:id/capacity
+ * Uses the aggregation center endpoint to get capacity info
  */
-export async function getAggregationCenterCapacity(centerId: string): Promise<AggregationCenterCapacity> {
-  // Backend doesn't have capacity endpoint yet - will be in aggregation service
-  return {
-    centerId,
-    centerName: "Aggregation Center",
-    totalCapacity: 10000,
-    usedCapacity: 5000,
-    availableCapacity: 5000,
-    capacityPercentage: 50,
-    status: "available",
-    lastUpdated: new Date().toISOString(),
-  };
+export async function getAggregationCenterCapacity(centerId: string): Promise<AggregationCenterCapacity | null> {
+  try {
+    // Fetch center details from aggregation service
+    const center = await apiGet<any>(`/aggregation/centers/${centerId}`);
+    
+    if (!center) {
+      return null;
+    }
+    
+    // Calculate capacity from center data
+    const totalCapacity = center.totalCapacity || 0;
+    const usedCapacity = center.currentStock || 0;
+    const availableCapacity = Math.max(0, totalCapacity - usedCapacity);
+    const capacityPercentage = totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 100) : 0;
+    
+    // Determine status based on capacity
+    let status: "available" | "near_full" | "full" | "over_capacity";
+    if (capacityPercentage >= 100) {
+      status = "over_capacity";
+    } else if (capacityPercentage >= 90) {
+      status = "full";
+    } else if (capacityPercentage >= 75) {
+      status = "near_full";
+    } else {
+      status = "available";
+    }
+    
+    return {
+      centerId: center.id || centerId,
+      centerName: center.name || "Aggregation Center",
+      totalCapacity,
+      usedCapacity,
+      availableCapacity,
+      capacityPercentage,
+      status,
+      lastUpdated: center.updatedAt || new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('Error fetching aggregation center capacity:', error);
+    return null;
+  }
 }
 
 /**
@@ -522,13 +796,46 @@ export async function getFarmerPickupBookings(farmerId: string, filters?: {
 }
 
 /**
+ * Transform backend pickup receipt to frontend format
+ * Backend returns receipt with nested relations (booking, aggregationCenter)
+ */
+function transformPickupReceipt(backendReceipt: any): PickupReceipt {
+  return {
+    id: backendReceipt.id,
+    receiptNumber: backendReceipt.receiptNumber,
+    bookingId: backendReceipt.bookingId,
+    scheduleId: backendReceipt.scheduleId,
+    farmerId: backendReceipt.farmerId,
+    farmerName: backendReceipt.booking?.farmer?.name || backendReceipt.booking?.farmer?.email || "Unknown Farmer",
+    providerId: backendReceipt.providerId,
+    providerName: backendReceipt.booking?.slot?.schedule?.provider?.name || backendReceipt.booking?.slot?.schedule?.provider?.email || "Unknown Provider",
+    aggregationCenterId: backendReceipt.aggregationCenterId,
+    aggregationCenterName: backendReceipt.aggregationCenter?.name || "Unknown Center",
+    batchId: backendReceipt.batchId,
+    qrCode: backendReceipt.qrCode,
+    quantity: backendReceipt.quantity,
+    variety: backendReceipt.variety,
+    qualityGrade: backendReceipt.qualityGrade,
+    pickupLocation: backendReceipt.pickupLocation,
+    pickupDate: backendReceipt.pickupDate ? new Date(backendReceipt.pickupDate).toISOString() : new Date().toISOString(),
+    pickupTime: backendReceipt.pickupTime || new Date().toTimeString().slice(0, 5), // HH:mm format
+    scheduledDeliveryDate: backendReceipt.scheduledDeliveryDate ? new Date(backendReceipt.scheduledDeliveryDate).toISOString() : undefined,
+    photos: backendReceipt.photos || [],
+    notes: backendReceipt.notes,
+    createdAt: backendReceipt.createdAt ? new Date(backendReceipt.createdAt).toISOString() : new Date().toISOString(),
+    createdBy: backendReceipt.createdBy,
+  };
+}
+
+/**
  * Confirm pickup and create batch
  * Backend: POST /api/v1/transport/pickup-slots/bookings/:id/confirm
+ * Returns booking with nested pickupReceipt
+ * Note: Batch ID is generated by backend for consistency
  */
 export async function confirmPickup(
   bookingId: string,
   data: {
-    batchId?: string;
     variety: string;
     qualityGrade: "A" | "B" | "C";
     photos?: string[];
@@ -536,15 +843,48 @@ export async function confirmPickup(
   }
 ): Promise<ApiResponse<PickupSlotBooking>> {
   try {
-    const confirmed = await apiPost<any>(`/transport/pickup-slots/bookings/${bookingId}/confirm`, {
-      batchId: data.batchId,
-      variety: data.variety,
-      qualityGrade: data.qualityGrade,
-      photos: data.photos,
-      notes: data.notes,
-    });
-    return { data: confirmed, message: "Pickup confirmed successfully. Receipt generated." };
+    // Disable error toast in apiPost - we'll handle success/error in the component
+    const confirmed = await apiPost<any>(
+      `/transport/pickup-slots/bookings/${bookingId}/confirm`,
+      {
+        variety: data.variety,
+        qualityGrade: data.qualityGrade,
+        photos: data.photos,
+        notes: data.notes,
+      },
+      { showErrorToast: false } // Disable automatic error toast - component will handle feedback
+    );
+    
+    // Log the response for debugging
+    console.log('[confirmPickup] API response received:', confirmed);
+    
+    // Handle case where response might be wrapped in { data: ... } from apiPost
+    // apiPost already extracts response.data, so confirmed should be the booking directly
+    // But handle both cases for safety
+    const booking = confirmed?.data || confirmed;
+    
+    // Check if the response is valid
+    if (!booking) {
+      console.error('[confirmPickup] Empty or null response from API:', confirmed);
+      return { data: null as any, error: "Received empty response from server" };
+    }
+    
+    // Check if booking has the expected structure (should have an id)
+    if (typeof booking !== 'object') {
+      console.error('[confirmPickup] Invalid response type:', typeof booking, booking);
+      return { data: null as any, error: "Invalid response type from server" };
+    }
+    
+    // If booking doesn't have id, it might be a different structure - log for debugging
+    if (!booking.id) {
+      console.warn('[confirmPickup] Response missing id field, but proceeding:', Object.keys(booking));
+    }
+    
+    return { data: booking, message: "Pickup confirmed successfully. Receipt generated." };
   } catch (error: any) {
+    console.error('[confirmPickup] Error caught:', error);
+    // Return error response without showing toast (component will handle it)
+    // This prevents duplicate error toasts since apiPost already showed one
     return { data: null as any, error: error.message || "Failed to confirm pickup" };
   }
 }
@@ -560,11 +900,26 @@ export async function getPickupReceipt(receiptId: string): Promise<PickupReceipt
 
 /**
  * Get pickup receipt by booking ID
- * TODO: Backend needs to implement GET /api/v1/transport/receipts?bookingId=...
+ * Backend: GET /api/v1/transport/receipts?bookingId=...
  */
 export async function getPickupReceiptByBooking(bookingId: string): Promise<PickupReceipt | null> {
-  // Backend doesn't have receipts endpoint yet
-  return null;
+  try {
+    const receipt = await apiGet<any>(`/transport/receipts`, { bookingId });
+    if (!receipt) return null;
+    return transformPickupReceipt(receipt);
+  } catch (error) {
+    console.error('Error fetching pickup receipt:', error);
+    return null;
+  }
+}
+
+/**
+ * Transform backend booking response to extract receipt
+ * Backend returns booking with nested pickupReceipt
+ */
+export function extractReceiptFromBooking(booking: any): PickupReceipt | null {
+  if (!booking?.pickupReceipt) return null;
+  return transformPickupReceipt(booking.pickupReceipt);
 }
 
 /**

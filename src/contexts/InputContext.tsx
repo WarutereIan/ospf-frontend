@@ -7,7 +7,7 @@
  * - Input customers
  */
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import type {
   Input,
   InputOrder,
@@ -389,15 +389,8 @@ export function InputProvider({ children }: { children: ReactNode }) {
     return true;
   });
 
-  // Initial fetch
-  useEffect(() => {
-    fetchInputs();
-    fetchInputOrders();
-    fetchCustomers();
-    fetchInputStats();
-    fetchCustomerStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // No context-level fetch: each page fetches only what it needs (e.g. InputManagement → fetchInputs;
+  // InputOrders → fetchInputOrders; InputCustomers → fetchCustomers).
 
   const value: InputContextType = {
     inputs,
