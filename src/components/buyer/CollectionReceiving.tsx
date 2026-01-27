@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   IconTruck,
   IconMapPin,
@@ -61,6 +62,29 @@ export function CollectionReceiving({ orders, onCollect }: CollectionReceivingPr
       }
       setShowCollectionForm(false);
       setSelectedOrder(null);
+      // Reset form
+      setCollectionDetails({
+        collectionDate: new Date().toISOString().split("T")[0],
+        collectionTime: new Date().toTimeString().slice(0, 5),
+        collectedBy: "",
+        vehicleNumber: "",
+        notes: "",
+      });
+    }
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setShowCollectionForm(open);
+    if (!open) {
+      // Reset form when dialog closes
+      setSelectedOrder(null);
+      setCollectionDetails({
+        collectionDate: new Date().toISOString().split("T")[0],
+        collectionTime: new Date().toTimeString().slice(0, 5),
+        collectedBy: "",
+        vehicleNumber: "",
+        notes: "",
+      });
     }
   };
 
@@ -187,114 +211,116 @@ export function CollectionReceiving({ orders, onCollect }: CollectionReceivingPr
       </Card>
 
       {/* Collection Form Dialog */}
-      {showCollectionForm && selectedOrder && (
-        <Card className="border-primary">
-          <CardHeader>
-            <CardTitle>Mark Order as Collected</CardTitle>
-            <CardDescription>Order #{selectedOrder.orderId}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Variety</p>
-                    <p className="font-semibold">{selectedOrder.variety}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Quantity</p>
-                    <p className="font-semibold">{selectedOrder.quantity} kg</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Location</p>
-                    <p className="font-semibold">{selectedOrder.aggregationCenter}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Batch ID</p>
-                    <p className="font-semibold">{selectedOrder.batchId}</p>
-                  </div>
-                </div>
-              </div>
-
+      <Dialog open={showCollectionForm} onOpenChange={handleDialogClose}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedOrder && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Mark Order as Collected</DialogTitle>
+                <DialogDescription>Order #{selectedOrder.orderId}</DialogDescription>
+              </DialogHeader>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-muted rounded-lg">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Variety</p>
+                      <p className="font-semibold">{selectedOrder.variety}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Quantity</p>
+                      <p className="font-semibold">{selectedOrder.quantity} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Location</p>
+                      <p className="font-semibold">{selectedOrder.aggregationCenter}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Batch ID</p>
+                      <p className="font-semibold">{selectedOrder.batchId}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="collectionDate">Collection Date *</Label>
+                      <Input
+                        id="collectionDate"
+                        type="date"
+                        value={collectionDetails.collectionDate}
+                        onChange={(e) =>
+                          setCollectionDetails({ ...collectionDetails, collectionDate: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="collectionTime">Collection Time *</Label>
+                      <Input
+                        id="collectionTime"
+                        type="time"
+                        value={collectionDetails.collectionTime}
+                        onChange={(e) =>
+                          setCollectionDetails({ ...collectionDetails, collectionTime: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <Label htmlFor="collectionDate">Collection Date *</Label>
+                    <Label htmlFor="collectedBy">Collected By *</Label>
                     <Input
-                      id="collectionDate"
-                      type="date"
-                      value={collectionDetails.collectionDate}
+                      id="collectedBy"
+                      placeholder="Enter name of person collecting"
+                      value={collectionDetails.collectedBy}
                       onChange={(e) =>
-                        setCollectionDetails({ ...collectionDetails, collectionDate: e.target.value })
+                        setCollectionDetails({ ...collectionDetails, collectedBy: e.target.value })
                       }
                       required
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="collectionTime">Collection Time *</Label>
+                    <Label htmlFor="vehicleNumber">Vehicle Number (Optional)</Label>
                     <Input
-                      id="collectionTime"
-                      type="time"
-                      value={collectionDetails.collectionTime}
+                      id="vehicleNumber"
+                      placeholder="e.g. KCA 123A"
+                      value={collectionDetails.vehicleNumber}
                       onChange={(e) =>
-                        setCollectionDetails({ ...collectionDetails, collectionTime: e.target.value })
+                        setCollectionDetails({ ...collectionDetails, vehicleNumber: e.target.value })
                       }
-                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notes (Optional)</Label>
+                    <Input
+                      id="notes"
+                      placeholder="Any additional notes..."
+                      value={collectionDetails.notes}
+                      onChange={(e) =>
+                        setCollectionDetails({ ...collectionDetails, notes: e.target.value })
+                      }
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="collectedBy">Collected By *</Label>
-                  <Input
-                    id="collectedBy"
-                    placeholder="Enter name of person collecting"
-                    value={collectionDetails.collectedBy}
-                    onChange={(e) =>
-                      setCollectionDetails({ ...collectionDetails, collectedBy: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="vehicleNumber">Vehicle Number (Optional)</Label>
-                  <Input
-                    id="vehicleNumber"
-                    placeholder="e.g. KCA 123A"
-                    value={collectionDetails.vehicleNumber}
-                    onChange={(e) =>
-                      setCollectionDetails({ ...collectionDetails, vehicleNumber: e.target.value })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="notes">Notes (Optional)</Label>
-                  <Input
-                    id="notes"
-                    placeholder="Any additional notes..."
-                    value={collectionDetails.notes}
-                    onChange={(e) =>
-                      setCollectionDetails({ ...collectionDetails, notes: e.target.value })
-                    }
-                  />
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button variant="outline" onClick={() => setShowCollectionForm(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCollect} disabled={!collectionDetails.collectedBy}>
+                    <IconCheck className="mr-2 h-4 w-4" />
+                    Confirm Collection
+                  </Button>
                 </div>
               </div>
-
-              <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline" onClick={() => setShowCollectionForm(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCollect} disabled={!collectionDetails.collectedBy}>
-                  <IconCheck className="mr-2 h-4 w-4" />
-                  Confirm Collection
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Collection History */}
       {collectedOrders.length > 0 && (

@@ -63,6 +63,9 @@ function mapOrderStatus(backendStatus: string): MarketplaceOrderStatus {
     ORDER_ACCEPTED: 'order_accepted',
     ORDER_REJECTED: 'rejected',
     PAYMENT_SECURED: 'payment_secured',
+    READY_TO_PROCESS: 'ready_to_process',
+    PROCESSING: 'processing',
+    READY_FOR_COLLECTION: 'ready_for_collection',
     IN_TRANSIT: 'in_transit',
     AT_AGGREGATION: 'at_aggregation',
     QUALITY_CHECKED: 'quality_checked',
@@ -210,11 +213,51 @@ function mapNegotiationStatus(backendStatus: string): NegotiationStatus {
  * Transform marketplace order from backend format to frontend format
  */
 function transformMarketplaceOrder(order: any): MarketplaceOrder {
+  // Derive aggregation center info from related data
+  let aggregationCenter: string | undefined;
+  let centerLocation: string | undefined;
+  
+  // Try to get from stock transactions (most direct)
+  if (order.stockTransactions && Array.isArray(order.stockTransactions) && order.stockTransactions.length > 0) {
+    const stockTx = order.stockTransactions[0];
+    if (stockTx?.center) {
+      aggregationCenter = stockTx.center.name;
+      centerLocation = stockTx.center.location;
+    }
+  }
+  
+  // Also check if already present (denormalized from backend)
+  if (!aggregationCenter && order.aggregationCenter) {
+    aggregationCenter = order.aggregationCenter;
+  }
+  if (!centerLocation && order.centerLocation) {
+    centerLocation = order.centerLocation;
+  }
+  
+  // Derive buyer and farmer names from nested relations
+  const buyerName = order.buyer?.profile
+    ? [order.buyer.profile.firstName, order.buyer.profile.lastName].filter(Boolean).join(' ') || order.buyer.email
+    : order.buyerName || order.buyer?.email || '';
+  
+  const farmerName = order.farmer?.profile
+    ? [order.farmer.profile.firstName, order.farmer.profile.lastName].filter(Boolean).join(' ') || order.farmer.email
+    : order.farmerName || order.farmer?.email || '';
+  
+  const buyerPhone = order.buyer?.profile?.phone || order.buyerPhone;
+  const farmerPhone = order.farmer?.profile?.phone || order.farmerPhone;
+  
   return {
     ...order,
     status: mapOrderStatus(order.status),
     paymentStatus: order.paymentStatus ? mapPaymentStatus(order.paymentStatus) : order.paymentStatus,
     variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+    aggregationCenter,
+    centerLocation,
+    buyerName,
+    farmerName,
+    buyerPhone,
+    farmerPhone,
+    deliveryLocation: order.deliveryAddress || order.deliveryLocation,
   };
 }
 
@@ -574,6 +617,7 @@ export async function getMarketplaceOrders(filters?: MarketplaceOrderFilters): P
     const params: Record<string, any> = {};
     if (filters?.buyerId) params.buyerId = filters.buyerId;
     if (filters?.farmerId) params.farmerId = filters.farmerId;
+    if (filters?.centerId) params.centerId = filters.centerId;
     // Transform status filter to backend format (UPPER_CASE) if provided
     if (filters?.status && filters.status !== "all") {
       params.status = filters.status.toUpperCase().replace(/_/g, '_');
@@ -640,12 +684,14 @@ function toCreateOrderDto(order: Partial<MarketplaceOrder>): CreateOrderDto {
       ? order.qualityGrade 
       : 'B',
     pricePerKg: typeof order.pricePerKg === 'number' ? order.pricePerKg : 0,
-    deliveryAddress: order.deliveryAddress,
+    deliveryAddress: (order.deliveryAddress && order.deliveryAddress.trim()) || ((order as any).deliveryLocation && (order as any).deliveryLocation.trim()) || undefined,
     notes: order.notes,
     rfqResponseId: order.rfqResponseId,
     supplierOfferId: order.supplierOfferId,
     negotiationId: order.negotiationId,
-    deliveryCounty: order.deliveryCounty || '',
+    deliveryCounty: order.deliveryCounty,
+    fulfillmentType: (order as any).fulfillmentType || 'self_pickup',
+    deliveryCoordinates: (order as any).deliveryCoordinates,
   };
 }
 
@@ -680,6 +726,51 @@ export async function updateMarketplaceOrderStatus(
     return { data: transformMarketplaceOrder(updated), message: "Order status updated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update order status" };
+  }
+}
+
+/**
+ * Start order processing (aggregation center)
+ * Backend: PUT /api/v1/marketplace/orders/:id/start-processing
+ */
+export async function startOrderProcessing(
+  id: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/start-processing`, {});
+    return { data: transformMarketplaceOrder(updated), message: "Order processing started" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to start order processing" };
+  }
+}
+
+/**
+ * Mark order as ready for collection (aggregation center)
+ * Backend: PUT /api/v1/marketplace/orders/:id/ready-for-collection
+ */
+export async function markOrderReadyForCollection(
+  id: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/ready-for-collection`, {});
+    return { data: transformMarketplaceOrder(updated), message: "Order marked as ready for collection" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to mark order as ready for collection" };
+  }
+}
+
+/**
+ * Mark order as collected by buyer
+ * Backend: PUT /api/v1/marketplace/orders/:id/collect
+ */
+export async function markOrderAsCollected(
+  id: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/collect`, {});
+    return { data: transformMarketplaceOrder(updated), message: "Order marked as collected" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to mark order as collected" };
   }
 }
 

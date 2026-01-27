@@ -32,6 +32,9 @@ export type MarketplaceOrderStatus =
   | "order_placed"
   | "order_accepted"
   | "payment_secured"
+  | "ready_to_process" // Payment confirmed by farmer, ready for aggregation center to start processing
+  | "processing" // Aggregation center is processing the order
+  | "ready_for_collection" // Order processed and ready for buyer collection
   | "in_transit"
   | "at_aggregation"
   | "quality_checked"
@@ -108,6 +111,7 @@ export interface MarketplaceOrder {
   paymentAmount?: number;
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
+  fulfillmentType?: "self_pickup" | "request_transport"; // How buyer wants to receive order
   deliveryLocation?: string;
   aggregationCenter?: string;
   centerLocation?: string;
@@ -119,6 +123,8 @@ export interface MarketplaceOrder {
   qrCode?: string; // QR code
   qualityScore?: number; // Quality check score
   qualityFeedback?: string;
+  stockOutRecorded?: boolean; // Tracks if order has been recorded as stock out
+  collected?: boolean; // Tracks if order has been collected by buyer
   farmerCoordinates?: [number, number];
   deliveryCoordinates?: [number, number];
   currentCoordinates?: [number, number]; // For in-transit tracking
@@ -165,6 +171,7 @@ export interface MarketplaceOrderFilters {
   paymentStatus?: PaymentStatus | "all";
   farmerId?: string;
   buyerId?: string;
+  centerId?: string; // Filter orders by aggregation center
   dateRange?: {
     start: string; // ISO 8601
     end: string; // ISO 8601

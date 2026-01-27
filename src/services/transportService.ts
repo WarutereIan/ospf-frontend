@@ -71,6 +71,7 @@ function mapTransportRequestType(backendType: string): TransportRequestType {
     PRODUCE_PICKUP: 'produce_pickup',
     PRODUCE_DELIVERY: 'produce_delivery',
     INPUT_DELIVERY: 'input_delivery',
+    ORDER_DELIVERY: 'order_delivery',
   };
   return typeMap[backendType] || 'produce_pickup';
 }
@@ -107,11 +108,215 @@ function mapPickupSlotStatus(backendStatus: string): PickupSlotStatus {
  * Transform transport request from backend format to frontend format
  */
 function transformTransportRequest(request: any): TransportRequest {
+  // Extract requester name if requester is an object
+  let requesterName = request.requesterName;
+  let requester: string | undefined;
+  
+  if (request.requester && typeof request.requester === 'object') {
+    // If requester is an object, extract the name from profile or use email
+    requesterName = request.requester.profile?.name || 
+                   request.requester.profile?.firstName || 
+                   request.requester.email || 
+                   request.requesterName || 
+                   'Unknown';
+    requester = requesterName;
+  } else if (typeof request.requester === 'string') {
+    requester = request.requester;
+    requesterName = requesterName || requester;
+  } else {
+    requester = requesterName;
+  }
+
+  // Extract provider name if provider is an object
+  let providerName = request.providerName;
+  if (request.provider && typeof request.provider === 'object') {
+    providerName = request.provider.profile?.name || 
+                   request.provider.profile?.firstName || 
+                   request.provider.email || 
+                   request.providerName || 
+                   undefined;
+  }
+
+  // Map backend field names to frontend field names
+  // Backend uses: pickupLocation, deliveryLocation, cargoDescription, estimatedWeight, scheduledPickup, estimatedCost/agreedCost
+  // Frontend expects: from/to, description, weight, scheduledTime, amount
+  
+  // Handle coordinates - backend uses pickupCoords/deliveryCoords (string "lat,lng")
+  // Frontend expects fromCoordinates/toCoordinates ([number, number]) or pickupCoordinates/deliveryCoordinates (string)
+  let fromCoordinates: [number, number] | undefined;
+  let toCoordinates: [number, number] | undefined;
+  let pickupCoordinates: string | undefined;
+  let deliveryCoordinates: string | undefined;
+  
+  if (request.pickupCoords) {
+    pickupCoordinates = request.pickupCoords;
+    const coords = request.pickupCoords.split(',').map((c: string) => parseFloat(c.trim()));
+    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+      fromCoordinates = [coords[0], coords[1]];
+    }
+  }
+  
+  if (request.deliveryCoords) {
+    deliveryCoordinates = request.deliveryCoords;
+    const coords = request.deliveryCoords.split(',').map((c: string) => parseFloat(c.trim()));
+    if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+      toCoordinates = [coords[0], coords[1]];
+    }
+  }
+
+  // Handle scheduled time - backend uses scheduledPickup (DateTime), frontend expects scheduledTime (ISO string)
+  let scheduledTime: string = '';
+  if (request.scheduledPickup) {
+    if (request.scheduledPickup instanceof Date) {
+      scheduledTime = request.scheduledPickup.toISOString();
+    } else if (typeof request.scheduledPickup === 'string') {
+      scheduledTime = request.scheduledPickup;
+    }
+  } else if (request.scheduledTime) {
+    // Fallback to scheduledTime if it exists
+    scheduledTime = request.scheduledTime instanceof Date 
+      ? request.scheduledTime.toISOString() 
+      : request.scheduledTime;
+  }
+
+  // Handle dates - convert DateTime to ISO strings
+  const requestedPickupDate = request.requestedPickupDate 
+    ? (request.requestedPickupDate instanceof Date ? request.requestedPickupDate.toISOString().split('T')[0] : request.requestedPickupDate.split('T')[0])
+    : request.scheduledPickup 
+      ? (request.scheduledPickup instanceof Date ? request.scheduledPickup.toISOString().split('T')[0] : request.scheduledPickup.split('T')[0])
+      : undefined;
+  
+  const requestedDeliveryDate = request.requestedDeliveryDate
+    ? (request.requestedDeliveryDate instanceof Date ? request.requestedDeliveryDate.toISOString().split('T')[0] : request.requestedDeliveryDate.split('T')[0])
+    : request.scheduledDelivery
+      ? (request.scheduledDelivery instanceof Date ? request.scheduledDelivery.toISOString().split('T')[0] : request.scheduledDelivery.split('T')[0])
+      : undefined;
+
+  // Handle amount - backend uses estimatedCost or agreedCost, frontend expects amount
+  const amount = request.agreedCost ?? request.estimatedCost ?? request.amount ?? 0;
+
+  // Handle collection dates
+  const collectedAt = request.collectedAt 
+    ? (request.collectedAt instanceof Date ? request.collectedAt.toISOString() : request.collectedAt)
+    : undefined;
+
+  // Handle ETA
+  const eta = request.eta 
+    ? (request.eta instanceof Date ? request.eta.toISOString() : request.eta)
+    : undefined;
+  const estimatedArrival = eta;
+
+  // Handle acceptedAt
+  const acceptedAt = request.acceptedAt
+    ? (request.acceptedAt instanceof Date ? request.acceptedAt.toISOString() : request.acceptedAt)
+    : undefined;
+
+  // Handle actual pickup/delivery times
+  const actualPickup = request.actualPickup
+    ? (request.actualPickup instanceof Date ? request.actualPickup.toISOString() : request.actualPickup)
+    : undefined;
+  const actualDelivery = request.actualDelivery
+    ? (request.actualDelivery instanceof Date ? request.actualDelivery.toISOString() : request.actualDelivery)
+    : undefined;
+  const pickupAt = actualPickup;
+  const deliveredAt = actualDelivery;
+
   return {
     ...request,
-    status: mapTransportRequestStatus(request.status),
+    // IDs
+    id: request.id,
+    requestId: request.id, // Alias
+    requesterId: request.requesterId,
+    
+    // Requester info
+    requesterName: requesterName || request.requesterName || '',
+    requester: requester || requesterName || request.requesterName || '',
+    requesterType: request.requesterType || 'farmer',
+    
+    // Provider info
+    providerId: request.providerId,
+    providerName: providerName || request.providerName,
+    
+    // Type and status
     type: mapTransportRequestType(request.type),
-    requestType: request.requestType ? mapTransportRequestType(request.requestType) : request.requestType,
+    requestType: request.requestType ? mapTransportRequestType(request.requestType) : mapTransportRequestType(request.type),
+    status: mapTransportRequestStatus(request.status),
+    
+    // Locations - map backend field names to frontend aliases
+    from: request.pickupLocation || request.from || '',
+    pickupLocation: request.pickupLocation || request.from || '',
+    to: request.deliveryLocation || request.to || '',
+    deliveryLocation: request.deliveryLocation || request.to || '',
+    pickupCounty: request.pickupCounty,
+    deliveryCounty: request.deliveryCounty,
+    fromCoordinates,
+    toCoordinates,
+    pickupCoordinates,
+    deliveryCoordinates,
+    
+    // Distance
+    distance: request.distance ?? 0,
+    
+    // Cargo - map backend field names
+    description: request.cargoDescription || request.description || '',
+    weight: request.estimatedWeight ?? request.actualWeight ?? request.weight ?? 0,
+    quantity: request.quantity ?? request.estimatedWeight ?? request.actualWeight,
+    specialInstructions: request.specialInstructions || request.notes,
+    
+    // Scheduling
+    scheduledTime,
+    scheduledPickupTime: scheduledTime, // Alias
+    requestedPickupDate,
+    requestedDeliveryDate,
+    
+    // Pricing
+    amount,
+    estimatedCost: request.estimatedCost ?? amount,
+    
+    // Collection info
+    collectionStatus: request.collectionStatus,
+    collectedBy: request.collectedBy,
+    collectedAt,
+    collectionDate: request.collectionDate,
+    collectionTime: request.collectionTime,
+    collectionNotes: request.collectionNotes,
+    
+    // Vehicle & Driver
+    vehicleId: request.vehicleId,
+    driverName: request.driverName,
+    driverPhone: request.driverPhone,
+    
+    // Tracking
+    currentCoordinates: request.currentCoordinates 
+      ? (typeof request.currentCoordinates === 'string' 
+          ? request.currentCoordinates.split(',').map((c: string) => parseFloat(c.trim())) as [number, number]
+          : request.currentCoordinates)
+      : undefined,
+    currentLocation: request.currentLocation,
+    progress: request.progress,
+    eta,
+    estimatedArrival,
+    
+    // Media & Feedback
+    photos: request.photos || [],
+    rating: request.rating,
+    review: request.review,
+    notes: request.notes,
+    
+    // Linked entities
+    orderId: request.orderId,
+    orderNumber: request.order?.orderNumber || request.orderNumber,
+    orderStockOutRecorded: request.order?.stockOutRecorded ?? false,
+    inputOrderId: request.inputOrderId,
+    pickupScheduleId: request.pickupScheduleId,
+    pickupSlotId: request.pickupSlotId,
+    
+    // Timestamps
+    createdAt: request.createdAt instanceof Date ? request.createdAt.toISOString() : (request.createdAt || new Date().toISOString()),
+    updatedAt: request.updatedAt instanceof Date ? request.updatedAt.toISOString() : (request.updatedAt || new Date().toISOString()),
+    acceptedAt,
+    pickupAt,
+    deliveredAt,
   };
 }
 
@@ -220,12 +425,14 @@ export async function getTransportRequests(filters?: TransportFilters): Promise<
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
     // Transform status filter to backend format (UPPER_CASE) if provided
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase().replace(/_/g, '_');
+    // Note: Frontend "in_transit" maps to both "IN_TRANSIT_PICKUP" and "IN_TRANSIT_DELIVERY" on backend
+    // For now, we don't filter by status if it's "in_transit" since backend has separate statuses
+    if (filters?.status && filters.status !== "all" && filters.status !== "in_transit") {
+      params.status = filters.status.toUpperCase();
     }
     // Transform type filter to backend format (UPPER_CASE) if provided
     if (filters?.type && filters.type !== "all") {
-      params.type = filters.type.toUpperCase().replace(/_/g, '_');
+      params.type = filters.type.toUpperCase();
     }
 
     const requests = await apiGet<any[]>('/transport/requests', params);
@@ -282,7 +489,8 @@ function toCreateTransportRequestDto(request: Partial<TransportRequest>): Create
   const type = request.type 
     ? (request.type === 'produce_pickup' ? 'PRODUCE_PICKUP' :
        request.type === 'produce_delivery' ? 'PRODUCE_DELIVERY' :
-       request.type === 'input_delivery' ? 'INPUT_DELIVERY' : 'PRODUCE_PICKUP')
+       request.type === 'input_delivery' ? 'INPUT_DELIVERY' :
+       request.type === 'order_delivery' ? 'ORDER_DELIVERY' : 'PRODUCE_PICKUP')
     : 'PRODUCE_PICKUP';
   
   return {
@@ -351,21 +559,83 @@ export async function rejectTransportRequest(id: string): Promise<ApiResponse<Tr
 }
 
 /**
+ * Map frontend status to backend status format
+ */
+function mapStatusToBackend(frontendStatus: TransportRequest["status"], transportType?: string): string {
+  // Handle the simplified "in_transit" status - map to appropriate backend status
+  if (frontendStatus === "in_transit") {
+    // For order deliveries, when marking as collected, use IN_TRANSIT_PICKUP (picking up from aggregation center)
+    // For other types, also use IN_TRANSIT_PICKUP when marking as collected
+    return "IN_TRANSIT_PICKUP";
+  }
+  
+  // Map other statuses to UPPER_CASE
+  const statusMap: Record<string, string> = {
+    pending: "PENDING",
+    accepted: "ACCEPTED",
+    rejected: "REJECTED",
+    delivered: "DELIVERED",
+    completed: "COMPLETED",
+    cancelled: "CANCELLED",
+  };
+  
+  return statusMap[frontendStatus] || frontendStatus.toUpperCase();
+}
+
+/**
  * Update transport request status
  * Backend: PUT /api/v1/transport/requests/:id/status
  */
 export async function updateTransportRequestStatus(
   id: string,
-  status: TransportRequest["status"]
+  status: TransportRequest["status"],
+  transportType?: string
 ): Promise<ApiResponse<TransportRequest>> {
   try {
-    // Transform frontend status to backend format (UPPER_CASE)
-    const backendStatus = status.toUpperCase().replace(/_/g, '_');
+    // Transform frontend status to backend format
+    const backendStatus = mapStatusToBackend(status, transportType);
     const updated = await apiPut<any>(`/transport/requests/${id}/status`, { status: backendStatus });
     return { data: transformTransportRequest(updated), message: "Request status updated" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update request status" };
   }
+}
+
+/**
+ * Transform active delivery from backend format to frontend format
+ */
+function transformActiveDelivery(request: any): ActiveDelivery {
+  // Use the base transport request transformation
+  const baseRequest = transformTransportRequest(request);
+  
+  // Extract tracking updates if present
+  const trackingUpdates = request.trackingUpdates?.map((update: any) => ({
+    id: update.id,
+    requestId: update.requestId,
+    status: update.status,
+    location: update.location,
+    coordinates: update.coordinates 
+      ? (typeof update.coordinates === 'string' 
+          ? update.coordinates.split(',').map((c: string) => parseFloat(c.trim())) as [number, number]
+          : update.coordinates)
+      : undefined,
+    notes: update.notes,
+    photos: update.photos || [],
+    createdAt: update.createdAt instanceof Date ? update.createdAt.toISOString() : (update.createdAt || new Date().toISOString()),
+  })) || [];
+  
+  return {
+    ...baseRequest,
+    // ActiveDelivery specific fields
+    status: baseRequest.status === "in_transit" || baseRequest.status === "delivered" 
+      ? baseRequest.status as "in_transit" | "delivered"
+      : "in_transit", // Default to in_transit for active deliveries
+    estimatedArrival: baseRequest.estimatedArrival,
+    eta: baseRequest.eta || baseRequest.estimatedArrival,
+    currentLocation: baseRequest.currentLocation,
+    progress: baseRequest.progress,
+    trackingUpdates,
+  };
 }
 
 /**
@@ -381,7 +651,8 @@ export async function getActiveDeliveries(filters?: {
     if (filters?.providerId) params.providerId = filters.providerId;
     if (filters?.requesterId) params.requesterId = filters.requesterId;
 
-    return await apiGet<ActiveDelivery[]>('/transport/deliveries', params);
+    const deliveries = await apiGet<any[]>('/transport/deliveries', params);
+    return deliveries.map(transformActiveDelivery);
   } catch (error) {
     console.error('Error fetching active deliveries:', error);
     return [];
@@ -392,21 +663,35 @@ export async function getActiveDeliveries(filters?: {
  * Backend AddTrackingUpdateDto shape (POST /transport/tracking/:requestId).
  */
 interface AddTrackingUpdateDto {
-  status: string;
-  location?: string;
+  status: string; // Must be uppercase: PENDING, IN_TRANSIT, DELIVERED, COMPLETED
+  location: string;
+  coordinates?: string;
   notes?: string;
-  timestamp?: string;
+  timestamp?: string; // ISO 8601 timestamp when location was captured
 }
 
 /**
  * Map frontend tracking update to backend AddTrackingUpdateDto.
  */
 function toAddTrackingUpdateDto(update: Partial<DeliveryTrackingUpdate>): AddTrackingUpdateDto {
+  // Map frontend status to backend uppercase format
+  const statusMap: Record<string, string> = {
+    'pending': 'PENDING',
+    'in_transit': 'IN_TRANSIT',
+    'delivered': 'DELIVERED',
+    'completed': 'COMPLETED',
+  };
+  
+  const backendStatus = update.status 
+    ? (statusMap[update.status.toLowerCase()] || update.status.toUpperCase())
+    : 'IN_TRANSIT'; // Default to IN_TRANSIT for location updates
+  
   return {
-    status: update.status || '',
-    location: update.location,
+    status: backendStatus,
+    location: update.location || '',
+    coordinates: update.coordinates,
     notes: update.notes,
-    timestamp: update.timestamp || new Date().toISOString(),
+    timestamp: update.timestamp || new Date().toISOString(), // Capture timestamp when location was captured
   };
 }
 

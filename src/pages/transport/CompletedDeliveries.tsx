@@ -102,6 +102,8 @@ export default function CompletedDeliveries() {
         return <Badge className="bg-info text-info-foreground">Produce Delivery</Badge>;
       case "input_delivery":
         return <Badge className="bg-success text-success-foreground">Input Delivery</Badge>;
+      case "order_delivery":
+        return <Badge className="bg-purple-500 text-white">Order Delivery</Badge>;
       default:
         return null;
     }
@@ -210,6 +212,7 @@ export default function CompletedDeliveries() {
                 <SelectItem value="produce_pickup">Produce Pickup</SelectItem>
                 <SelectItem value="produce_delivery">Produce Delivery</SelectItem>
                 <SelectItem value="input_delivery">Input Delivery</SelectItem>
+                <SelectItem value="order_delivery">Order Delivery</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterPayment} onValueChange={setFilterPayment}>

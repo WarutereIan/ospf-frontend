@@ -100,6 +100,12 @@ export interface StockTransaction {
   confirmedBy?: string; // User ID who confirmed/rejected
   confirmedAt?: string; // ISO 8601 - When confirmed/rejected
   rejectionReason?: string; // Reason if rejected
+  // Grading Matrix Criteria (for quality assessment)
+  weightRange?: string; // small, medium, large, extra_large
+  colorIntensity?: number; // 1-10 scale
+  physicalCondition?: string; // excellent, good, fair, poor
+  freshness?: string; // very_fresh, fresh, moderate, aging
+  daysSinceHarvest?: number; // Number of days since harvest
 }
 
 /**

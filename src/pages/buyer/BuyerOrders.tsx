@@ -230,7 +230,7 @@ export function BuyerOrders() {
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
                   >
-                    <TableCell className="font-medium">{order.id}</TableCell>
+                    <TableCell className="font-medium">{order.orderNumber}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getPaymentStatusColor(order.paymentStatus || "pending")}>
                         {getPaymentStatusLabel(order.paymentStatus || "pending")}

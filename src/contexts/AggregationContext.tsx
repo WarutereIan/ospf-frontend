@@ -62,6 +62,7 @@ interface AggregationContextType {
   setCenterFilters: (filters: AggregationFilters) => void;
   setStockFilters: (filters: StockFilters) => void;
   setWastageFilters: (filters: WastageFilters) => void;
+  setSelectedCenter: (center: AggregationCenter | null) => void;
   clearSelectedCenter: () => void;
   
   filteredCenters: AggregationCenter[];
@@ -287,6 +288,10 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
+  const setSelectedCenterAction = useCallback((center: AggregationCenter | null) => {
+    setSelectedCenter(center);
+  }, []);
+
   const clearSelectedCenter = useCallback(() => {
     setSelectedCenter(null);
   }, []);
@@ -324,6 +329,7 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
     setCenterFilters,
     setStockFilters,
     setWastageFilters,
+    setSelectedCenter: setSelectedCenterAction,
     clearSelectedCenter,
     filteredCenters,
     filteredTransactions,

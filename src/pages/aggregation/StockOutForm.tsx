@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +16,11 @@ import {
   IconTruck,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
 import { useAggregation } from "@/contexts/AggregationContext";
-import { useProfile } from "@/contexts/ProfileContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { searchOrders, type OrderSearchResult, createStockOut } from "@/services/aggregationService";
+import { showSuccess, showError } from "@/lib/toast";
 
 interface StockOutEntry {
   buyerId: string;
@@ -46,8 +49,7 @@ const qualityGrades = [
 ];
 
 export function StockOutForm() {
-  const { recordStockOut, centers, fetchCenters, selectedCenter, inventory, fetchInventory, isLoading: aggregationLoading } = useAggregation();
-  const { profiles, fetchProfiles, filteredProfiles } = useProfile();
+  const { recordStockOut, centers, fetchCenters, selectedCenter, inventory, fetchInventory, fetchTransactions, fetchStats, isLoading: aggregationLoading } = useAggregation();
   const { user } = useAuth();
   
   const [formData, setFormData] = useState<Partial<StockOutEntry>>({
@@ -63,24 +65,106 @@ export function StockOutForm() {
     photos: [],
     notes: "",
   });
-  const [searchTerm, setSearchTerm] = useState("");
+  const [orderSearchTerm, setOrderSearchTerm] = useState("");
+  const [orderSearchResults, setOrderSearchResults] = useState<OrderSearchResult[]>([]);
+  const [isSearchingOrders, setIsSearchingOrders] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
+  const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
+  const searchResultsRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Fetch centers, buyers, and inventory on mount
+  // Fetch centers and inventory on mount
   useEffect(() => {
     fetchCenters();
-    fetchProfiles({ role: "buyer" });
     fetchInventory();
-  }, [fetchCenters, fetchProfiles, fetchInventory]);
+  }, [fetchCenters, fetchInventory]);
 
-  // Filter buyers based on search term
-  const filteredBuyers = filteredProfiles.filter(
-    (buyer) =>
-      buyer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      buyer.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      buyer.phone.includes(searchTerm)
-  );
+  // Update dropdown position when input is focused or search results change
+  useEffect(() => {
+    const updatePosition = () => {
+      if (inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      }
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [showSearchResults, orderSearchResults]);
+
+  // Debounced order search
+  useEffect(() => {
+    if (!orderSearchTerm || orderSearchTerm.trim().length < 2) {
+      setOrderSearchResults([]);
+      setIsSearchingOrders(false);
+      return;
+    }
+
+    setIsSearchingOrders(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const results = await searchOrders(orderSearchTerm.trim(), 10);
+        setOrderSearchResults(results);
+      } catch (error) {
+        console.error("Error searching orders:", error);
+        setOrderSearchResults([]);
+      } finally {
+        setIsSearchingOrders(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [orderSearchTerm]);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        searchResultsRef.current &&
+        !searchResultsRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Handle order selection
+  const handleSelectOrder = (order: OrderSearchResult) => {
+    setFormData((prev) => ({
+      ...prev,
+      buyerId: order.buyerId,
+      buyerName: order.buyerName,
+      orderId: order.id, // Use UUID id, not orderNumber
+      variety: order.variety,
+      quantity: order.quantity,
+      qualityGrade: order.qualityGrade as "A" | "B" | "C",
+    }));
+    setOrderSearchTerm("");
+    setShowSearchResults(false);
+    setOrderSearchResults([]);
+  };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -105,9 +189,15 @@ export function StockOutForm() {
     }));
   };
 
+  // Generate QR code for stock out
+  const generateQRCode = (transactionId: string) => {
+    return `QR-OUT-${transactionId}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.buyerId || !formData.variety || !formData.quantity || !formData.qualityGrade) {
+      showError("Validation Error", "Please fill in all required fields");
       return;
     }
 
@@ -134,30 +224,71 @@ export function StockOutForm() {
         createdBy: user?.id || "",
       };
 
-      // Record stock out via context
-      await recordStockOut(stockTransaction);
+      // Record stock out via service to get the created transaction
+      const result = await createStockOut(stockTransaction);
       
-      // Reset form after successful submission
-      setFormData({
-        buyerId: "",
-        buyerName: "",
-        orderId: "",
-        variety: "",
-        quantity: 0,
-        qualityGrade: undefined,
-        vehicleDetails: "",
-        driverName: "",
-        driverPhone: "",
-        photos: [],
-        notes: "",
-      });
-      setSearchTerm("");
-      
-      // Show success message (could use toast notification)
-      alert("Stock out entry recorded successfully!");
+      if (result.error) {
+        showError("Failed to Record Stock Out", result.error);
+        return;
+      }
+
+      if (result.data) {
+        // Refresh context state (inventory, transactions, stats)
+        // Note: We don't call recordStockOut again as it would try to create the transaction twice
+        // Instead, we manually refresh the related data
+        try {
+          await fetchTransactions();
+          await fetchInventory();
+          await fetchStats();
+        } catch (refreshError) {
+          console.error("Failed to refresh data:", refreshError);
+          // Don't fail the whole operation if refresh fails
+        }
+
+        // Generate QR code
+        const qrCode = generateQRCode(result.data.id || `OUT-${Date.now()}`);
+        setGeneratedQRCode(qrCode);
+
+        // Generate receipt data
+        const receiptData = {
+          receiptId: `OUT-${Date.now()}`,
+          type: "stock_out" as const,
+          date: new Date().toISOString(),
+          buyerName: formData.buyerName || "N/A",
+          variety: formData.variety,
+          quantity: formData.quantity,
+          qualityGrade: formData.qualityGrade,
+          location: selectedCenter?.name || centers[0]?.name || "Aggregation Center",
+          transactionId: result.data.transactionNumber || result.data.id,
+          qrCode: qrCode,
+          orderId: formData.orderId,
+        };
+
+        setGeneratedReceipt(receiptData);
+        setReceiptOpen(true);
+        showSuccess("Stock Out Recorded", "Stock out transaction has been recorded successfully");
+
+        // Reset form after showing receipt
+        setFormData({
+          buyerId: "",
+          buyerName: "",
+          orderId: "",
+          variety: "",
+          quantity: 0,
+          qualityGrade: undefined,
+          vehicleDetails: "",
+          driverName: "",
+          driverPhone: "",
+          photos: [],
+          notes: "",
+        });
+        setOrderSearchTerm("");
+        setOrderSearchResults([]);
+        setShowSearchResults(false);
+      }
     } catch (error) {
       console.error("Failed to record stock out:", error);
-      // Error handling is done by context
+      showError("Failed to Record Stock Out", error instanceof Error ? error.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -179,43 +310,91 @@ export function StockOutForm() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Form */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Buyer Selection */}
+            {/* Order/Buyer Selection */}
             <Card>
               <CardHeader>
-                <CardTitle>Buyer Information</CardTitle>
-                <CardDescription>Select or search for the buyer</CardDescription>
+                <CardTitle>Order & Buyer Information</CardTitle>
+                <CardDescription>Search for order by order ID or buyer name</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 overflow-visible relative">
                 <div className="space-y-2">
-                  <Label>Search Buyer</Label>
-                  <Input
-                    placeholder="Search by name, ID, or phone..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                  {searchTerm && filteredBuyers.length > 0 && (
-                    <div className="border rounded-lg mt-2 max-h-48 overflow-y-auto">
-                      {filteredBuyers.map((buyer) => (
+                  <Label>Search Order (by Order ID or Buyer Name)</Label>
+                  <div className="relative z-10" ref={inputRef}>
+                    <Input
+                      placeholder="Search by order ID (e.g., ORD-1234567890) or buyer name..."
+                      value={orderSearchTerm}
+                      onChange={(e) => {
+                        setOrderSearchTerm(e.target.value);
+                        setShowSearchResults(true);
+                      }}
+                      onFocus={() => {
+                        if (orderSearchResults.length > 0) {
+                          setShowSearchResults(true);
+                        }
+                      }}
+                    />
+                  </div>
+                  {/* Search Results Dropdown - Rendered via Portal to avoid clipping */}
+                  {showSearchResults && orderSearchResults.length > 0 && orderSearchTerm.trim().length >= 2 && dropdownPosition && typeof document !== 'undefined' && createPortal(
+                    <div 
+                      ref={searchResultsRef}
+                      className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                      style={{ 
+                        top: `${dropdownPosition.top}px`,
+                        left: `${dropdownPosition.left}px`,
+                        width: `${dropdownPosition.width}px`,
+                      }}
+                    >
+                      <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
+                        Select an order to auto-fill form:
+                      </div>
+                      {orderSearchResults.map((order) => (
                         <button
-                          key={buyer.id}
+                          key={order.id}
                           type="button"
-                          onClick={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              buyerId: buyer.id,
-                              buyerName: buyer.name,
-                            }));
-                            setSearchTerm("");
-                          }}
-                          className="w-full text-left p-3 hover:bg-muted transition-colors border-b last:border-b-0"
+                          onClick={() => handleSelectOrder(order)}
+                          className="w-full text-left p-3 hover:bg-blue-50 transition-colors border-b last:border-b-0"
                         >
-                          <div className="font-medium">{buyer.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {buyer.id} • {buyer.phone}
-                            {buyer.location && ` • ${buyer.location}`}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm font-medium text-primary">
+                                  {order.orderNumber}
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  {order.status}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                Buyer: {order.buyerName}
+                                {order.buyerPhone && ` • ${order.buyerPhone}`}
+                              </p>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span>Variety: {order.variety}</span>
+                                <span>•</span>
+                                <span>Quantity: {order.quantity} kg</span>
+                                <span>•</span>
+                                <Badge variant="outline" className={qualityGrades.find(g => g.value === order.qualityGrade)?.color}>
+                                  Grade {order.qualityGrade}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Amount: KES {order.totalAmount.toLocaleString()}
+                              </p>
+                            </div>
+                            <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
                           </div>
                         </button>
                       ))}
+                    </div>,
+                    document.body
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {isSearchingOrders && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
+                      Searching for orders...
                     </div>
                   )}
                 </div>
@@ -224,14 +403,26 @@ export function StockOutForm() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">{formData.buyerName}</p>
-                        <p className="text-sm text-muted-foreground">ID: {formData.buyerId}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formData.orderId && `Order: ${formData.orderId} • `}
+                          Buyer ID: {formData.buyerId}
+                        </p>
                       </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setFormData((prev) => ({ ...prev, buyerId: "", buyerName: "" }));
+                          setFormData((prev) => ({ 
+                            ...prev, 
+                            buyerId: "", 
+                            buyerName: "",
+                            orderId: "",
+                            variety: "",
+                            quantity: 0,
+                            qualityGrade: undefined,
+                          }));
+                          setOrderSearchTerm("");
                         }}
                       >
                         <IconX className="h-4 w-4" />
@@ -239,15 +430,6 @@ export function StockOutForm() {
                     </div>
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label htmlFor="orderId">Order ID (Optional)</Label>
-                  <Input
-                    id="orderId"
-                    placeholder="ORD-001"
-                    value={formData.orderId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, orderId: e.target.value }))}
-                  />
-                </div>
               </CardContent>
             </Card>
 
@@ -525,6 +707,21 @@ export function StockOutForm() {
           </div>
         </div>
       </form>
+
+      {/* Receipt Dialog */}
+      {generatedReceipt && (
+        <ReceiptGenerator
+          open={receiptOpen}
+          onOpenChange={setReceiptOpen}
+          receiptData={generatedReceipt}
+          onDownload={(format) => {
+            console.log(`Downloading receipt as ${format}...`);
+          }}
+          onPrint={() => {
+            window.print();
+          }}
+        />
+      )}
     </div>
   );
 }

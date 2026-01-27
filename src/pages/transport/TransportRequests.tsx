@@ -38,9 +38,23 @@ export default function TransportRequests() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
   // Fetch requests on mount
+  // For "pending" status, show all unassigned requests (no providerId filter)
+  // For other statuses, show requests assigned to this provider
   useEffect(() => {
     if (user?.id) {
-      fetchRequests({ providerId: user.id, status: filterStatus !== "all" ? filterStatus as any : undefined });
+      const filters: any = {
+        status: filterStatus !== "all" ? filterStatus as any : undefined,
+      };
+      
+      // Only filter by providerId if not viewing pending requests
+      // Pending requests should show all unassigned requests (providerId is null)
+      if (filterStatus !== "all" && filterStatus !== "pending") {
+        filters.providerId = user.id;
+      }
+      // For pending requests, we want to see all requests without a providerId
+      // The backend should handle this - we'll pass status=PENDING and no providerId
+      
+      fetchRequests(filters);
     }
   }, [user?.id, filterStatus, fetchRequests]);
 
@@ -92,6 +106,8 @@ export default function TransportRequests() {
         return <Badge className="bg-info text-info-foreground">Produce Delivery</Badge>;
       case "input_delivery":
         return <Badge className="bg-success text-success-foreground">Input Delivery</Badge>;
+      case "order_delivery":
+        return <Badge className="bg-purple-500 text-white">Order Delivery</Badge>;
       default:
         return null;
     }
@@ -155,10 +171,8 @@ export default function TransportRequests() {
               <TableRow>
                 <TableHead>Type</TableHead>
                 <TableHead>Requester</TableHead>
-                <TableHead>Route</TableHead>
-                <TableHead>Scheduled</TableHead>
+                <TableHead>Destination</TableHead>
                 <TableHead>Details</TableHead>
-                <TableHead>Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -167,19 +181,16 @@ export default function TransportRequests() {
               {filteredRequests.map((request) => (
                 <TableRow key={request.id}>
                   <TableCell>{getTypeBadge(request.type)}</TableCell>
-                  <TableCell>{request.requesterName || request.requester}</TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      <div className="font-medium">{request.from}</div>
-                      <div className="text-muted-foreground">→ {request.to}</div>
-                      <div className="text-xs text-muted-foreground">
-                        📍 {request.distance} km
-                      </div>
-                    </div>
+                    {request.requesterName || 
+                     (typeof request.requester === 'string' ? request.requester : 
+                      request.requester?.profile?.name || 
+                      request.requester?.email || 
+                      'Unknown')}
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm">
-                      {new Date(request.scheduledTime).toLocaleString()}
+                    <div className="text-sm truncate max-w-[200px]" title={request.to}>
+                      {request.to}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -188,7 +199,6 @@ export default function TransportRequests() {
                       <div className="text-muted-foreground">⚖️ {request.weight} kg</div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-bold">KES {request.amount}</TableCell>
                   <TableCell>{getStatusBadge(request.status)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
@@ -240,7 +250,13 @@ export default function TransportRequests() {
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Requested By</Label>
-                <div className="font-medium">{selectedRequest.requesterName || selectedRequest.requester}</div>
+                <div className="font-medium">
+                  {selectedRequest.requesterName || 
+                   (typeof selectedRequest.requester === 'string' ? selectedRequest.requester : 
+                    selectedRequest.requester?.profile?.name || 
+                    selectedRequest.requester?.email || 
+                    'Unknown')}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -263,24 +279,10 @@ export default function TransportRequests() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground flex items-center gap-2">
-                    <IconTruck className="h-4 w-4" />
-                    Distance
-                  </Label>
-                  <div className="font-medium">{selectedRequest.distance} km</div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground flex items-center gap-2">
                     <IconWeight className="h-4 w-4" />
                     Weight
                   </Label>
                   <div className="font-medium">{selectedRequest.weight} kg</div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground flex items-center gap-2">
-                    <IconCurrency className="h-4 w-4" />
-                    Amount
-                  </Label>
-                  <div className="font-medium">KES {selectedRequest.amount}</div>
                 </div>
               </div>
 
@@ -303,13 +305,6 @@ export default function TransportRequests() {
 
               {selectedRequest.status === "pending" && (
                 <div className="flex gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => handleRejectRequest(selectedRequest.id)}
-                    className="flex-1"
-                  >
-                    Reject
-                  </Button>
                   <Button
                     onClick={() => handleAcceptRequest(selectedRequest.id)}
                     className="flex-1"

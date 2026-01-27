@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   IconUpload,
   IconCheck,
@@ -15,11 +16,22 @@ import {
   IconBuildingCommunity,
   IconPackage,
   IconArrowRight,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
+import { GradingMatrixGuide } from "@/components/quality/GradingMatrixGuide";
+import { calculateGradeFromMatrix } from "@/data/gradingMatrix";
+import {
+  weightRangeDefinitions,
+  colorIntensityDefinitions,
+  physicalConditionDefinitions,
+  freshnessDefinitions,
+} from "@/data/gradingMatrix";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { showError } from "@/lib/toast";
+import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 
 interface WardTransferEntry {
   fromCenterId: string;
@@ -28,6 +40,12 @@ interface WardTransferEntry {
   variety: string;
   quantity: number; // kg
   qualityGrade: "A" | "B" | "C";
+  // Grading Matrix Criteria
+  weightRange: WeightRange | "";
+  colorIntensity: number; // 1-10
+  physicalCondition: PhysicalCondition | "";
+  freshness: FreshnessLevel | "";
+  daysSinceHarvest?: number;
   photos: string[];
   notes?: string;
   transferDate: string;
@@ -59,6 +77,11 @@ export function ReceiveFromWard() {
     variety: "",
     quantity: 0,
     qualityGrade: undefined,
+    weightRange: "",
+    colorIntensity: 5,
+    physicalCondition: "",
+    freshness: "",
+    daysSinceHarvest: 0,
     photos: [],
     notes: "",
     transferDate: new Date().toISOString().split("T")[0],
@@ -71,6 +94,7 @@ export function ReceiveFromWard() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [generatedReceipt, setGeneratedReceipt] = useState<any>(null);
   const [generatedQRCode, setGeneratedQRCode] = useState<string>("");
+  const [showMatrixGuide, setShowMatrixGuide] = useState(false);
 
   // Fetch centers on mount - filter for satellite centers
   useEffect(() => {
@@ -126,6 +150,12 @@ export function ReceiveFromWard() {
       !formData.quantity ||
       !formData.qualityGrade
     ) {
+      showError("Validation Error", "Please fill in all required fields");
+      return;
+    }
+    // Validate grading matrix criteria
+    if (!formData.weightRange || !formData.physicalCondition || !formData.freshness) {
+      showError("Validation Error", "Please complete all grading matrix criteria (weight range, physical condition, freshness)");
       return;
     }
 
@@ -147,12 +177,19 @@ export function ReceiveFromWard() {
         variety: formData.variety || "",
         quantity: formData.quantity || 0,
         qualityGrade: formData.qualityGrade as "A" | "B" | "C",
+        // Grading Matrix Criteria
+        weightRange: formData.weightRange || undefined,
+        colorIntensity: formData.colorIntensity || undefined,
+        physicalCondition: formData.physicalCondition || undefined,
+        freshness: formData.freshness || undefined,
+        daysSinceHarvest: formData.daysSinceHarvest || undefined,
         photos: formData.photos || [],
         notes: `${formData.notes || ""} Transfer from ${formData.fromCenterName}. ${formData.transporterName ? `Transporter: ${formData.transporterName}. ` : ""}${formData.vehicleNumber ? `Vehicle: ${formData.vehicleNumber}.` : ""}`,
         batchId: formData.batchId,
         qrCode,
         createdBy: user?.id || "",
         orderId: undefined, // Transfer doesn't have an order
+        sourceCenterId: formData.fromCenterId, // Source center for transfer
       };
 
       // Record stock in via context
@@ -182,6 +219,11 @@ export function ReceiveFromWard() {
         variety: "",
         quantity: 0,
         qualityGrade: undefined,
+        weightRange: "",
+        colorIntensity: 5,
+        physicalCondition: "",
+        freshness: "",
+        daysSinceHarvest: 0,
         photos: [],
         notes: "",
         transferDate: new Date().toISOString().split("T")[0],
@@ -331,28 +373,192 @@ export function ReceiveFromWard() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Quality Grade (Secondary Verification) *</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {qualityGrades.map((grade) => (
-                      <button
-                        key={grade.value}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, qualityGrade: grade.value as "A" | "B" | "C" })}
-                        className={cn(
-                          "p-3 border-2 rounded-lg text-sm font-medium transition-all",
-                          formData.qualityGrade === grade.value
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:border-primary/50"
-                        )}
-                      >
-                        <div className={cn("inline-block px-2 py-1 rounded text-xs mb-1", grade.color)}>
-                          Grade {grade.value}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-1">{grade.label.split(" - ")[1]}</div>
-                      </button>
-                    ))}
+                {/* Grading Matrix Section */}
+                <div className="border-t pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">Grading Matrix Criteria (Secondary Verification)</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowMatrixGuide(true)}
+                    >
+                      <IconInfoCircle className="mr-2 h-4 w-4" />
+                      View Matrix Guide
+                    </Button>
                   </div>
+
+                  {/* Weight Range */}
+                  <div className="space-y-2">
+                    <Label>1. Weight Range *</Label>
+                    <Select
+                      value={formData.weightRange || ""}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, weightRange: value as WeightRange }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select weight range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {weightRangeDefinitions.map((def) => (
+                          <SelectItem key={def.value} value={def.value}>
+                            {def.label} - {def.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Color Intensity */}
+                  <div className="space-y-2">
+                    <Label htmlFor="colorIntensity">2. Color Intensity (1-10) *</Label>
+                    <div className="space-y-2">
+                      <Input
+                        id="colorIntensity"
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={formData.colorIntensity || 5}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, colorIntensity: parseInt(e.target.value) }))
+                        }
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Very Pale (1)</span>
+                        <span className="font-semibold">
+                          {colorIntensityDefinitions.find((c) => c.score === (formData.colorIntensity || 5))?.label || formData.colorIntensity}
+                        </span>
+                        <span>Premium+ (10)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Physical Condition */}
+                  <div className="space-y-2">
+                    <Label>3. Physical Condition *</Label>
+                    <Select
+                      value={formData.physicalCondition || ""}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, physicalCondition: value as PhysicalCondition }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select physical condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {physicalConditionDefinitions.map((def) => (
+                          <SelectItem key={def.value} value={def.value}>
+                            {def.label} - {def.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Freshness */}
+                  <div className="space-y-2">
+                    <Label>4. Freshness *</Label>
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.freshness || ""}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, freshness: value as FreshnessLevel }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select freshness level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {freshnessDefinitions.map((def) => (
+                            <SelectItem key={def.value} value={def.value}>
+                              {def.label} - {def.description}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder="Days since harvest (optional)"
+                        min={0}
+                        value={formData.daysSinceHarvest || ""}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            daysSinceHarvest: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Grade Recommendation */}
+                  {formData.weightRange && formData.physicalCondition && formData.freshness && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      {(() => {
+                        const recommendation = calculateGradeFromMatrix({
+                          weightRange: formData.weightRange,
+                          colorIntensity: formData.colorIntensity || 5,
+                          physicalCondition: formData.physicalCondition,
+                          freshness: formData.freshness,
+                        });
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-blue-900">Recommended Grade:</span>
+                              <Badge
+                                className={cn(
+                                  "text-base px-3 py-1",
+                                  recommendation.recommendedGrade === "A" && "bg-green-100 text-green-800",
+                                  recommendation.recommendedGrade === "B" && "bg-yellow-100 text-yellow-800",
+                                  recommendation.recommendedGrade === "C" && "bg-orange-100 text-orange-800"
+                                )}
+                              >
+                                Grade {recommendation.recommendedGrade}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-blue-700">
+                              Confidence: <span className="font-semibold">{recommendation.confidence}</span>
+                            </p>
+                            <p className="text-xs text-blue-600 mt-2">{recommendation.explanation}</p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  qualityGrade: recommendation.recommendedGrade as "A" | "B" | "C",
+                                }))
+                              }
+                              className="w-full mt-2"
+                            >
+                              <IconCheck className="mr-2 h-4 w-4" />
+                              Apply Recommended Grade
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Quality Grade Display */}
+                  {formData.qualityGrade && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Selected Quality Grade:</Label>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            qualityGrades.find((g) => g.value === formData.qualityGrade)?.color
+                          )}
+                        >
+                          Grade {formData.qualityGrade}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -507,6 +713,9 @@ export function ReceiveFromWard() {
                       !formData.variety ||
                       !formData.quantity ||
                       !formData.qualityGrade ||
+                      !formData.weightRange ||
+                      !formData.physicalCondition ||
+                      !formData.freshness ||
                       isSubmitting
                     }
                   >
@@ -559,6 +768,21 @@ export function ReceiveFromWard() {
           }}
         />
       )}
+
+      {/* Grading Matrix Guide Dialog */}
+      <Dialog open={showMatrixGuide} onOpenChange={setShowMatrixGuide}>
+        <DialogContent className="w-[95vw] max-w-7xl max-h-[90vh] overflow-y-auto p-6">
+          <DialogHeader>
+            <DialogTitle>Grading Matrix Guide</DialogTitle>
+            <DialogDescription>
+              Reference guide for the four criteria used in quality grading
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-x-auto">
+            <GradingMatrixGuide />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

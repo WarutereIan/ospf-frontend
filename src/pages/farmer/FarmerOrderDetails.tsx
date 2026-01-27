@@ -11,6 +11,7 @@ import {
   IconClipboardCheck,
   IconCash,
   IconStar,
+  IconLoader2,
 } from "@tabler/icons-react";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
@@ -18,15 +19,17 @@ import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/component
 import { FarmerPaymentConfirmationDialog } from "@/components/payments/FarmerPaymentConfirmationDialog";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { usePayment } from "@/contexts/PaymentContext";
+import { showSuccess, showError } from "@/lib/toast";
 import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function FarmerOrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
+  const { selectedOrder, fetchOrderById, isLoading, updateOrderStatus } = useMarketplace();
   const { payments, fetchPayments } = usePayment();
   
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   // Fetch order details on mount
   useEffect(() => {
@@ -46,6 +49,46 @@ export function FarmerOrderDetails() {
     payment.status?.toLowerCase() !== "confirmed_by_farmer" &&
     payment.status !== "CONFIRMED_BY_FARMER" &&
     (order?.status === "payment_secured" || order?.status === "order_accepted" || order?.status === "order_placed");
+
+  // Check if order can be accepted or cancelled (only when status is order_placed)
+  const canAcceptOrCancel = order?.status === "order_placed";
+
+  // Handle accept order
+  const handleAcceptOrder = async () => {
+    if (!order || !id) return;
+    
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus(id, "order_accepted");
+      showSuccess("Order Accepted", "The order has been accepted successfully");
+      await fetchOrderById(id);
+    } catch (error) {
+      showError("Failed to Accept Order", error instanceof Error ? error.message : "An error occurred");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle cancel order
+  const handleCancelOrder = async () => {
+    if (!order || !id) return;
+    
+    // Confirm cancellation
+    if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
+      return;
+    }
+    
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus(id, "cancelled");
+      showSuccess("Order Cancelled", "The order has been cancelled successfully");
+      await fetchOrderById(id);
+    } catch (error) {
+      showError("Failed to Cancel Order", error instanceof Error ? error.message : "An error occurred");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -91,6 +134,44 @@ export function FarmerOrderDetails() {
             <p className="text-sm text-muted-foreground mt-1">Order #{order.id}</p>
           </div>
           <div className="flex items-center gap-2">
+            {canAcceptOrCancel && (
+              <>
+                <Button
+                  onClick={handleAcceptOrder}
+                  disabled={isUpdatingStatus}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isUpdatingStatus ? (
+                    <>
+                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    <>
+                      <IconCheck className="mr-2 h-4 w-4" />
+                      Accept Order
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleCancelOrder}
+                  disabled={isUpdatingStatus}
+                  variant="destructive"
+                >
+                  {isUpdatingStatus ? (
+                    <>
+                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cancelling...
+                    </>
+                  ) : (
+                    <>
+                      <IconX className="mr-2 h-4 w-4" />
+                      Cancel Order
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
             {needsFarmerConfirmation && (
               <Button
                 onClick={() => setPaymentConfirmationOpen(true)}
@@ -105,7 +186,7 @@ export function FarmerOrderDetails() {
               className={
                 order.status === "completed" || order.status === "delivered"
                   ? "bg-green-100 text-green-800"
-                  : order.status === "quality_rejected" || order.status === "rejected"
+                  : order.status === "quality_rejected" || order.status === "rejected" || order.status === "cancelled"
                   ? "bg-red-100 text-red-800"
                   : "bg-blue-100 text-blue-800"
               }
@@ -137,10 +218,10 @@ export function FarmerOrderDetails() {
               },
               {
                 stage: "payment_secured",
-                timestamp: payment?.confirmedAt || (["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: payment?.confirmedAt || (["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 12 * 60 * 1000).toISOString()
                   : undefined),
-                completed: payment && (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED" || payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER") || ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: payment && (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED" || payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER") || ["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "payment_confirmed_by_farmer",
@@ -156,28 +237,35 @@ export function FarmerOrderDetails() {
                   payment.status === "CONFIRMED_BY_FARMER" ||
                   payment.farmerConfirmedAt !== undefined ||
                   payment.farmerConfirmedBy !== undefined
-                ) || ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                ) || ["ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "in_transit",
-                timestamp: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 8 * 60 * 1000).toISOString()
+                stage: "ready_to_process",
+                timestamp: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 6 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "at_aggregation",
-                timestamp: ["at_aggregation", "quality_checked", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                stage: "processing",
+                timestamp: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 4 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["at_aggregation", "quality_checked", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "quality_approved",
-                timestamp: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                stage: "ready_for_collection",
+                timestamp: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "out_for_delivery",
+                timestamp: ["out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
+                  : undefined,
+                completed: ["out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "delivered",
@@ -185,6 +273,13 @@ export function FarmerOrderDetails() {
                   ? order.actualDeliveryDate || new Date().toISOString()
                   : undefined,
                 completed: order.status === "delivered" || order.status === "completed",
+              },
+              {
+                stage: "completed",
+                timestamp: order.status === "completed"
+                  ? order.actualDeliveryDate || new Date().toISOString()
+                  : undefined,
+                completed: order.status === "completed",
               },
             ]}
           />

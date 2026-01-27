@@ -3,12 +3,11 @@ import {
   IconPackage,
   IconCircleCheck,
   IconCreditCard,
-  IconTruck,
-  IconMapPin,
-  IconClipboardCheck,
   IconTruckDelivery,
   IconCheck,
   IconUserCheck,
+  IconClock,
+  IconLoader2,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +16,9 @@ export type OrderStage =
   | "order_accepted"
   | "payment_secured"
   | "payment_confirmed_by_farmer"
+  | "ready_to_process"
+  | "processing"
+  | "ready_for_collection"
   | "in_transit"
   | "at_aggregation"
   | "quality_approved"
@@ -57,20 +59,20 @@ const stageConfig: Record<
     icon: IconUserCheck,
     description: "Farmer confirmed payment receipt",
   },
-  in_transit: {
-    label: "In Transit",
-    icon: IconTruck,
-    description: "Farmer delivering to center",
+  ready_to_process: {
+    label: "Ready to Process",
+    icon: IconClock,
+    description: "Order ready for aggregation center processing",
   },
-  at_aggregation: {
-    label: "At Aggregation Center",
-    icon: IconMapPin,
-    description: "Produce delivered to center",
+  processing: {
+    label: "Processing",
+    icon: IconLoader2,
+    description: "Aggregation center is processing the order",
   },
-  quality_approved: {
-    label: "Quality Approved",
-    icon: IconClipboardCheck,
-    description: "QC passed, stock logged",
+  ready_for_collection: {
+    label: "Ready for Collection",
+    icon: IconCircleCheck,
+    description: "Order processed and ready for buyer pickup",
   },
   out_for_delivery: {
     label: "Out for Delivery",
@@ -89,14 +91,15 @@ const stageConfig: Record<
   },
 };
 
+// Order workflow stages
 const stageOrder: OrderStage[] = [
   "order_placed",
   "order_accepted",
   "payment_secured",
   "payment_confirmed_by_farmer",
-  "in_transit",
-  "at_aggregation",
-  "quality_approved",
+  "ready_to_process",
+  "processing",
+  "ready_for_collection",
   "out_for_delivery",
   "delivered",
   "completed",

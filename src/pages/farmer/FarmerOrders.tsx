@@ -333,7 +333,7 @@ export function FarmerOrders() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleViewOrder(order.id)}
                     >
-                      <TableCell className="font-medium">{order.id}</TableCell>
+                      <TableCell className="font-medium">{order.orderNumber}</TableCell>
                       <TableCell>{order.buyerName}</TableCell>
                       <TableCell>
                         {order.variety} <Badge variant="outline" className="ml-2">Grade {order.qualityGrade}</Badge>

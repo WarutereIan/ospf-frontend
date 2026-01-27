@@ -3,6 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -10,19 +13,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { IconTruck, IconMapPin, IconPhoto, IconCheck } from "@tabler/icons-react";
+import { IconTruck, IconMapPin, IconPhoto, IconCheck, IconLocation } from "@tabler/icons-react";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { useTransport } from "@/contexts/TransportContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Delivery } from "@/types/transport";
 
 export default function ActiveDeliveries() {
-  const { activeDeliveries, fetchActiveDeliveries, updateRequestStatus, isLoading } = useTransport();
+  const { activeDeliveries, fetchActiveDeliveries, updateRequestStatus, addTracking, isLoading } = useTransport();
   const { user } = useAuth();
   
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [photoDialogOpen, setPhotoDialogOpen] = useState(false);
+  const [locationDialogOpen, setLocationDialogOpen] = useState(false);
+  const [locationForm, setLocationForm] = useState({
+    location: "",
+    coordinates: "",
+    timestamp: "",
+  });
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   // Fetch active deliveries on mount
   useEffect(() => {
@@ -43,6 +54,127 @@ export default function ActiveDeliveries() {
     setPhotoDialogOpen(true);
   };
 
+  const handleUpdateLocation = (delivery: Delivery) => {
+    setSelectedDelivery(delivery);
+    setLocationForm({
+      location: delivery.currentLocation || "",
+      coordinates: delivery.currentCoordinates 
+        ? `${delivery.currentCoordinates[0]},${delivery.currentCoordinates[1]}`
+        : "",
+      timestamp: "",
+    });
+    setLocationError(null);
+    setIsCapturingLocation(false);
+    setLocationDialogOpen(true);
+  };
+
+  const handleCaptureLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsCapturingLocation(true);
+    setLocationError(null);
+
+    // Capture timestamp when location capture starts
+    const captureTimestamp = new Date().toISOString();
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const coordinates = `${latitude},${longitude}`;
+        
+        // Try to reverse geocode to get location name
+        try {
+          // Using OpenStreetMap Nominatim API for reverse geocoding (free, no API key needed)
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+          );
+          const data = await response.json();
+          
+          // Extract location name from response
+          const locationName = data.display_name || 
+                             data.address?.road || 
+                             data.address?.village || 
+                             data.address?.town || 
+                             data.address?.city ||
+                             `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+          
+          setLocationForm({
+            location: locationName,
+            coordinates: coordinates,
+            timestamp: captureTimestamp,
+          });
+        } catch (error) {
+          // If reverse geocoding fails, use coordinates as location name
+          setLocationForm({
+            location: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            coordinates: coordinates,
+            timestamp: captureTimestamp,
+          });
+        }
+        
+        setIsCapturingLocation(false);
+      },
+      (error) => {
+        setIsCapturingLocation(false);
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError("Location access denied. Please enable location permissions in your browser settings.");
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError("Location information unavailable. Please try again.");
+            break;
+          case error.TIMEOUT:
+            setLocationError("Location request timed out. Please try again.");
+            break;
+          default:
+            setLocationError("An error occurred while capturing location. Please try again.");
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  };
+
+  const handleSubmitLocation = async () => {
+    if (!selectedDelivery || !locationForm.location) {
+      alert("Please provide a location name");
+      return;
+    }
+
+    try {
+      // Parse coordinates if provided
+      let coordinates: [number, number] | undefined;
+      if (locationForm.coordinates) {
+        const coords = locationForm.coordinates.split(",").map(c => parseFloat(c.trim()));
+        if (coords.length === 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+          coordinates = [coords[0], coords[1]];
+        }
+      }
+
+      await addTracking(selectedDelivery.id, {
+        status: selectedDelivery.status || "in_transit",
+        location: locationForm.location,
+        coordinates: coordinates ? `${coordinates[0]},${coordinates[1]}` : undefined,
+        timestamp: locationForm.timestamp || new Date().toISOString(),
+      });
+
+      alert("Location updated successfully!");
+      setLocationDialogOpen(false);
+      setSelectedDelivery(null);
+      await fetchActiveDeliveries();
+    } catch (error) {
+      console.error("Failed to update location:", error);
+      alert("Failed to update location. Please try again.");
+    }
+  };
+
   const handleCompleteDelivery = async (id: string) => {
     try {
       await updateRequestStatus(id, "delivered");
@@ -53,6 +185,23 @@ export default function ActiveDeliveries() {
     } catch (error) {
       console.error("Failed to complete delivery:", error);
       alert("Failed to complete delivery. Please try again.");
+    }
+  };
+
+  const getTypeBadge = (type: string) => {
+    // Handle both lowercase (frontend) and uppercase (backend) formats
+    const normalizedType = type?.toLowerCase();
+    switch (normalizedType) {
+      case "produce_pickup":
+        return <Badge variant="secondary">Produce Pickup</Badge>;
+      case "produce_delivery":
+        return <Badge className="bg-info text-info-foreground">Produce Delivery</Badge>;
+      case "input_delivery":
+        return <Badge className="bg-success text-success-foreground">Input Delivery</Badge>;
+      case "order_delivery":
+        return <Badge className="bg-purple-500 text-white">Order Delivery</Badge>;
+      default:
+        return <Badge variant="secondary">{type || "Unknown"}</Badge>;
     }
   };
 
@@ -87,7 +236,7 @@ export default function ActiveDeliveries() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <CardTitle className="text-lg">{delivery.type}</CardTitle>
+                    {getTypeBadge(delivery.type)}
                     <Badge className={getStatusColor(delivery.status)}>
                       {delivery.status.replace("_", " ")}
                     </Badge>
@@ -115,32 +264,26 @@ export default function ActiveDeliveries() {
                 </div>
               </div>
 
-              {/* Progress */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{delivery.progress || 0}%</span>
+              {/* Current Location */}
+              {delivery.currentLocation && (
+                <div className="text-sm text-muted-foreground">
+                  <span>📍 Current Location: {delivery.currentLocation}</span>
                 </div>
-                <Progress value={delivery.progress || 0} className="h-2" />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>📍 {delivery.currentLocation || "Unknown"}</span>
-                  <span>⏱️ ETA: {delivery.eta || delivery.estimatedArrival || "N/A"}</span>
-                </div>
-              </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleViewDetails(delivery)}
-                  className="flex-1"
-                >
-                  <IconMapPin className="mr-2 h-4 w-4" />
-                  Track
-                </Button>
                 {delivery.status !== "delivered" && (
                   <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUpdateLocation(delivery)}
+                      className="flex-1"
+                    >
+                      <IconLocation className="mr-2 h-4 w-4" />
+                      Update Location
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -149,16 +292,19 @@ export default function ActiveDeliveries() {
                       <IconPhoto className="mr-2 h-4 w-4" />
                       Photo
                     </Button>
-                    {delivery.status === "in_transit" && delivery.progress > 90 && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleCompleteDelivery(delivery.id)}
-                      >
-                        <IconCheck className="mr-2 h-4 w-4" />
-                        Complete
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => handleCompleteDelivery(delivery.id)}
+                    >
+                      <IconCheck className="mr-2 h-4 w-4" />
+                      Mark as Complete
+                    </Button>
                   </>
+                )}
+                {delivery.status === "delivered" && (
+                  <Badge className="bg-success text-success-foreground w-full justify-center">
+                    Delivered
+                  </Badge>
                 )}
               </div>
             </CardContent>
@@ -187,7 +333,9 @@ export default function ActiveDeliveries() {
           {selectedDelivery && (
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div className="p-4 border rounded-lg bg-accent/50">
-                <div className="font-medium mb-1">{selectedDelivery.type}</div>
+                <div className="flex items-center gap-2 mb-1">
+                  {getTypeBadge(selectedDelivery.type)}
+                </div>
                 <div className="text-sm text-muted-foreground">
                   {selectedDelivery.description}
                 </div>
@@ -253,17 +401,8 @@ export default function ActiveDeliveries() {
                 </div>
 
                 <div>
-                  <div className="text-sm text-muted-foreground mb-2">Delivery Progress</div>
-                  <Progress value={selectedDelivery.progress || 0} className="h-3" />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>{selectedDelivery.progress || 0}% Complete</span>
-                    <span>ETA: {selectedDelivery.eta || selectedDelivery.estimatedArrival || "N/A"}</span>
-                  </div>
-                </div>
-
-                <div>
                   <div className="text-sm text-muted-foreground">Current Location</div>
-                  <div className="font-medium">{selectedDelivery.currentLocation || "Unknown"}</div>
+                  <div className="font-medium">{selectedDelivery.currentLocation || "Not updated"}</div>
                 </div>
 
                 <div>
@@ -274,14 +413,24 @@ export default function ActiveDeliveries() {
                 </div>
               </div>
 
-              {selectedDelivery.status === "in_transit" && (selectedDelivery.progress || 0) > 90 && (
-                <Button
-                  onClick={() => handleCompleteDelivery(selectedDelivery.id)}
-                  className="w-full"
-                >
-                  <IconCheck className="mr-2 h-4 w-4" />
-                  Mark as Delivered
-                </Button>
+              {selectedDelivery.status === "in_transit" && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleUpdateLocation(selectedDelivery)}
+                    className="flex-1"
+                  >
+                    <IconLocation className="mr-2 h-4 w-4" />
+                    Update Location
+                  </Button>
+                  <Button
+                    onClick={() => handleCompleteDelivery(selectedDelivery.id)}
+                    className="flex-1"
+                  >
+                    <IconCheck className="mr-2 h-4 w-4" />
+                    Mark as Complete
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -313,6 +462,114 @@ export default function ActiveDeliveries() {
               </Button>
               <Button onClick={() => setPhotoDialogOpen(false)} className="flex-1">
                 Upload
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Location Dialog */}
+      <Dialog open={locationDialogOpen} onOpenChange={setLocationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Current Location</DialogTitle>
+            <DialogDescription>
+              Capture your current location to update the delivery status
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!locationForm.location && (
+              <div className="space-y-4">
+                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                  <IconLocation className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Click the button below to capture your current location
+                  </p>
+                  <Button
+                    onClick={handleCaptureLocation}
+                    disabled={isCapturingLocation}
+                    variant="outline"
+                  >
+                    {isCapturingLocation ? (
+                      <>
+                        <IconLocation className="mr-2 h-4 w-4 animate-spin" />
+                        Capturing Location...
+                      </>
+                    ) : (
+                      <>
+                        <IconLocation className="mr-2 h-4 w-4" />
+                        Capture Location
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {locationError && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <p className="text-sm text-destructive">{locationError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {locationForm.location && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={locationForm.location}
+                    onChange={(e) =>
+                      setLocationForm({ ...locationForm, location: e.target.value })
+                    }
+                    readOnly={false}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You can edit the location name if needed
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="coordinates">Coordinates</Label>
+                  <Input
+                    id="coordinates"
+                    value={locationForm.coordinates}
+                    readOnly
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Automatically captured from your device
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setLocationForm({ location: "", coordinates: "" });
+                      setLocationError(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Capture Again
+                  </Button>
+                  <Button onClick={handleSubmitLocation} className="flex-1">
+                    <IconLocation className="mr-2 h-4 w-4" />
+                    Update Location
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLocationDialogOpen(false);
+                  setSelectedDelivery(null);
+                  setLocationForm({ location: "", coordinates: "", timestamp: "" });
+                  setLocationError(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
               </Button>
             </div>
           </div>

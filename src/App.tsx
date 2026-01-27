@@ -45,6 +45,8 @@ import { QualityChecksList } from "@/pages/aggregation/QualityChecksList";
 import { ReceiveFromWard } from "@/pages/aggregation/ReceiveFromWard";
 import { AggregationReports } from "@/pages/aggregation/Reports";
 import { BuyerDemandMatching } from "@/pages/aggregation/BuyerDemandMatching";
+import { OrderProcessing } from "@/pages/aggregation/OrderProcessing";
+import { AggregationOrderDetails } from "@/pages/aggregation/AggregationOrderDetails";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { BuyerOrderDetails } from "@/pages/buyer/BuyerOrderDetails";
@@ -143,6 +145,8 @@ export function App() {
             <Route path="/dashboard/aggregation/stock-in" element={<StockInForm />} />
             <Route path="/dashboard/aggregation/receive-ward" element={<ReceiveFromWard />} />
             <Route path="/dashboard/aggregation/stock-out" element={<StockOutForm />} />
+            <Route path="/dashboard/aggregation/order-processing" element={<OrderProcessing />} />
+            <Route path="/dashboard/aggregation/orders/:id" element={<AggregationOrderDetails />} />
             <Route path="/dashboard/aggregation/inventory" element={<InventoryManagement />} />
             <Route path="/dashboard/aggregation/storage" element={<StorageManagement />} />
             <Route path="/dashboard/aggregation/capacity" element={<CapacityManagement />} />

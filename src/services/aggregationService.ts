@@ -282,6 +282,43 @@ export async function searchBatches(query: string, limit: number = 10): Promise<
 }
 
 /**
+ * Order search result interface
+ */
+export interface OrderSearchResult {
+  id: string;
+  orderNumber: string;
+  buyerId: string;
+  buyerName: string;
+  buyerPhone: string;
+  variety: string;
+  quantity: number;
+  qualityGrade: string;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+}
+
+/**
+ * Search orders using PostgreSQL full-text search by order ID or buyer name
+ * Backend: GET /api/v1/aggregation/orders/search
+ */
+export async function searchOrders(query: string, limit: number = 10): Promise<OrderSearchResult[]> {
+  try {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+    const params: Record<string, any> = { q: query.trim() };
+    if (limit) params.limit = limit;
+
+    const orders = await apiGet<OrderSearchResult[]>('/aggregation/orders/search', params);
+    return orders;
+  } catch (error) {
+    console.error('Error searching orders:', error);
+    return [];
+  }
+}
+
+/**
  * Backend CreateStockTransactionDto shape (POST /aggregation/stock-in, /aggregation/stock-out).
  */
 interface CreateStockTransactionDto {

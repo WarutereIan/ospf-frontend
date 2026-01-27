@@ -1,3 +1,200 @@
+---
+puppeteer:
+  format: "A4"
+  margin:
+    top: "2cm"
+    right: "1.5cm"
+    bottom: "2cm"
+    left: "1.5cm"
+  printBackground: true
+  displayHeaderFooter: true
+  headerTemplate: '<div style="font-size: 9px; margin-left: 1cm; color: #666;">Orange-Fleshed Sweet Potato (OFSP) System Documentation</div>'
+  footerTemplate: '<div style="font-size: 9px; margin: 0 auto; color: #666;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'
+---
+
+<style>
+@media print {
+  /* Base font settings */
+  body {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #333;
+  }
+  
+  /* Headings */
+  h1 {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 22pt;
+    font-weight: bold;
+    color: #1a1a1a;
+    page-break-before: always;
+    margin-top: 0;
+    margin-bottom: 12pt;
+  }
+  
+  h2 {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 18pt;
+    font-weight: bold;
+    color: #2c3e50;
+    page-break-after: avoid;
+    margin-top: 18pt;
+    margin-bottom: 10pt;
+  }
+  
+  h3 {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 14pt;
+    font-weight: bold;
+    color: #34495e;
+    margin-top: 14pt;
+    margin-bottom: 8pt;
+  }
+  
+  h4 {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
+    color: #555;
+    margin-top: 12pt;
+    margin-bottom: 6pt;
+  }
+  
+  /* Paragraphs */
+  p {
+    font-size: 11pt;
+    margin-bottom: 8pt;
+    text-align: justify;
+  }
+  
+  /* Lists */
+  ul, ol {
+    font-size: 11pt;
+    margin-bottom: 8pt;
+  }
+  
+  li {
+    margin-bottom: 4pt;
+  }
+  
+  /* Tables */
+  table {
+    font-size: 10pt;
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: avoid;
+    margin-bottom: 12pt;
+  }
+  
+  th {
+    font-weight: bold;
+    background-color: #f0f0f0;
+    padding: 6pt;
+  }
+  
+  td {
+    padding: 6pt;
+  }
+  
+  /* Code blocks */
+  code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 9pt;
+    background-color: #f4f4f4;
+    padding: 2px 4px;
+  }
+  
+  pre {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 9pt;
+    background-color: #f8f8f8;
+    padding: 10pt;
+    border: 1px solid #ddd;
+    page-break-inside: avoid;
+    overflow-x: auto;
+  }
+  
+  /* Block quotes */
+  blockquote {
+    font-size: 10pt;
+    font-style: italic;
+    border-left: 3px solid #ccc;
+    padding-left: 10pt;
+    margin-left: 0;
+    page-break-inside: avoid;
+  }
+  
+  /* Prevent page breaks */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  
+  pre, blockquote, table, figure {
+    page-break-inside: avoid;
+  }
+  
+  /* Mermaid diagrams */
+  .mermaid {
+    page-break-inside: avoid;
+    margin: 12pt 0;
+    max-height: 700px;
+    max-width: 100%;
+    object-fit: contain;
+  }
+  
+  /* Images and figures */
+  img {
+    max-width: 100%;
+    max-height: 650px;
+    object-fit: contain;
+    page-break-inside: avoid;
+    page-break-before: auto;
+    page-break-after: auto;
+    display: block;
+    margin: 12pt auto;
+  }
+  
+  figure {
+    page-break-inside: avoid;
+    margin: 12pt 0;
+    text-align: center;
+  }
+  
+  figure img {
+    max-height: 600px;
+    width: auto;
+    height: auto;
+  }
+  
+  /* SVG images (including Mermaid) */
+  svg {
+    max-width: 100%;
+    max-height: 650px;
+    page-break-inside: avoid;
+  }
+  
+  /* Diagrams container */
+  div[style*="transform: scale"] {
+    page-break-inside: avoid;
+    page-break-before: auto;
+    page-break-after: auto;
+  }
+  
+  /* Strong/Bold text */
+  strong, b {
+    font-weight: bold;
+    color: #1a1a1a;
+  }
+  
+  /* Emphasis/Italic text */
+  em, i {
+    font-style: italic;
+  }
+}
+</style>
+
+
 # Entity Lifecycle Mapping - OFSP Platform
 
 **Date:** January 2025  
@@ -21,7 +218,7 @@
 12. [Quality Check Lifecycle](#quality-check-lifecycle)
 13. [Notification System](#notification-system)
 14. [Data Points & Outputs](#data-points--outputs)
-15. [Improvement Opportunities](#improvement-opportunities)
+
 
 ---
 
@@ -76,14 +273,10 @@
 ### Status Flow
 
 ```
-order_placed → order_accepted → payment_secured → payment_confirmed_by_farmer → ready_to_process → 
-processing → ready_for_collection → out_for_delivery → delivered → completed
+order_placed → order_accepted → payment_secured → payment_confirmed_by_farmer → in_transit → at_aggregation → 
+quality_checked → quality_approved/quality_rejected → out_for_delivery → 
+delivered → completed
 ```
-
-**Alternative paths:**
-- `ready_for_collection` → `collected` (buyer collects directly at center)
-- `ready_for_collection` → `out_for_delivery` (arrange delivery)
-- Legacy path (for existing orders): `payment_secured` → `in_transit` → `at_aggregation` → `quality_checked` → `quality_approved/quality_rejected` → `out_for_delivery` → `delivered` → `completed`
 
 **Alternative paths:**
 - `order_placed` → `rejected` (farmer rejects)
@@ -267,149 +460,7 @@ processing → ready_for_collection → out_for_delivery → delivered → compl
 
 ---
 
-#### 5. **Ready to Process** (`ready_to_process`)
-**Trigger:** Farmer confirms payment receipt (automatic transition from `payment_secured`)
-
-**Actors:**
-- **System:** Automatically transitions order status
-- **Aggregation Manager:** Receives notification of order ready for processing
-- **Buyer:** Receives notification
-
-**Actions:**
-- When farmer confirms payment, system automatically updates order status to `ready_to_process`
-- Order appears in aggregation center's "Order Processing" interface
-- Order is now visible to aggregation center staff assigned to that center
-- Listing's available quantity is still intact (not yet deducted)
-
-**Data Points:**
-- Order Status: "ready_to_process"
-- Payment Status: "confirmed_by_farmer"
-- Ready to Process Timestamp
-- Aggregation Center ID (from associated stock transactions)
-
-**Notifications:**
-- **To Aggregation Manager:** "New order ready for processing: Order #XXX from [Buyer Name]"
-- **To Buyer:** "Order #XXX is ready for processing at aggregation center"
-
-**Outputs:**
-- Updated MarketplaceOrder (status: ready_to_process)
-- Activity log entry (ORDER_READY_TO_PROCESS)
-- Notification records (2)
-
-**Note:** Orders can only be placed on stock/batches that are already approved (from listings created from confirmed stock-in transactions). This ensures quality and availability.
-
----
-
-#### 6. **Processing** (`processing`)
-**Trigger:** Aggregation center staff marks order as started processing
-
-**Actors:**
-- **Aggregation Manager/Staff:** Starts order processing
-- **System:** Deducts quantity from listing
-- **Buyer:** Receives notification
-
-**Actions:**
-- Aggregation center staff views orders in "Order Processing" page
-- Staff selects order with status "ready_to_process"
-- Staff clicks "Start Processing" button
-- System validates order is in correct status
-- System deducts order quantity from listing's `availableQuantity`
-- Order status updated to "processing"
-- Listing's `availableQuantity` reduced by order quantity
-- If listing `availableQuantity` reaches 0, listing status may be updated to "SOLD"
-
-**Data Points:**
-- Order Status: "processing"
-- Processing Started Timestamp
-- Updated Listing Available Quantity
-- Processing Started By (User ID)
-
-**Notifications:**
-- **To Buyer:** "Order #XXX processing has started at aggregation center"
-- **To Farmer:** "Order #XXX is being processed at aggregation center"
-
-**Outputs:**
-- Updated MarketplaceOrder (status: processing)
-- Updated ProduceListing (availableQuantity reduced)
-- Activity log entry (ORDER_PROCESSING_STARTED)
-- Notification records (2)
-
-**Business Rule:** Once processing starts, the quantity is committed and deducted from available stock. This prevents overselling and ensures inventory accuracy.
-
----
-
-#### 7. **Ready for Collection** (`ready_for_collection`)
-**Trigger:** Aggregation center staff marks order as processed and ready
-
-**Actors:**
-- **Aggregation Manager/Staff:** Completes processing
-- **Buyer:** Receives notification that order is ready
-
-**Actions:**
-- Aggregation center staff completes order processing (sorting, packaging, quality verification, etc.)
-- Staff clicks "Mark Ready for Collection" button
-- System validates order is in "processing" status
-- Order status updated to "ready_for_collection"
-- Order appears in buyer's "Collection & Receiving" page
-- Order can now be collected by buyer or arranged for delivery
-
-**Data Points:**
-- Order Status: "ready_for_collection"
-- Processing Completed Timestamp
-- Ready for Collection Timestamp
-- Processed By (User ID)
-
-**Notifications:**
-- **To Buyer:** "Order #XXX is ready for collection at [Aggregation Center Name]"
-- **To Farmer:** "Order #XXX has been processed and is ready for buyer collection"
-
-**Outputs:**
-- Updated MarketplaceOrder (status: ready_for_collection)
-- Activity log entry (ORDER_READY_FOR_COLLECTION)
-- Notification records (2)
-
-**Note:** At this stage, the order is physically ready and waiting for buyer pickup or delivery arrangement.
-
----
-
-#### 8. **Collection/Delivery** (`collected` or `out_for_delivery`)
-**Trigger:** Buyer collects order OR delivery is arranged
-
-**Actors:**
-- **Buyer:** Collects order OR arranges delivery
-- **Transport Provider:** (if delivery) Executes delivery
-
-**Actions:**
-- **If Collection:**
-  - Buyer navigates to "Collection & Receiving" page
-  - Buyer sees orders with status "ready_for_collection" where `stockOutRecorded=true` and `collected=false`
-  - Buyer clicks "Collect" button
-  - Order marked as `collected=true`
-  - Order status may remain "ready_for_collection" or transition to "delivered"
-- **If Delivery:**
-  - Order status updated to "out_for_delivery"
-  - Transport request created (if needed)
-  - Delivery tracking initiated
-
-**Data Points:**
-- Collection Timestamp (if collected)
-- Collected By (Buyer ID)
-- Delivery Arranged Timestamp (if delivery)
-- Transport Request ID (if delivery)
-
-**Notifications:**
-- **To Farmer:** "Order #XXX has been collected/delivered to buyer"
-- **To Aggregation Manager:** "Order #XXX collected/delivered"
-
-**Outputs:**
-- Updated MarketplaceOrder (collected=true or status: out_for_delivery)
-- TransportRequest (if delivery)
-- Activity log entry
-- Notification records (2)
-
----
-
-#### 9. **In Transit** (`in_transit`) - Legacy/Alternative Path
+#### 5. **In Transit** (`in_transit`)
 **Trigger:** Transport request accepted and pickup completed
 
 **Actors:**
@@ -2483,16 +2534,6 @@ pending → accepted → in_transit → delivered → completed
    - Triggered by: Input Provider
    - Related to: InputOrder
 
-4. **Order Delivery** (`order_delivery`) **[NEW]**
-   - Aggregation Center → Buyer
-   - Triggered by: System (automatically after payment confirmation) OR Buyer (manual request)
-   - Related to: MarketplaceOrder
-   - **Special Flow:** 
-     - Created automatically when buyer confirms payment and order requires delivery
-     - Transport provider collects from aggregation center (after stockout is recorded)
-     - Transport provider delivers directly to buyer
-     - Order status updates automatically based on transport status
-
 ### Detailed Lifecycle Stages
 
 #### 1. **Pending** (`pending`)
@@ -2659,300 +2700,12 @@ pending → accepted → in_transit → delivered → completed
 
 ---
 
-### ORDER_DELIVERY Lifecycle (Detailed)
-
-#### Overview
-ORDER_DELIVERY is a special transport type that handles end-to-end delivery of marketplace orders from aggregation centers to buyers. It is automatically created when payment is confirmed and the order requires delivery.
-
-#### Lifecycle Flow
-
-```
-Payment Confirmed → Transport Request Created (PENDING) → Provider Accepts (ACCEPTED) → 
-Stockout Recorded → Collection Marked (IN_TRANSIT_PICKUP) → In Transit (IN_TRANSIT_DELIVERY) → 
-Delivered (DELIVERED) → Completed (COMPLETED)
-```
-
-#### Stage 1: Transport Request Creation (PENDING)
-**Trigger:** Payment confirmed by farmer for marketplace order requiring delivery
-
-**Actors:**
-- **System:** Automatically creates transport request
-- **Buyer:** Receives notification
-- **Transport Providers:** See request in pending list
-
-**Inputs:**
-- MarketplaceOrder (status: `payment_confirmed_by_farmer`)
-- Payment (status: `confirmed_by_farmer`)
-- Order delivery address and coordinates
-- Aggregation center location (from stock transaction)
-- Order quantity (weight)
-
-**Actions:**
-- System creates TransportRequest with type `ORDER_DELIVERY`
-- Request linked to MarketplaceOrder via `orderId`
-- Requester set to buyer (`requesterId = order.buyerId`)
-- Pickup location set to aggregation center
-- Delivery location set to order delivery address
-- Order `fulfillmentType` updated to `request_transport`
-
-**Data Points:**
-- TransportRequest ID, Request Number
-- Order ID, Order Number
-- Buyer ID (requester)
-- Pickup Location (aggregation center name/location)
-- Delivery Location (buyer address)
-- Pickup Coordinates, Delivery Coordinates
-- Distance (calculated)
-- Weight (from order quantity)
-- Created Timestamp
-
-**Notifications:**
-- **To Buyer:** "Delivery Arranged - Transport request #XXX created for order #YYY. Waiting for provider assignment."
-- **To Transport Providers:** Request visible in pending requests list
-
-**Activity Logs:**
-- `ORDER_DELIVERY_TRANSPORT_CREATED` (userId: buyerId, entityType: TRANSPORT, metadata: {orderId, orderNumber, triggeredBy: PAYMENT_CONFIRMED})
-- `TRANSPORT_CREATED` (userId: buyerId, entityType: TRANSPORT)
-
-**Outputs:**
-- TransportRequest record (status: PENDING, type: ORDER_DELIVERY)
-- Updated MarketplaceOrder (fulfillmentType: request_transport)
-- Notification record (1 to buyer)
-- Activity log records (2)
-
----
-
-#### Stage 2: Provider Acceptance (ACCEPTED)
-**Trigger:** Transport provider accepts the ORDER_DELIVERY request
-
-**Actors:**
-- **Transport Provider:** Accepts request
-- **Buyer:** Receives confirmation
-
-**Inputs:**
-- TransportRequest (status: PENDING, type: ORDER_DELIVERY)
-- Provider ID
-
-**Actions:**
-- Provider assigned to request
-- Status updated to ACCEPTED
-- Provider can view order details and collection requirements
-
-**Data Points:**
-- Provider ID
-- Accepted At Timestamp
-- Status: ACCEPTED
-
-**Notifications:**
-- **To Buyer:** "Delivery Provider Assigned - A transport provider has been assigned for order #YYY. They will collect and deliver your order."
-- **To Transport Provider:** "Order Delivery Assigned - You have been assigned to deliver order #YYY. Collect from aggregation center and deliver to buyer."
-
-**Activity Logs:**
-- `TRANSPORT_STATUS_CHANGED` (userId: providerId, oldStatus: PENDING, newStatus: ACCEPTED, metadata: {orderId, orderNumber})
-
-**Outputs:**
-- Updated TransportRequest (status: ACCEPTED, providerId assigned)
-- Notification records (2: buyer + provider)
-- Activity log record (1)
-
----
-
-#### Stage 3: Collection (IN_TRANSIT_PICKUP)
-**Trigger:** Transport provider marks order as collected (after stockout is recorded)
-
-**Actors:**
-- **Transport Provider:** Marks collection
-- **Buyer:** Receives update
-
-**Prerequisites:**
-- Order must have `stockOutRecorded = true` (stockout process completed at aggregation center)
-
-**Inputs:**
-- TransportRequest (status: ACCEPTED, type: ORDER_DELIVERY)
-- MarketplaceOrder (stockOutRecorded: true)
-
-**Actions:**
-- Provider marks collection at aggregation center
-- Status updated to IN_TRANSIT_PICKUP
-- Collection timestamp recorded
-- Order status updated to IN_TRANSIT (if not already)
-
-**Data Points:**
-- Collection Status: "collected"
-- Collected At Timestamp
-- Collection Location (aggregation center)
-- Status: IN_TRANSIT_PICKUP
-
-**Notifications:**
-- **To Buyer:** "Order In Transit - Your order #YYY is now in transit. Track delivery in real-time."
-- **To Transport Provider:** "Order In Transit - Order #YYY is in transit. Continue tracking and updating location."
-
-**Activity Logs:**
-- `TRANSPORT_STATUS_CHANGED` (userId: providerId, oldStatus: ACCEPTED, newStatus: IN_TRANSIT_PICKUP, metadata: {orderId, orderNumber, collectionStatus: collected})
-
-**Outputs:**
-- Updated TransportRequest (status: IN_TRANSIT_PICKUP, collectionStatus: collected, collectedAt)
-- Updated MarketplaceOrder (status: IN_TRANSIT)
-- Notification records (2: buyer + provider)
-- Activity log record (1)
-
----
-
-#### Stage 4: Location Updates (Tracking)
-**Trigger:** Transport provider updates current location during delivery
-
-**Actors:**
-- **Transport Provider:** Updates location
-- **Buyer:** Receives location updates
-
-**Inputs:**
-- TransportRequest (status: IN_TRANSIT_PICKUP or IN_TRANSIT_DELIVERY)
-- Location name (from geolocation reverse geocoding)
-- Coordinates (lat, lng)
-- Timestamp (client-captured)
-
-**Actions:**
-- Provider captures location using browser geolocation
-- Location reverse geocoded to human-readable address
-- TrackingUpdate record created
-- Current location updated on transport request
-
-**Data Points:**
-- TrackingUpdate ID
-- Location Name
-- Coordinates (lat, lng)
-- Status (IN_TRANSIT)
-- Timestamp (captured time)
-- Created At
-
-**Notifications:**
-- **To Buyer:** "Location Update - Order #YYY location update: [Location Name]" (LOW priority, real-time updates)
-
-**Activity Logs:**
-- `TRANSPORT_TRACKING_UPDATE` (userId: providerId, entityType: TRANSPORT, metadata: {location, coordinates, trackingUpdateId, orderId, orderNumber})
-
-**Outputs:**
-- DeliveryTrackingUpdate record
-- Updated TransportRequest (currentLocation, currentCoordinates)
-- Notification record (1 to buyer, LOW priority)
-- Activity log record (1)
-
----
-
-#### Stage 5: Delivery (DELIVERED)
-**Trigger:** Transport provider marks delivery as completed
-
-**Actors:**
-- **Transport Provider:** Marks delivery complete
-- **Buyer:** Receives delivery confirmation
-
-**Inputs:**
-- TransportRequest (status: IN_TRANSIT_DELIVERY)
-- Delivery confirmation
-
-**Actions:**
-- Provider marks delivery as complete
-- Status updated to DELIVERED
-- Delivery timestamp recorded
-- Order status updated to DELIVERED
-
-**Data Points:**
-- Delivered At Timestamp
-- Delivery Location (buyer address)
-- Delivery Coordinates
-- Status: DELIVERED
-
-**Notifications:**
-- **To Buyer:** "Order Delivered - Your order #YYY has been delivered successfully."
-- **To Transport Provider:** "Order Delivered - Order #YYY has been delivered. Mark as complete when confirmed."
-
-**Activity Logs:**
-- `TRANSPORT_STATUS_CHANGED` (userId: providerId, oldStatus: IN_TRANSIT_DELIVERY, newStatus: DELIVERED, metadata: {orderId, orderNumber})
-
-**Outputs:**
-- Updated TransportRequest (status: DELIVERED, actualDelivery timestamp)
-- Updated MarketplaceOrder (status: DELIVERED)
-- Notification records (2: buyer + provider)
-- Activity log record (1)
-
----
-
-#### Stage 6: Completion (COMPLETED)
-**Trigger:** Transport provider marks request as completed (final confirmation)
-
-**Actors:**
-- **Transport Provider:** Marks complete
-- **Buyer:** Request finalized
-
-**Inputs:**
-- TransportRequest (status: DELIVERED)
-
-**Actions:**
-- Provider marks request as completed
-- Status updated to COMPLETED
-- Request finalized
-
-**Data Points:**
-- Completed At Timestamp
-- Status: COMPLETED
-
-**Notifications:**
-- **To Buyer:** "Delivery Completed - Delivery for order #YYY has been completed."
-- **To Transport Provider:** "Request Completed - Request #XXX completed."
-
-**Activity Logs:**
-- `TRANSPORT_STATUS_CHANGED` (userId: providerId, oldStatus: DELIVERED, newStatus: COMPLETED, metadata: {orderId, orderNumber})
-
-**Outputs:**
-- Updated TransportRequest (status: COMPLETED)
-- Notification records (2: buyer + provider)
-- Activity log record (1)
-
----
-
-### ORDER_DELIVERY Data Points Summary
-
-**Inputs:**
-- MarketplaceOrder (with payment confirmed)
-- Payment (confirmed_by_farmer)
-- Aggregation Center location (from stock transaction)
-- Buyer delivery address and coordinates
-- Order quantity/weight
-
-**Outputs:**
-- TransportRequest (1 record, type: ORDER_DELIVERY)
-- DeliveryTrackingUpdate[] (multiple records, one per location update)
-- Updated MarketplaceOrder (status transitions: payment_confirmed → in_transit → delivered)
-- Notification[] (8-10 records across lifecycle)
-- ActivityLog[] (6-8 records across lifecycle)
-
-**Key Data Points Tracked:**
-- Request creation timestamp
-- Provider assignment timestamp
-- Collection timestamp (when stockout completed and collected)
-- Location updates (real-time coordinates and location names)
-- Delivery timestamp
-- Completion timestamp
-- Order status synchronization
-- Distance and route tracking
-
-**Notification Types:**
-- TRANSPORT (HIGH priority for status changes, MEDIUM for updates, LOW for location updates)
-
-**Activity Log Actions:**
-- ORDER_DELIVERY_TRANSPORT_CREATED
-- TRANSPORT_CREATED
-- TRANSPORT_STATUS_CHANGED
-- TRANSPORT_TRACKING_UPDATE
-
----
-
 ### Transport Request Data Model
 
 **Core Entity:** `TransportRequest`
 
 **Related Entities:**
-- `MarketplaceOrder` (if produce pickup/delivery or ORDER_DELIVERY)
+- `MarketplaceOrder` (if produce pickup/delivery)
 - `InputOrder` (if input delivery)
 - `Payment` (transport fee payment)
 - `DeliveryTrackingUpdate` (tracking updates)
@@ -3418,167 +3171,6 @@ pending → secured → released
 
 ---
 
-## Order Processing Workflow (New)
-
-### Overview
-
-The new order processing workflow ensures that:
-1. **Orders can only be placed on approved stock** - Orders are created from listings that come from confirmed stock-in transactions
-2. **Payment confirmation triggers processing readiness** - When farmer confirms payment, order automatically becomes ready for processing
-3. **Aggregation center manages processing** - Center staff can view, start, and complete order processing
-4. **Inventory is protected** - Listing availableQuantity is only deducted when processing starts, preventing overselling
-5. **Buyer collection tracking** - Orders ready for collection are tracked separately from delivery orders
-
-### Workflow Stages
-
-#### Stage 1: Ready to Process
-**Inputs:**
-- Order with status `payment_secured`
-- Payment with status `confirmed_by_farmer`
-- Associated ProduceListing (from stock-in)
-- Aggregation Center ID (from stock transactions)
-
-**Process:**
-- System automatically transitions order status to `ready_to_process` when farmer confirms payment
-- Order becomes visible in aggregation center's "Order Processing" interface
-- Listing availableQuantity remains unchanged (not yet committed)
-
-**Outputs:**
-- Updated MarketplaceOrder (status: `ready_to_process`)
-- Notification to aggregation manager
-- Notification to buyer
-- Activity log entry
-
-**Data Points:**
-- Order Status: `ready_to_process`
-- Payment Status: `confirmed_by_farmer`
-- Ready to Process Timestamp
-- Aggregation Center ID
-
----
-
-#### Stage 2: Processing
-**Inputs:**
-- Order with status `ready_to_process`
-- Associated ProduceListing
-- Aggregation Center Staff User ID
-
-**Process:**
-- Aggregation center staff views order in "Order Processing" page
-- Staff clicks "Start Processing" button
-- System validates order status
-- System deducts order quantity from listing's `availableQuantity`
-- Order status updated to `processing`
-- If listing `availableQuantity` reaches 0, listing status updated to `SOLD`
-
-**Outputs:**
-- Updated MarketplaceOrder (status: `processing`)
-- Updated ProduceListing (availableQuantity reduced)
-- Notification to buyer
-- Notification to farmer
-- Activity log entry
-
-**Data Points:**
-- Order Status: `processing`
-- Processing Started Timestamp
-- Processing Started By (User ID)
-- Listing Available Quantity (before and after)
-- Listing Status (if updated to SOLD)
-
-**Business Rules:**
-- Quantity deduction is atomic and cannot be reversed
-- Prevents overselling by committing inventory at processing start
-- Ensures accurate available quantity tracking
-
----
-
-#### Stage 3: Ready for Collection
-**Inputs:**
-- Order with status `processing`
-- Aggregation Center Staff User ID
-
-**Process:**
-- Aggregation center staff completes physical processing (sorting, packaging, quality verification)
-- Staff clicks "Mark Ready for Collection" button
-- System validates order is in `processing` status
-- Order status updated to `ready_for_collection`
-- Order appears in buyer's "Collection & Receiving" page (filtered by `stockOutRecorded=true` and `collected=false`)
-
-**Outputs:**
-- Updated MarketplaceOrder (status: `ready_for_collection`)
-- Notification to buyer
-- Notification to farmer
-- Activity log entry
-
-**Data Points:**
-- Order Status: `ready_for_collection`
-- Processing Completed Timestamp
-- Ready for Collection Timestamp
-- Processed By (User ID)
-
----
-
-#### Stage 4: Collection or Delivery
-**Inputs:**
-- Order with status `ready_for_collection`
-- Buyer User ID
-- Stock Out Transaction (when stock out is recorded)
-
-**Process:**
-- **Stock Out Recording:**
-  - Aggregation center records stock out transaction
-  - Order marked as `stockOutRecorded=true`
-  - Order appears in buyer's collection page
-- **Collection:**
-  - Buyer collects order at center
-  - Order marked as `collected=true`
-  - Order removed from "ready for collection" list
-- **Delivery (Alternative):**
-  - Order status updated to `out_for_delivery`
-  - Transport request created
-  - Delivery tracking initiated
-
-**Outputs:**
-- Updated MarketplaceOrder (`stockOutRecorded=true`, `collected=true` or status: `out_for_delivery`)
-- StockTransaction (type: `STOCK_OUT`)
-- TransportRequest (if delivery)
-- Notification records
-- Activity log entries
-
-**Data Points:**
-- Stock Out Recorded: `true`
-- Collected: `true` (if collected)
-- Collection Timestamp
-- Collected By (Buyer ID)
-- Stock Out Transaction ID
-
----
-
-### Key Data Points for Order Processing
-
-**Order Processing Data:**
-- Order Status (ready_to_process, processing, ready_for_collection)
-- Processing Started Timestamp
-- Processing Completed Timestamp
-- Processed By (User ID)
-- Aggregation Center ID
-- Stock Out Recorded (Boolean)
-- Collected (Boolean)
-
-**Listing Inventory Data:**
-- Listing Available Quantity (before processing)
-- Listing Available Quantity (after processing)
-- Quantity Deducted
-- Listing Status (ACTIVE or SOLD)
-
-**Collection Data:**
-- Stock Out Recorded Timestamp
-- Collected Timestamp
-- Collected By (Buyer ID)
-- Collection Method (direct pickup or delivery)
-
----
-
 ## Data Points & Outputs
 
 ### Key Data Points by Entity
@@ -3736,23 +3328,16 @@ The new order processing workflow ensures that:
 
 1. **MarketplaceOrder** (1 record)
 2. **Payment** (1 record)
-3. **EscrowTransaction** (1 record, if escrow used)
-4. **TransportRequest** (0-2 records: pickup + delivery, if transport used)
-5. **StockTransaction** (1-2 records: stock_in + stock_out)
-6. **InventoryItem** (1 record, created from stock_in)
-7. **ProduceListing** (1 record, created/updated from stock_in)
-8. **QualityCheck** (1 record, if quality checked)
-9. **Notification** (16-18 records across all stages)
-10. **ActivityLog** (14-16 records across all stages)
-11. **Rating** (0-2 records: buyer rating farmer, farmer rating transport)
+3. **EscrowTransaction** (1 record)
+4. **TransportRequest** (2 records: pickup + delivery)
+5. **StockTransaction** (2 records: stock_in + stock_out)
+6. **InventoryItem** (1 record)
+7. **QualityCheck** (1 record, if checked)
+8. **Notification** (14-16 records)
+9. **ActivityLog** (12-14 records)
+10. **Rating** (0-2 records: buyer rating farmer, farmer rating transport)
 
-**New Processing Workflow Outputs:**
-- **Order Status Updates:** 3 additional status transitions (ready_to_process → processing → ready_for_collection)
-- **Listing Updates:** 1 update when processing starts (availableQuantity deduction)
-- **Collection Tracking:** 1 update when buyer collects (collected=true)
-- **Stock Out Tracking:** 1 update when stock out recorded (stockOutRecorded=true)
-
-**Total: ~40-45 records per order (with new processing workflow)**
+**Total: ~35-40 records per order**
 
 ---
 
@@ -4071,20 +3656,10 @@ This document provides a comprehensive mapping of all entity lifecycles, workflo
 - Tabbed interface for easy navigation
 - Improved user experience for farmers
 
-**Next Steps:**
-1. Prioritize improvement opportunities
-2. Design automated workflows
-3. Implement notification preferences
-4. Enhance traceability features
-5. Develop analytics dashboards
-6. Create mobile applications
-7. Integrate negotiation and RFQ features with backend APIs
-8. Implement real-time notifications for negotiations and RFQ updates
-9. Enhance Buyer Requests filtering and recommendation algorithms
-10. Add negotiation analytics and insights
+
 
 ---
 
 **Document Version:** 2.0  
 **Last Updated:** January 2025  
-**Maintained By:** Development Team
+**Maintained By:**GARTS Development Team

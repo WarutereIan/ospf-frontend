@@ -9,23 +9,30 @@ import {
   IconClipboardCheck,
   IconStar,
   IconUser,
+  IconTruck,
 } from "@tabler/icons-react";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { PaymentConfirmationDialog } from "@/components/payments/PaymentConfirmationDialog";
 import { RateFarmer } from "./RateFarmer";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
+import RequestTransport from "@/components/transport/RequestTransport";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { usePayment } from "@/contexts/PaymentContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { createTransportRequest } from "@/services/transportService";
+import { showSuccess, showError } from "@/lib/toast";
 import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function BuyerOrderDetails() {
   const { id } = useParams<{ id: string }>();
   const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
   const { payments, fetchPayments } = usePayment();
+  const { user } = useAuth();
   
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
+  const [requestTransportOpen, setRequestTransportOpen] = useState(false);
 
   // Fetch order details on mount
   useEffect(() => {
@@ -93,6 +100,16 @@ export function BuyerOrderDetails() {
                 Confirm Payment
               </Button>
             )}
+            {/* Show Request Transport button if order doesn't already have transport requested */}
+            {order.fulfillmentType !== "request_transport" && (
+              <Button
+                variant="outline"
+                onClick={() => setRequestTransportOpen(true)}
+              >
+                <IconTruck className="mr-2 h-4 w-4" />
+                Request Transport
+              </Button>
+            )}
             {order.canRate && (
               <Button
                 variant="outline"
@@ -139,31 +156,46 @@ export function BuyerOrderDetails() {
               },
               {
                 stage: "payment_secured",
-                timestamp: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: ["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? payment?.confirmedAt || new Date(Date.now() - 10 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["payment_secured", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "payment_confirmed_by_farmer",
                 timestamp: (payment && (payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER"))
                   ? payment?.farmerConfirmedAt || payment?.confirmedAt || new Date(Date.now() - 8 * 60 * 1000).toISOString()
                   : undefined,
-                completed: (payment && (payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER")) || ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: (payment && (payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER")) || 
+                  ["ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "in_transit",
-                timestamp: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                stage: "ready_to_process",
+                timestamp: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 6 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "quality_approved",
-                timestamp: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                stage: "processing",
+                timestamp: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 4 * 60 * 1000).toISOString()
+                  : undefined,
+                completed: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "ready_for_collection",
+                timestamp: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              {
+                stage: "out_for_delivery",
+                timestamp: ["out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
+                  : undefined,
+                completed: ["out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "delivered",
@@ -171,6 +203,13 @@ export function BuyerOrderDetails() {
                   ? order.actualDeliveryDate || new Date().toISOString()
                   : undefined,
                 completed: order.status === "delivered" || order.status === "completed",
+              },
+              {
+                stage: "completed",
+                timestamp: order.status === "completed"
+                  ? order.actualDeliveryDate || new Date().toISOString()
+                  : undefined,
+                completed: order.status === "completed",
               },
             ]}
           />
@@ -392,6 +431,32 @@ export function BuyerOrderDetails() {
           onRatingSubmitted={() => setRatingDialogOpen(false)}
         />
       )}
+
+      {/* Request Transport Dialog */}
+      <RequestTransport
+        defaultType="produce_delivery"
+        defaultFrom={order.aggregationCenter || order.centerLocation || "Aggregation Center"}
+        defaultTo="" // Don't pre-fill delivery location - user must provide it
+        orderId={order.id}
+        order={{
+          quantity: order.quantity,
+          variety: order.variety,
+          qualityGrade: order.qualityGrade,
+          aggregationCenter: order.aggregationCenter,
+          centerLocation: order.centerLocation,
+          deliveryLocation: order.deliveryLocation,
+          deliveryAddress: order.deliveryAddress,
+          deliveryCounty: order.deliveryCounty,
+        }}
+        open={requestTransportOpen}
+        onOpenChange={setRequestTransportOpen}
+        onSuccess={() => {
+          // Refresh order data to show updated fulfillment type
+          if (id) {
+            fetchOrderById(id);
+          }
+        }}
+      />
     </div>
   );
 }

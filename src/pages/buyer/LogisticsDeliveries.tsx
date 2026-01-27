@@ -12,16 +12,21 @@ import {
   IconUser,
   IconPackage,
 } from "@tabler/icons-react";
-import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { Progress } from "@/components/ui/progress";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import type { LatLngExpression } from "leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { useTransport } from "@/contexts/TransportContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { MarketplaceOrder } from "@/types/marketplace";
+import type { TransportRequest, DeliveryTrackingUpdate } from "@/types/transport";
 
 interface DeliveryBatch {
   id: string;
   batchId: string;
+  orderNumber?: string;
   status: "in_transit" | "received" | "inspecting" | "approved";
   destination: string;
   destinationRegion: string;
@@ -31,7 +36,8 @@ interface DeliveryBatch {
   productType: string;
   driver?: {
     name: string;
-    vehicleNumber: string;
+    phone?: string;
+    vehicleNumber?: string;
   };
   timeline: DeliveryTimelineStage[];
   supplier?: string;
@@ -41,6 +47,8 @@ interface DeliveryBatch {
   currentCoordinates?: [number, number]; // [lat, lng]
   arrivalDate?: string;
   qualityCheckStatus?: string;
+  transportRequest: TransportRequest; // Keep reference to original transport request
+  trackingUpdates: DeliveryTrackingUpdate[]; // All tracking updates for map view
 }
 
 interface DeliveryTimelineStage {
@@ -53,7 +61,6 @@ interface DeliveryTimelineStage {
 interface LogisticsMetrics {
   incomingToday: number; // in kg
   activeTrucks: number;
-  avgDelay: number; // in minutes (negative means early)
 }
 
 interface LogisticsCoordinator {
@@ -63,72 +70,153 @@ interface LogisticsCoordinator {
 
 export function LogisticsDeliveries() {
   const { orders, fetchOrders, isLoading: ordersLoading } = useMarketplace();
-  const { deliveries, fetchDeliveries, isLoading: deliveriesLoading } = useTransport();
+  const { requests, fetchRequests, isLoading: requestsLoading } = useTransport();
   const { user } = useAuth();
   
   const [showMapView, setShowMapView] = useState(false);
 
-  // Fetch buyer's orders and deliveries
+  // Fetch buyer's orders and transport requests
   useEffect(() => {
     if (user?.id) {
       fetchOrders({ buyerId: user.id });
-      fetchDeliveries();
+      // Fetch transport requests where buyer is the requester (for order deliveries)
+      fetchRequests({ requesterId: user.id });
     }
-  }, [user?.id, fetchOrders, fetchDeliveries]);
+  }, [user?.id, fetchOrders, fetchRequests]);
 
-  // Convert orders to delivery batches format
-  const batches: DeliveryBatch[] = orders
-    .filter((order) => 
-      order.status === "in_transit" || 
-      order.status === "out_for_delivery" ||
-      order.status === "delivered" ||
-      order.status === "at_aggregation"
-    )
-    .map((order) => ({
-      id: order.id,
-      batchId: order.batchId || order.id,
-      status: order.status === "delivered" ? "received" :
-              order.status === "at_aggregation" ? "inspecting" :
-              order.status === "quality_approved" ? "approved" :
-              "in_transit" as "in_transit" | "received" | "inspecting" | "approved",
-      destination: order.deliveryLocation || order.aggregationCenter || "N/A",
-      destinationRegion: order.deliveryLocation || "N/A",
-      estimatedArrival: order.estimatedDeliveryDate 
-        ? new Date(order.estimatedDeliveryDate).toLocaleDateString()
-        : undefined,
-      estimatedArrivalTime: order.estimatedDeliveryDate
-        ? new Date(order.estimatedDeliveryDate).toLocaleTimeString()
-        : undefined,
-      weight: order.quantity,
-      productType: "Fresh Root",
-      timeline: [
-        {
-          stage: "Order Placed",
-          location: order.farmerName || "Farmer",
-          timestamp: new Date(order.createdAt).toLocaleTimeString(),
+  // Convert transport requests to delivery batches format
+  // Filter for ORDER_DELIVERY type and in-transit/delivered statuses
+  const orderDeliveryRequests = requests.filter(
+    (req) => req.type === "order_delivery" && 
+    (req.status === "in_transit" || req.status === "delivered" || req.status === "accepted")
+  );
+
+  // Get related orders for additional info
+  const ordersMap = new Map(orders.map(order => [order.id, order]));
+
+  // Build timeline from tracking updates and transport request status
+  const buildTimeline = (request: TransportRequest, order?: MarketplaceOrder): DeliveryTimelineStage[] => {
+    const timeline: DeliveryTimelineStage[] = [];
+    
+    // Start with order collection if it's an order delivery
+    if (request.orderId && order) {
+      timeline.push({
+        stage: "Order Placed",
+        location: order.farmerName || "Farmer",
+        timestamp: new Date(order.createdAt).toLocaleString(),
+        status: "completed",
+      });
+
+      // If order has stockout recorded, add collection stage
+      if (order.stockOutRecorded) {
+        timeline.push({
+          stage: "Collected",
+          location: request.from || "Aggregation Center",
+          timestamp: request.collectedAt 
+            ? new Date(request.collectedAt).toLocaleString()
+            : request.collectionDate 
+              ? `${request.collectionDate} ${request.collectionTime || ""}`
+              : "Collected",
           status: "completed",
-        },
-        ...(order.status !== "order_placed" ? [{
-          stage: "In Transit",
-          location: order.aggregationCenter || "Aggregation Center",
-          timestamp: order.status === "in_transit" ? "Current" : new Date(order.updatedAt).toLocaleTimeString(),
-          status: order.status === "in_transit" ? "current" as const : "completed" as const,
-        }] : []),
-        ...(order.status === "delivered" ? [{
-          stage: "Delivered",
-          location: order.deliveryLocation || "Destination",
-          timestamp: order.actualDeliveryDate 
-            ? new Date(order.actualDeliveryDate).toLocaleDateString()
-            : "Completed",
-          status: "completed" as const,
-        }] : []),
-      ],
-      originCoordinates: order.farmerCoordinates,
-      destinationCoordinates: order.deliveryCoordinates,
-      currentCoordinates: order.currentCoordinates,
-      arrivalDate: order.actualDeliveryDate,
-      qualityCheckStatus: order.qualityScore ? `Score: ${order.qualityScore}%` : undefined,
-    }));
+        });
+      }
+    }
+
+    // Add tracking updates from transport provider
+    if (request.trackingUpdates && request.trackingUpdates.length > 0) {
+      // Sort tracking updates by timestamp (oldest first)
+      const sortedUpdates = [...request.trackingUpdates].sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+        const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+        return timeA - timeB;
+      });
+
+      sortedUpdates.forEach((update, index) => {
+        const isLast = index === sortedUpdates.length - 1;
+        const isInTransit = request.status === "in_transit";
+        
+        timeline.push({
+          stage: update.location || "Location Update",
+          location: update.location || "Unknown Location",
+          timestamp: update.createdAt 
+            ? new Date(update.createdAt).toLocaleString()
+            : update.timestamp
+              ? new Date(update.timestamp).toLocaleString()
+              : undefined,
+          status: isLast && isInTransit ? "current" : "completed",
+        });
+      });
+    } else if (request.status === "in_transit") {
+      // If no tracking updates but in transit, show current status
+      timeline.push({
+        stage: "In Transit",
+        location: request.currentLocation || request.to || "En Route",
+        timestamp: "Current",
+        status: "current",
+      });
+    }
+
+    // Add delivered stage if delivered
+    if (request.status === "delivered" || request.status === "completed") {
+      timeline.push({
+        stage: "Delivered",
+        location: request.to || "Destination",
+        timestamp: request.deliveredAt 
+          ? new Date(request.deliveredAt).toLocaleString()
+          : "Completed",
+        status: "completed",
+      });
+    }
+
+    return timeline;
+  };
+
+  const batches: DeliveryBatch[] = orderDeliveryRequests.map((request) => {
+    const order = request.orderId ? ordersMap.get(request.orderId) : undefined;
+    const timeline = buildTimeline(request, order);
+    
+    // Get latest tracking update for current location
+    const latestUpdate = request.trackingUpdates && request.trackingUpdates.length > 0
+      ? request.trackingUpdates[request.trackingUpdates.length - 1]
+      : null;
+
+    return {
+      id: request.id,
+      batchId: request.orderNumber || request.requestId || request.id,
+      orderNumber: request.orderNumber,
+      status: request.status === "delivered" || request.status === "completed" 
+        ? "received" 
+        : request.status === "in_transit"
+          ? "in_transit"
+          : "in_transit" as "in_transit" | "received" | "inspecting" | "approved",
+      destination: request.to || request.deliveryLocation || "N/A",
+      destinationRegion: request.deliveryCounty || "N/A",
+      estimatedArrival: request.estimatedArrival
+        ? new Date(request.estimatedArrival).toLocaleDateString()
+        : undefined,
+      estimatedArrivalTime: request.estimatedArrival
+        ? new Date(request.estimatedArrival).toLocaleTimeString()
+        : undefined,
+      weight: request.weight || 0,
+      productType: request.description || "Order Delivery",
+      driver: request.driverName ? {
+        name: request.driverName,
+        phone: request.driverPhone,
+        vehicleNumber: request.vehicleId || "N/A",
+      } : undefined,
+      timeline,
+      origin: request.from || request.pickupLocation,
+      originCoordinates: request.fromCoordinates,
+      destinationCoordinates: request.toCoordinates,
+      currentCoordinates: latestUpdate?.coordinates || request.currentCoordinates,
+      arrivalDate: request.deliveredAt 
+        ? new Date(request.deliveredAt).toLocaleDateString()
+        : undefined,
+      qualityCheckStatus: order?.qualityScore ? `Score: ${order.qualityScore}%` : undefined,
+      transportRequest: request,
+      trackingUpdates: request.trackingUpdates || [],
+    };
+  });
 
   // Calculate metrics
   const metrics: LogisticsMetrics = {
@@ -136,10 +224,9 @@ export function LogisticsDeliveries() {
       .filter((b) => b.status === "in_transit" || b.status === "inspecting")
       .reduce((sum, b) => sum + b.weight, 0),
     activeTrucks: batches.filter((b) => b.status === "in_transit").length,
-    avgDelay: 0, // TODO: Calculate from delivery times
   };
 
-  const isLoading = ordersLoading || deliveriesLoading;
+  const isLoading = ordersLoading || requestsLoading;
 
   // Mock coordinator - TODO: Get from transport context
   const coordinator: LogisticsCoordinator | null = null;
@@ -247,7 +334,9 @@ export function LogisticsDeliveries() {
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-lg font-bold text-stone-900">Batch #{batch.batchId}</h3>
+                            <h3 className="text-lg font-bold text-stone-900">
+                              {batch.orderNumber ? `Order #${batch.orderNumber}` : `Batch #${batch.batchId}`}
+                            </h3>
                             <Badge variant="outline" className={getStatusColor(batch.status)}>
                               {getStatusLabel(batch.status)}
                             </Badge>
@@ -267,8 +356,8 @@ export function LogisticsDeliveries() {
                         )}
                       </div>
 
-                      {/* Timeline for In Transit */}
-                      {batch.status === "in_transit" && batch.timeline && (
+                      {/* Timeline - Show for all statuses */}
+                      {batch.timeline && batch.timeline.length > 0 && (
                         <div className="space-y-3 pt-2">
                           <div className="relative">
                             {/* Timeline Line */}
@@ -283,7 +372,7 @@ export function LogisticsDeliveries() {
                                         <IconCheck className="h-2.5 w-2.5 text-white" />
                                       </div>
                                     ) : stage.status === "current" ? (
-                                      <div className="w-4 h-4 rounded-full bg-orange-500 border-2 border-white shadow-sm ring-2 ring-orange-200" />
+                                      <div className="w-4 h-4 rounded-full bg-orange-500 border-2 border-white shadow-sm ring-2 ring-orange-200 animate-pulse" />
                                     ) : (
                                       <div className="w-4 h-4 rounded-full bg-white border-2 border-stone-300">
                                         {stage.status === "upcoming" && (
@@ -315,17 +404,28 @@ export function LogisticsDeliveries() {
                       )}
 
                       {/* Driver & Payload for In Transit */}
-                      {batch.status === "in_transit" && batch.driver && (
+                      {batch.status === "in_transit" && (
                         <div className="flex items-center justify-between pt-2 border-t border-stone-100">
-                          <div className="flex items-center gap-2">
-                            <IconUser className="h-4 w-4 text-stone-400" />
-                            <div>
-                              <p className="text-sm font-medium text-stone-900">{batch.driver.name}</p>
-                              <p className="text-xs text-stone-500">
-                                Driver • {batch.driver.vehicleNumber}
-                              </p>
+                          {batch.driver ? (
+                            <div className="flex items-center gap-2">
+                              <IconUser className="h-4 w-4 text-stone-400" />
+                              <div>
+                                <p className="text-sm font-medium text-stone-900">{batch.driver.name}</p>
+                                <p className="text-xs text-stone-500">
+                                  Driver {batch.driver.vehicleNumber ? `• ${batch.driver.vehicleNumber}` : ""}
+                                  {batch.driver.phone ? ` • ${batch.driver.phone}` : ""}
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <IconUser className="h-4 w-4 text-stone-400" />
+                              <div>
+                                <p className="text-sm font-medium text-stone-900">Driver Assigned</p>
+                                <p className="text-xs text-stone-500">Contact info pending</p>
+                              </div>
+                            </div>
+                          )}
                           <div className="text-right">
                             <p className="text-xs text-stone-500">PAYLOAD</p>
                             <p className="text-sm font-medium text-stone-900">
@@ -368,12 +468,15 @@ export function LogisticsDeliveries() {
                       )}
 
                       {/* Action Button */}
-                      {batch.status === "in_transit" && batch.driver && (
+                      {batch.status === "in_transit" && batch.driver && batch.driver.phone && (
                         <div className="flex justify-end pt-2">
                           <Button
                             variant="outline"
                             size="sm"
                             className="border-stone-200 hover:border-orange-500 hover:text-orange-500"
+                            onClick={() => {
+                              window.location.href = `tel:${batch.driver!.phone!.replace(/\s/g, "")}`;
+                            }}
                           >
                             <IconPhone className="h-4 w-4 mr-2" />
                             Contact Driver
@@ -403,17 +506,6 @@ export function LogisticsDeliveries() {
               <div>
                 <p className="text-sm text-stone-300 mb-1">Active Trucks</p>
                 <p className="text-2xl font-bold text-white">{metrics.activeTrucks}</p>
-              </div>
-              <div>
-                <p className="text-sm text-stone-300 mb-1">Avg. Delay</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    metrics.avgDelay < 0 ? "text-green-400" : metrics.avgDelay > 0 ? "text-red-400" : "text-white"
-                  }`}
-                >
-                  {metrics.avgDelay > 0 ? "+" : ""}
-                  {metrics.avgDelay} min
-                </p>
               </div>
             </CardContent>
           </Card>
@@ -466,31 +558,147 @@ export function LogisticsDeliveries() {
           <CardContent>
             {batches
               .filter((batch) => batch.status === "in_transit" && batch.originCoordinates && batch.destinationCoordinates)
-              .map((batch) => (
-                <DeliveryTrackingMap
-                  key={batch.id}
-                  pickupLocation={{
-                    name: batch.origin || "Origin",
-                    coordinates: batch.originCoordinates!,
-                  }}
-                  deliveryLocation={{
-                    name: batch.destination,
-                    coordinates: batch.destinationCoordinates!,
-                  }}
-                  currentLocation={
-                    batch.currentCoordinates
-                      ? {
-                          name: `Batch ${batch.batchId}`,
-                          coordinates: batch.currentCoordinates,
-                        }
-                      : undefined
+              .map((batch) => {
+                // Build route with all tracking points
+                const routePoints: LatLngExpression[] = [];
+                if (batch.originCoordinates) {
+                  routePoints.push(batch.originCoordinates as LatLngExpression);
+                }
+                
+                // Add all tracking update coordinates in chronological order
+                const sortedUpdates = [...batch.trackingUpdates].sort((a, b) => {
+                  const timeA = new Date(a.createdAt || a.timestamp || 0).getTime();
+                  const timeB = new Date(b.createdAt || b.timestamp || 0).getTime();
+                  return timeA - timeB;
+                });
+                
+                sortedUpdates.forEach(update => {
+                  if (update.coordinates) {
+                    routePoints.push(update.coordinates as LatLngExpression);
                   }
-                  status="in_transit"
-                  distance={undefined}
-                  eta={batch.estimatedArrivalTime ? `${batch.estimatedArrival}, ${batch.estimatedArrivalTime}` : undefined}
-                  className="mb-4"
-                />
-              ))}
+                });
+                
+                // Add destination
+                if (batch.destinationCoordinates) {
+                  routePoints.push(batch.destinationCoordinates as LatLngExpression);
+                }
+
+                return (
+                  <div key={batch.id} className="mb-6">
+                    <div className="mb-2">
+                      <h4 className="text-sm font-semibold text-stone-900">
+                        Order #{batch.orderNumber || batch.batchId}
+                      </h4>
+                      <p className="text-xs text-stone-500">
+                        {batch.trackingUpdates.length} location update{batch.trackingUpdates.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    {/* Custom Map with all tracking updates */}
+                    <div className="w-full h-[400px] rounded-lg overflow-hidden border border-stone-200 mb-4">
+                      <MapContainer
+                        {...({
+                          center: batch.currentCoordinates || batch.originCoordinates || [-1.5167, 37.2667],
+                          zoom: 10,
+                          style: { height: "100%", width: "100%" },
+                          scrollWheelZoom: true,
+                        } as any)}
+                      >
+                        <TileLayer
+                          {...({
+                            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                            url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                          } as any)}
+                        />
+                        {/* Pickup marker */}
+                        {batch.originCoordinates && (
+                          <Marker position={batch.originCoordinates as LatLngExpression}>
+                            <Popup>
+                              <div className="text-sm">
+                                <p className="font-semibold">Pickup</p>
+                                <p>{batch.origin}</p>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        )}
+                        {/* All tracking update markers */}
+                        {sortedUpdates.map((update, idx) => {
+                          if (!update.coordinates) return null;
+                          return (
+                            <Marker 
+                              key={update.id || idx} 
+                              position={update.coordinates as LatLngExpression}
+                              icon={L.divIcon({
+                                className: "custom-tracking-marker",
+                                html: `<div style="
+                                  background-color: #f97316;
+                                  width: 20px;
+                                  height: 20px;
+                                  border-radius: 50%;
+                                  border: 2px solid white;
+                                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                                "></div>`,
+                                iconSize: [20, 20],
+                                iconAnchor: [10, 10],
+                              })}
+                            >
+                              <Popup>
+                                <div className="text-sm">
+                                  <p className="font-semibold">Update #{idx + 1}</p>
+                                  <p>{update.location}</p>
+                                  {update.createdAt && (
+                                    <p className="text-xs text-stone-500">
+                                      {new Date(update.createdAt).toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                              </Popup>
+                            </Marker>
+                          );
+                        })}
+                        {/* Destination marker */}
+                        {batch.destinationCoordinates && (
+                          <Marker position={batch.destinationCoordinates as LatLngExpression}>
+                            <Popup>
+                              <div className="text-sm">
+                                <p className="font-semibold">Delivery</p>
+                                <p>{batch.destination}</p>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        )}
+                        {/* Route polyline */}
+                        {routePoints.length > 1 && (
+                          <Polyline
+                            positions={routePoints}
+                            color="#f97316"
+                            weight={3}
+                            opacity={0.7}
+                          />
+                        )}
+                      </MapContainer>
+                    </div>
+                    {/* Show tracking updates list */}
+                    {batch.trackingUpdates.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-stone-700 mb-2">Location Updates:</p>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {sortedUpdates.map((update, idx) => (
+                            <div key={update.id || idx} className="text-xs text-stone-600 flex items-center gap-2">
+                              <IconMapPin className="h-3 w-3 text-orange-500" />
+                              <span className="font-medium">{update.location}</span>
+                              {update.createdAt && (
+                                <span className="text-stone-400">
+                                  • {new Date(update.createdAt).toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             {batches.filter((batch) => batch.status === "in_transit" && batch.originCoordinates && batch.destinationCoordinates).length === 0 && (
               <div className="h-96 bg-stone-100 rounded-lg flex items-center justify-center border border-stone-200">
                 <div className="text-center space-y-2">

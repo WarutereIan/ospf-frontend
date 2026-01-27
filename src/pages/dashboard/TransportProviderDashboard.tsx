@@ -1,16 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { IconTruck, IconMapPin, IconClock, IconCurrency, IconChecklist, IconTrendingUp } from "@tabler/icons-react";
+import { IconTruck, IconMapPin, IconCurrency } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { useEffect, useMemo } from "react";
 import {
-  StatCard,
-  SimpleBarChart,
   StarRating,
 } from "@/components/visualizations";
 import { useTransport } from "@/contexts/TransportContext";
-import { useAnalytics } from "@/contexts/AnalyticsContext";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function TransportProviderDashboard() {
@@ -24,14 +21,6 @@ export default function TransportProviderDashboard() {
     fetchStats,
     isLoading: transportLoading 
   } = useTransport();
-  
-  const { 
-    trends,
-    transportProviderAnalytics,
-    fetchTrends,
-    fetchTransportProviderAnalytics,
-    isLoading: analyticsLoading 
-  } = useAnalytics();
 
   // Fetch data on mount
   useEffect(() => {
@@ -39,61 +28,41 @@ export default function TransportProviderDashboard() {
       fetchRequests();
       fetchActiveDeliveries();
       fetchStats();
-      fetchTrends({ timeRange: "week" });
-      fetchTransportProviderAnalytics({ timeRange: "week" });
     }
-  }, [user?.id, fetchRequests, fetchActiveDeliveries, fetchStats, fetchTrends, fetchTransportProviderAnalytics]);
+  }, [user?.id, fetchRequests, fetchActiveDeliveries, fetchStats]);
 
-  const isLoading = transportLoading || analyticsLoading;
+  const isLoading = transportLoading;
 
   // Calculate stats from context data
   const stats = useMemo(() => {
     const pendingRequests = requests.filter(r => r.status === "pending");
-    const today = new Date().toISOString().split("T")[0];
-    const completedToday = requests.filter(r => 
-      (r.status === "delivered" || r.status === "completed") && 
-      r.createdAt.startsWith(today)
-    ).length;
-
-    // Calculate earnings from completed requests
-    const completedRequests = requests.filter(r => r.status === "delivered" || r.status === "completed");
-    const totalEarnings = completedRequests.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
     
-    // Weekly earnings
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const weeklyEarnings = completedRequests
-      .filter(r => new Date(r.createdAt) >= weekAgo)
-      .reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+    // Calculate delivery status counts
+    const inTransitCount = transportActiveDeliveries.filter(
+      d => d.status === "in_transit" || d.status === "IN_TRANSIT_PICKUP" || d.status === "IN_TRANSIT_DELIVERY"
+    ).length;
+    const pickupCount = transportActiveDeliveries.filter(
+      d => d.status === "accepted" || d.status === "ACCEPTED" || d.collectionStatus === "pending"
+    ).length;
 
     return {
       activeDeliveries: transportActiveDeliveries.length,
       pendingRequests: pendingRequests.length,
-      completedToday,
-      totalEarnings: Math.round(totalEarnings),
-      weeklyEarnings: Math.round(weeklyEarnings),
+      inTransitCount,
+      pickupCount,
       rating: 4.8, // TODO: Get from profile/ratings
       reviews: 156, // TODO: Get from profile/ratings
     };
   }, [requests, transportActiveDeliveries]);
 
-  // Weekly earnings from trends
-  const weeklyEarnings = useMemo(() => {
-    if (trends.length === 0) return [];
-    return trends.slice(-5).map(t => ({
-      day: new Date(t.date).toLocaleDateString("en-US", { weekday: "short" }),
-      amount: t.revenue || 0,
-    }));
-  }, [trends]);
 
   // Active deliveries from context
   const activeDeliveries = useMemo(() => {
     return transportActiveDeliveries.slice(0, 3).map(delivery => ({
       id: delivery.id,
-      type: delivery.type === "produce_delivery" ? "Produce Delivery" : 
-            delivery.type === "input_delivery" ? "Input Delivery" : "Produce Pickup",
-      from: delivery.pickupLocation || "Unknown",
-      to: delivery.deliveryLocation || "Unknown",
+      type: delivery.type, // Keep original type for badge rendering
+      from: delivery.pickupLocation || delivery.from || "Unknown",
+      to: delivery.deliveryLocation || delivery.to || "Unknown",
       distance: `${delivery.distance || 0} km`,
       status: delivery.status === "in_transit" ? "in_transit" : 
               delivery.status === "delivered" ? "delivered" : "in_transit",
@@ -109,10 +78,9 @@ export default function TransportProviderDashboard() {
       .slice(0, 2)
       .map(request => ({
         id: request.id,
-        type: request.type === "produce_pickup" ? "Produce Pickup" : 
-              request.type === "input_delivery" ? "Input Delivery" : "Produce Delivery",
-        from: request.pickupLocation || "Unknown",
-        to: request.deliveryLocation || "Unknown",
+        type: request.type, // Keep original type for badge rendering
+        from: request.pickupLocation || request.from || "Unknown",
+        to: request.deliveryLocation || request.to || "Unknown",
         distance: `${request.distance || 0} km`,
         scheduledTime: request.scheduledPickupTime ? 
           new Date(request.scheduledPickupTime).toLocaleString() : "N/A",
@@ -120,6 +88,21 @@ export default function TransportProviderDashboard() {
         weight: `${request.weight || 0} kg`,
       }));
   }, [requests]);
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case "produce_pickup":
+        return <Badge variant="secondary">Produce Pickup</Badge>;
+      case "produce_delivery":
+        return <Badge className="bg-info text-info-foreground">Produce Delivery</Badge>;
+      case "input_delivery":
+        return <Badge className="bg-success text-success-foreground">Input Delivery</Badge>;
+      case "order_delivery":
+        return <Badge className="bg-purple-500 text-white">Order Delivery</Badge>;
+      default:
+        return <Badge variant="secondary">{type}</Badge>;
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -140,58 +123,9 @@ export default function TransportProviderDashboard() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Transport Provider Dashboard</h1>
         <p className="text-muted-foreground mt-1">
-          Manage deliveries and track your earnings
+          Manage deliveries and track your transport requests
         </p>
       </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Today's Earnings</CardTitle>
-            <CardDescription>Earnings from today's deliveries</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="h-32 bg-muted animate-pulse rounded" />
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-4xl font-bold">KES {stats.totalEarnings.toLocaleString()}</p>
-                <p className="text-sm text-muted-foreground mt-2">from {stats.completedToday} trips</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Deliveries</CardTitle>
-            <CardDescription>Currently in progress</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="h-32 bg-muted animate-pulse rounded" />
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-4xl font-bold">{stats.activeDeliveries}</p>
-                <div className="flex items-center justify-center gap-2 mt-2 text-sm text-muted-foreground">
-                  <span>● 2 In Transit</span>
-                  <span>◐ 3 Pickup</span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Earnings Chart */}
-      <SimpleBarChart
-        data={weeklyEarnings.map((w) => ({ name: w.day, value: w.amount }))}
-        title="Earnings This Week"
-        description="Daily earnings breakdown"
-        formatter={(value) => `KES ${value.toLocaleString()}`}
-        color="#22C55E"
-        height={300}
-      />
 
       {/* Rating Display */}
       <Card>
@@ -242,11 +176,31 @@ export default function TransportProviderDashboard() {
       </Card>
 
       {/* Active Deliveries */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Deliveries</CardTitle>
-          <CardDescription>Deliveries currently in progress</CardDescription>
-        </CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Deliveries</CardTitle>
+            <CardDescription>Currently in progress</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-32 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="text-center py-6">
+                <p className="text-4xl font-bold">{stats.activeDeliveries}</p>
+                <div className="flex items-center justify-center gap-2 mt-2 text-sm text-muted-foreground">
+                  <span>● {stats.inTransitCount} In Transit</span>
+                  <span>◐ {stats.pickupCount} Pickup</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Deliveries</CardTitle>
+            <CardDescription>Deliveries currently in progress</CardDescription>
+          </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {activeDeliveries.map((delivery) => (
@@ -256,7 +210,7 @@ export default function TransportProviderDashboard() {
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="font-medium">{delivery.type}</div>
+                    {getTypeBadge(delivery.type)}
                     <Badge className={getStatusColor(delivery.status)}>
                       {delivery.status}
                     </Badge>
@@ -287,7 +241,8 @@ export default function TransportProviderDashboard() {
             </Link>
           </div>
         </CardContent>
-      </Card>
+        </Card>
+      </div>
 
       {/* Pending Requests */}
       <Card>
@@ -303,7 +258,9 @@ export default function TransportProviderDashboard() {
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
               >
                 <div className="flex-1">
-                  <div className="font-medium">{request.type}</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {getTypeBadge(request.type)}
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     <div>From: {request.from}</div>
                     <div>To: {request.to}</div>

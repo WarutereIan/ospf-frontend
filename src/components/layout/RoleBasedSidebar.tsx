@@ -91,6 +91,7 @@ const aggregationManagerMenuItems: MenuItem[] = [
   { name: "Stock In", path: "/dashboard/aggregation/stock-in", icon: IconTrendingUp },
   { name: "Receive from Ward", path: "/dashboard/aggregation/receive-ward", icon: IconPackage },
   { name: "Stock Out", path: "/dashboard/aggregation/stock-out", icon: IconTrendingDown },
+  { name: "Order Processing", path: "/dashboard/aggregation/order-processing", icon: IconPackage },
   { name: "Quality Checks", path: "/dashboard/aggregation/quality-checks", icon: IconClipboardCheck },
   { name: "Buyer Matching", path: "/dashboard/aggregation/buyer-matching", icon: IconUsers },
   { name: "Inventory", path: "/dashboard/aggregation/inventory", icon: IconPackage },

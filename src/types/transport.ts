@@ -15,7 +15,8 @@
 export type TransportRequestType = 
   | "produce_pickup" // Farm → Aggregation Center
   | "produce_delivery" // Aggregation Center → Buyer/Market
-  | "input_delivery"; // Input Provider → Farmer
+  | "input_delivery" // Input Provider → Farmer
+  | "order_delivery"; // Marketplace Order Delivery (Aggregation Center → Buyer)
 
 /**
  * Transport request status
@@ -80,6 +81,8 @@ export interface TransportRequest {
   estimatedCost?: number; // Estimated transport cost (alias for amount or separate estimate)
   status: TransportRequestStatus;
   orderId?: string; // Related marketplace order ID
+  orderNumber?: string; // Related marketplace order number
+  orderStockOutRecorded?: boolean; // Whether the linked order has completed stockout
   inputOrderId?: string; // Related input order ID
   collectionStatus?: CollectionStatus; // Status for collection phase
   collectedBy?: string; // User ID who collected
@@ -239,11 +242,15 @@ export type Delivery = TransportRequest;
  */
 export interface DeliveryTrackingUpdate {
   id: string;
-  deliveryId: string;
-  timestamp: string; // ISO 8601
-  coordinates: [number, number]; // [lat, lng]
+  requestId: string;
+  deliveryId?: string; // Alias for requestId (used in some contexts)
+  timestamp?: string; // ISO 8601 (alias for createdAt)
+  createdAt?: string; // ISO 8601 - when the update was created
+  coordinates?: [number, number]; // [lat, lng]
+  location: string; // Human-readable location name
   status: string;
   notes?: string;
+  photos?: string[];
 }
 
 /**

@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -46,6 +47,7 @@ import {
   StarRating,
 } from "@/components/visualizations";
 import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
+import { LocationPicker } from "@/components/marketplace/LocationPicker";
 import type { ProduceListing, OFSPVariety } from "@/types/marketplace";
 
 const ofspVarieties = [
@@ -100,6 +102,9 @@ export function MarketplacePage() {
   const [showSmartMatching, setShowSmartMatching] = useState(false);
   const [orderQuantity, setOrderQuantity] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
+  const [deliveryCounty, setDeliveryCounty] = useState("");
+  const [deliveryCoordinates, setDeliveryCoordinates] = useState<string | undefined>(undefined);
+  const [fulfillmentType, setFulfillmentType] = useState<"self_pickup" | "request_transport">("self_pickup");
   const [advanceOrderOpen, setAdvanceOrderOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showFilters, setShowFilters] = useState(false);
@@ -169,7 +174,13 @@ export function MarketplacePage() {
   }, [listings, sortBy]);
 
   const handlePlaceOrder = async () => {
-    if (!selectedListing || !orderQuantity || !deliveryLocation || !user?.id) return;
+    if (!selectedListing || !orderQuantity || !user?.id) return;
+
+    // Validate transport requirements
+    if (fulfillmentType === "request_transport" && (!deliveryLocation || !deliveryCounty)) {
+      alert("Please provide delivery location and county when requesting transport");
+      return;
+    }
 
     const quantity = parseFloat(orderQuantity);
     if (quantity > selectedListing.availableQuantity) {
@@ -187,7 +198,11 @@ export function MarketplacePage() {
         qualityGrade: selectedListing.qualityGrade,
         pricePerKg: selectedListing.pricePerKg,
         totalAmount: quantity * selectedListing.pricePerKg,
-        deliveryLocation,
+        deliveryAddress: fulfillmentType === "request_transport" ? deliveryLocation : undefined,
+        deliveryLocation: fulfillmentType === "request_transport" ? deliveryLocation : undefined,
+        deliveryCounty: fulfillmentType === "request_transport" ? deliveryCounty : undefined,
+        deliveryCoordinates: fulfillmentType === "request_transport" ? deliveryCoordinates : undefined,
+        fulfillmentType,
         status: "order_placed",
       });
 
@@ -195,6 +210,9 @@ export function MarketplacePage() {
       setOrderDialogOpen(false);
       setOrderQuantity("");
       setDeliveryLocation("");
+      setDeliveryCounty("");
+      setDeliveryCoordinates(undefined);
+      setFulfillmentType("self_pickup");
       setSelectedListing(null);
       alert("Order placed successfully!");
     } catch (error) {
@@ -629,9 +647,9 @@ export function MarketplacePage() {
                   {/* Actions */}
                   {role === "buyer" && (
                     <div className="mt-auto space-y-2">
-                      <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+                      <div className="flex items-center gap-2">
                       <Button
-                          className="flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
+                          className="flex-1 flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-white text-sm font-semibold py-2.5 px-4 rounded-lg transition-colors shadow-sm"
                         onClick={() => {
                           setSelectedListing(listing);
                           setOrderDialogOpen(true);
@@ -643,12 +661,12 @@ export function MarketplacePage() {
                       <InitiateNegotiationButton
                         listing={listing}
                         variant="outline"
-                        size="icon"
-                        className="p-2.5 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors"
+                        size="default"
+                        className="shrink-0 px-3 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors whitespace-nowrap"
                       />
                       <Button
                         variant="outline"
-                          className="px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors"
+                          className="shrink-0 px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors whitespace-nowrap"
                         onClick={() => {
                           setSelectedListing(listing);
                           setRfqDialogOpen(true);
@@ -722,7 +740,7 @@ export function MarketplacePage() {
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Quantity (kg)</label>
+                <Label className="text-sm font-medium mb-2 block">Quantity (kg)</Label>
                 <Input
                   type="number"
                   placeholder="Enter quantity"
@@ -732,21 +750,59 @@ export function MarketplacePage() {
                   min={1}
                 />
               </div>
+              
+              {/* Fulfillment Type Selection */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Delivery Location</label>
-                <Select value={deliveryLocation} onValueChange={(value) => setDeliveryLocation(value || "")}>
+                <Label className="text-sm font-medium mb-2 block">Fulfillment Type</Label>
+                <Select
+                  value={fulfillmentType}
+                  onValueChange={(value) => {
+                    setFulfillmentType(value as "self_pickup" | "request_transport");
+                    if (value === "self_pickup") {
+                      setDeliveryLocation("");
+                      setDeliveryCounty("");
+                    }
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {allAggregationCenters.map((center) => (
-                      <SelectItem key={center.value} value={center.value}>
-                        {formatCenterLabel(center)}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="self_pickup">Self Pickup</SelectItem>
+                    <SelectItem value="request_transport">Request Transport</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Delivery Details - Only show when transport is requested */}
+              {fulfillmentType === "request_transport" && (
+                <>
+                  <LocationPicker
+                    address={deliveryLocation}
+                    coordinates={deliveryCoordinates}
+                    onAddressChange={setDeliveryLocation}
+                    onCoordinatesChange={setDeliveryCoordinates}
+                    label="Delivery Address"
+                    required={true}
+                  />
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Delivery County *</Label>
+                    <Select value={deliveryCounty} onValueChange={(value) => setDeliveryCounty(value || "")}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select county" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="machakos">Machakos</SelectItem>
+                        <SelectItem value="nairobi">Nairobi</SelectItem>
+                        <SelectItem value="kiambu">Kiambu</SelectItem>
+                        <SelectItem value="kajiado">Kajiado</SelectItem>
+                        <SelectItem value="makueni">Makueni</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
               {orderQuantity && (
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center">
@@ -765,7 +821,11 @@ export function MarketplacePage() {
             </Button>
             <Button
               onClick={handlePlaceOrder}
-              disabled={!orderQuantity || !deliveryLocation || parseFloat(orderQuantity) <= 0}
+              disabled={
+                !orderQuantity || 
+                parseFloat(orderQuantity) <= 0 ||
+                (fulfillmentType === "request_transport" && (!deliveryLocation || !deliveryCounty))
+              }
             >
               Place Order
             </Button>

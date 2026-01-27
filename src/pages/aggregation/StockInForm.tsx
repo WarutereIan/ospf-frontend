@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import {
   IconPhoto,
   IconLoader2,
   IconQrcode,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
@@ -22,6 +24,13 @@ import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchBatches, confirmStockTransaction, rejectStockTransaction, getStockTransactions } from "@/services/aggregationService";
 import { showSuccess, showError } from "@/lib/toast";
+import { calculateGradeFromMatrix } from "@/data/gradingMatrix";
+import {
+  weightRangeDefinitions,
+  colorIntensityDefinitions,
+  physicalConditionDefinitions,
+  freshnessDefinitions,
+} from "@/data/gradingMatrix";
 import type { StockTransaction } from "@/types/aggregation";
 import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 
@@ -84,6 +93,8 @@ export function StockInForm() {
   const [isSearchingBatch, setIsSearchingBatch] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const searchResultsRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<StockTransaction[]>([]);
   const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [confirmingTransactionId, setConfirmingTransactionId] = useState<string | null>(null);
@@ -97,10 +108,42 @@ export function StockInForm() {
     fetchPendingTransactions();
   }, [fetchCenters, selectedCenter]);
 
+  // Update dropdown position when input position changes
+  useEffect(() => {
+    const updatePosition = () => {
+      if (inputRef.current && showSearchResults && batchSearchResults.length > 0) {
+        const rect = inputRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      } else {
+        setDropdownPosition(null);
+      }
+    };
+
+    if (showSearchResults && batchSearchResults.length > 0) {
+      updatePosition();
+      window.addEventListener('scroll', updatePosition, true);
+      window.addEventListener('resize', updatePosition);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [showSearchResults, batchSearchResults.length, batchSearchTerm]);
+
   // Close search results when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchResultsRef.current && !searchResultsRef.current.contains(event.target as Node)) {
+      if (
+        searchResultsRef.current && 
+        !searchResultsRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
         setShowSearchResults(false);
       }
     };
@@ -227,6 +270,12 @@ export function StockInForm() {
       quantity: batch.quantity || prev.quantity,
       qualityGrade: batch.qualityGrade || prev.qualityGrade,
       orderId: batch.orderId || prev.orderId,
+      // Fill grading matrix criteria if available
+      weightRange: (batch as any).weightRange || prev.weightRange,
+      colorIntensity: (batch as any).colorIntensity || prev.colorIntensity,
+      physicalCondition: (batch as any).physicalCondition || prev.physicalCondition,
+      freshness: (batch as any).freshness || prev.freshness,
+      daysSinceHarvest: (batch as any).daysSinceHarvest || prev.daysSinceHarvest,
     }));
     setFoundBatch(batch);
     setBatchSearchTerm(batch.batchId || "");
@@ -270,6 +319,12 @@ export function StockInForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.variety || !formData.quantity || !formData.qualityGrade) {
+      showError("Validation Error", "Please fill in all required fields (variety, quantity, quality grade)");
+      return;
+    }
+    // Validate grading matrix criteria
+    if (!formData.weightRange || !formData.physicalCondition || !formData.freshness) {
+      showError("Validation Error", "Please complete all grading matrix criteria (weight range, physical condition, freshness)");
       return;
     }
 
@@ -297,6 +352,12 @@ export function StockInForm() {
         variety: formData.variety,
         quantity: formData.quantity || 0,
         qualityGrade: formData.qualityGrade as "A" | "B" | "C",
+        // Grading Matrix Criteria
+        weightRange: formData.weightRange || undefined,
+        colorIntensity: formData.colorIntensity || undefined,
+        physicalCondition: formData.physicalCondition || undefined,
+        freshness: formData.freshness || undefined,
+        daysSinceHarvest: formData.daysSinceHarvest || undefined,
         photos: formData.photos || [],
         notes: formData.notes,
         batchId,
@@ -451,21 +512,21 @@ export function StockInForm() {
       )}
 
       <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative" style={{ overflow: 'visible' }}>
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6 overflow-visible">
+          <div className="lg:col-span-2 space-y-6" style={{ overflow: 'visible' }}>
             {/* Batch ID Selection */}
-            <Card className="relative">
+            <Card className="relative overflow-visible">
               <CardHeader>
                 <CardTitle>Batch Information</CardTitle>
-                <CardDescription>Search for existing batch ID or leave blank to generate a new one</CardDescription>
+                <CardDescription>Search for existing batch ID or farmer name, or leave blank to generate a new batch</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4 overflow-visible">
+              <CardContent className="space-y-4 overflow-visible relative">
                 <div className="space-y-2">
                   <Label>Batch ID (Optional)</Label>
-                  <div className="relative z-10">
+                  <div className="relative z-10" ref={inputRef}>
                     <Input
-                      placeholder="Search for existing batch ID (e.g., BATCH-1234567890-123)..."
+                      placeholder="Search by batch ID (e.g., BATCH-1234567890-123) or farmer name..."
                       value={batchSearchTerm}
                       onChange={(e) => {
                         setBatchSearchTerm(e.target.value);
@@ -478,62 +539,69 @@ export function StockInForm() {
                         }
                       }}
                     />
-                    {/* Search Results Dropdown */}
-                    {showSearchResults && batchSearchResults.length > 0 && batchSearchTerm.trim().length >= 2 && (
-                      <div 
-                        ref={searchResultsRef}
-                        className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
-                        style={{ position: 'absolute', top: '100%' }}
-                      >
-                        <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
-                          Select a batch to auto-fill form:
-                        </div>
-                        {batchSearchResults.map((batch) => (
-                          <button
-                            key={batch.id}
-                            type="button"
-                            onClick={() => handleSelectBatch(batch)}
-                            className="w-full text-left p-3 hover:bg-blue-50 transition-colors border-b last:border-b-0"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-mono text-sm font-medium text-primary">
-                                    {batch.batchId}
-                                  </span>
-                                  {batch.status === "PENDING_CONFIRMATION" && (
-                                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs">
-                                      Pending
-                                    </Badge>
-                                  )}
-                                </div>
-                                {batch.farmerName && (
-                                  <p className="text-xs text-muted-foreground mb-1">
-                                    Farmer: {batch.farmerName}
-                                  </p>
-                                )}
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                  <span>Variety: {batch.variety}</span>
-                                  <span>•</span>
-                                  <span>Quantity: {batch.quantity} kg</span>
-                                  <span>•</span>
-                                  <Badge variant="outline" className={qualityGrades.find(g => g.value === batch.qualityGrade)?.color}>
-                                    Grade {batch.qualityGrade}
+                  </div>
+                </div>
+                {/* Search Results Dropdown - Rendered via Portal to avoid clipping */}
+                {showSearchResults && batchSearchResults.length > 0 && batchSearchTerm.trim().length >= 2 && dropdownPosition && typeof document !== 'undefined' && createPortal(
+                    <div 
+                      ref={searchResultsRef}
+                      className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                      style={{ 
+                        top: `${dropdownPosition.top}px`,
+                        left: `${dropdownPosition.left}px`,
+                        width: `${dropdownPosition.width}px`,
+                      }}
+                    >
+                      <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
+                        Select a batch to auto-fill form:
+                      </div>
+                      {batchSearchResults.map((batch) => (
+                        <button
+                          key={batch.id}
+                          type="button"
+                          onClick={() => handleSelectBatch(batch)}
+                          className="w-full text-left p-3 hover:bg-blue-50 transition-colors border-b last:border-b-0"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm font-medium text-primary">
+                                  {batch.batchId}
+                                </span>
+                                {batch.status === "PENDING_CONFIRMATION" && (
+                                  <Badge variant="outline" className="bg-yellow-100 text-yellow-800 text-xs">
+                                    Pending
                                   </Badge>
-                                </div>
-                                {batch.orderId && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    Order: {batch.orderId}
-                                  </p>
                                 )}
                               </div>
-                              <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                              {batch.farmerName && (
+                                <p className="text-xs text-muted-foreground mb-1">
+                                  Farmer: {batch.farmerName}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span>Variety: {batch.variety}</span>
+                                <span>•</span>
+                                <span>Quantity: {batch.quantity} kg</span>
+                                <span>•</span>
+                                <Badge variant="outline" className={qualityGrades.find(g => g.value === batch.qualityGrade)?.color}>
+                                  Grade {batch.qualityGrade}
+                                </Badge>
+                              </div>
+                              {batch.orderId && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Order: {batch.orderId}
+                                </p>
+                              )}
                             </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                            <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>,
+                    document.body
+                  )}
+                <div className="space-y-2">
                   {isSearchingBatch && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <IconLoader2 className="h-4 w-4 animate-spin" />
@@ -622,35 +690,192 @@ export function StockInForm() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Quality Grade</Label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {qualityGrades.map((grade) => (
-                      <button
-                        key={grade.value}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({ ...prev, qualityGrade: grade.value as "A" | "B" | "C" }))
-                        }
-                        className={cn(
-                          "p-4 border-2 rounded-lg text-left transition-all",
-                          formData.qualityGrade === grade.value
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/50"
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <Badge variant="outline" className={grade.color}>
-                            Grade {grade.value}
-                          </Badge>
-                          {formData.qualityGrade === grade.value && (
-                            <IconCheck className="h-5 w-5 text-primary" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{grade.label.split(" - ")[1]}</p>
-                      </button>
-                    ))}
+                {/* Grading Matrix Section */}
+                <div className="border-t pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">Grading Matrix Criteria</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowMatrixGuide(true)}
+                    >
+                      <IconInfoCircle className="mr-2 h-4 w-4" />
+                      View Matrix Guide
+                    </Button>
                   </div>
+
+                  {/* Weight Range */}
+                  <div className="space-y-2">
+                    <Label>1. Weight Range *</Label>
+                    <Select
+                      value={formData.weightRange || ""}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, weightRange: value as WeightRange }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select weight range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {weightRangeDefinitions.map((def) => (
+                          <SelectItem key={def.value} value={def.value}>
+                            {def.label} - {def.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Color Intensity */}
+                  <div className="space-y-2">
+                    <Label htmlFor="colorIntensity">2. Color Intensity (1-10) *</Label>
+                    <div className="space-y-2">
+                      <Input
+                        id="colorIntensity"
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={formData.colorIntensity || 5}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, colorIntensity: parseInt(e.target.value) }))
+                        }
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Very Pale (1)</span>
+                        <span className="font-semibold">
+                          {colorIntensityDefinitions.find((c) => c.score === (formData.colorIntensity || 5))?.label || formData.colorIntensity}
+                        </span>
+                        <span>Premium+ (10)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Physical Condition */}
+                  <div className="space-y-2">
+                    <Label>3. Physical Condition *</Label>
+                    <Select
+                      value={formData.physicalCondition || ""}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, physicalCondition: value as PhysicalCondition }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select physical condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {physicalConditionDefinitions.map((def) => (
+                          <SelectItem key={def.value} value={def.value}>
+                            {def.label} - {def.description}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Freshness */}
+                  <div className="space-y-2">
+                    <Label>4. Freshness *</Label>
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.freshness || ""}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({ ...prev, freshness: value as FreshnessLevel }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select freshness level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {freshnessDefinitions.map((def) => (
+                            <SelectItem key={def.value} value={def.value}>
+                              {def.label} - {def.description}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder="Days since harvest (optional)"
+                        min={0}
+                        value={formData.daysSinceHarvest || ""}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            daysSinceHarvest: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Grade Recommendation */}
+                  {formData.weightRange && formData.physicalCondition && formData.freshness && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      {(() => {
+                        const recommendation = calculateGradeFromMatrix({
+                          weightRange: formData.weightRange,
+                          colorIntensity: formData.colorIntensity || 5,
+                          physicalCondition: formData.physicalCondition,
+                          freshness: formData.freshness,
+                        });
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-blue-900">Recommended Grade:</span>
+                              <Badge
+                                className={cn(
+                                  "text-base px-3 py-1",
+                                  recommendation.recommendedGrade === "A" && "bg-green-100 text-green-800",
+                                  recommendation.recommendedGrade === "B" && "bg-yellow-100 text-yellow-800",
+                                  recommendation.recommendedGrade === "C" && "bg-orange-100 text-orange-800"
+                                )}
+                              >
+                                Grade {recommendation.recommendedGrade}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-blue-700">
+                              Confidence: <span className="font-semibold">{recommendation.confidence}</span>
+                            </p>
+                            <p className="text-xs text-blue-600 mt-2">{recommendation.explanation}</p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  qualityGrade: recommendation.recommendedGrade as "A" | "B" | "C",
+                                }))
+                              }
+                              className="w-full mt-2"
+                            >
+                              <IconCheck className="mr-2 h-4 w-4" />
+                              Apply Recommended Grade
+                            </Button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Quality Grade Display */}
+                  {formData.qualityGrade && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Selected Quality Grade:</Label>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            qualityGrades.find((g) => g.value === formData.qualityGrade)?.color
+                          )}
+                        >
+                          Grade {formData.qualityGrade}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -821,7 +1046,7 @@ export function StockInForm() {
               </CardHeader>
               <CardContent>
                 <ul className="text-xs text-muted-foreground space-y-2">
-                  <li>• Search for existing batch ID if available</li>
+                  <li>• Search for existing batch ID or farmer name if available</li>
                   <li>• New batch ID will be generated automatically if not found</li>
                   <li>• Weigh the produce before recording</li>
                   <li>• Assess quality and assign appropriate grade</li>

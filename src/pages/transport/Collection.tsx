@@ -30,10 +30,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   IconTruck,
-  IconMapPin,
   IconClock,
   IconWeight,
-  IconCurrency,
   IconCheck,
   IconPackage,
   IconCalendar,
@@ -84,6 +82,12 @@ export default function Collection() {
   );
 
   const handleMarkCollection = (collection: TransportRequest) => {
+    // Prevent opening dialog if collection cannot be marked
+    if (!canMarkCollected(collection)) {
+      const reason = getCollectionBlockReason(collection);
+      alert(reason || "Collection cannot be marked at this time.");
+      return;
+    }
     setSelectedCollection(collection);
     setCollectionForm({
       collectionDate: new Date().toISOString().split("T")[0],
@@ -97,6 +101,13 @@ export default function Collection() {
   const handleSubmitCollection = async () => {
     if (!selectedCollection || !collectionForm.collectedBy) {
       alert("Please fill in all required fields");
+      return;
+    }
+
+    // Double-check stockout requirement for order deliveries
+    if (!canMarkCollected(selectedCollection)) {
+      const reason = getCollectionBlockReason(selectedCollection);
+      alert(reason || "Collection cannot be marked. Stockout process must be completed first.");
       return;
     }
 
@@ -114,7 +125,8 @@ export default function Collection() {
         }
       }));
 
-      // Update request status to in_transit
+      // Update request status to in_transit (will be mapped to IN_TRANSIT_PICKUP for order deliveries)
+      // Pass the transport type so the service can determine the correct backend status
       await updateRequestStatus(selectedCollection.id, "in_transit");
 
       setCollectionDialogOpen(false);
@@ -130,15 +142,19 @@ export default function Collection() {
   };
 
   const getTypeBadge = (type: string) => {
-    switch (type) {
+    // Handle both lowercase (frontend) and uppercase (backend) formats
+    const normalizedType = type?.toLowerCase();
+    switch (normalizedType) {
       case "produce_pickup":
         return <Badge variant="secondary">Produce Pickup</Badge>;
       case "produce_delivery":
         return <Badge className="bg-info text-info-foreground">Produce Delivery</Badge>;
       case "input_delivery":
         return <Badge className="bg-success text-success-foreground">Input Delivery</Badge>;
+      case "order_delivery":
+        return <Badge className="bg-purple-500 text-white">Order Delivery</Badge>;
       default:
-        return null;
+        return <Badge variant="secondary">{type || "Unknown"}</Badge>;
     }
   };
 
@@ -151,6 +167,24 @@ export default function Collection() {
       default:
         return <Badge className="bg-muted text-muted-foreground">Not Started</Badge>;
     }
+  };
+
+  // Check if collection can be marked for a given request
+  const canMarkCollected = (collection: TransportRequest): boolean => {
+    // For order deliveries, stockout must be completed
+    if (collection.type === "order_delivery") {
+      return collection.orderStockOutRecorded === true;
+    }
+    // For other types, allow if status is accepted
+    return collection.status === "accepted";
+  };
+
+  // Get reason why collection cannot be marked
+  const getCollectionBlockReason = (collection: TransportRequest): string | null => {
+    if (collection.type === "order_delivery" && !collection.orderStockOutRecorded) {
+      return "Stockout process must be completed before collection";
+    }
+    return null;
   };
 
   return (
@@ -245,7 +279,7 @@ export default function Collection() {
               <Table className="w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">Request ID</TableHead>
+                  <TableHead className="w-[100px]">Order Number</TableHead>
                   <TableHead className="w-[110px]">Type</TableHead>
                   <TableHead className="w-[140px]">Requester</TableHead>
                   <TableHead className="w-[170px]">Route</TableHead>
@@ -258,7 +292,9 @@ export default function Collection() {
               <TableBody>
                 {filteredCollections.map((collection) => (
                   <TableRow key={collection.id}>
-                    <TableCell className="font-medium font-mono text-xs">{collection.requestId}</TableCell>
+                    <TableCell className="font-medium font-mono text-xs">
+                      {collection.orderNumber || collection.requestId}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">{getTypeBadge(collection.type)}</TableCell>
                     <TableCell className="text-xs max-w-[140px]">
                       <div className="truncate" title={collection.requesterName}>{collection.requesterName}</div>
@@ -266,20 +302,12 @@ export default function Collection() {
                     <TableCell className="text-xs max-w-[170px]">
                       <div className="font-medium truncate" title={collection.from}>{collection.from}</div>
                       <div className="text-muted-foreground truncate" title={collection.to}>→ {collection.to}</div>
-                      <div className="text-xs text-muted-foreground">
-                        <IconMapPin className="h-3 w-3 inline mr-1" />
-                        {collection.distance} km
-                      </div>
                     </TableCell>
                     <TableCell className="text-xs max-w-[140px]">
                       <div className="truncate" title={collection.description}>{collection.description}</div>
                       <div className="text-muted-foreground">
                         <IconWeight className="h-3 w-3 inline mr-1" />
                         {collection.weight} kg
-                      </div>
-                      <div className="text-muted-foreground">
-                        <IconCurrency className="h-3 w-3 inline mr-1" />
-                        KES {collection.amount}
                       </div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{getCollectionStatusBadge(collection.status)}</TableCell>
@@ -307,14 +335,23 @@ export default function Collection() {
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       {collection.status === "accepted" && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleMarkCollection(collection)}
-                          className="text-xs"
-                        >
-                          <IconCheck className="mr-1 h-3 w-3" />
-                          Mark Collected
-                        </Button>
+                        <div className="flex flex-col items-end gap-1">
+                          <Button
+                            size="sm"
+                            onClick={() => handleMarkCollection(collection)}
+                            disabled={!canMarkCollected(collection)}
+                            className="text-xs"
+                            title={getCollectionBlockReason(collection) || undefined}
+                          >
+                            <IconCheck className="mr-1 h-3 w-3" />
+                            Mark Collected
+                          </Button>
+                          {!canMarkCollected(collection) && (
+                            <span className="text-xs text-muted-foreground text-right max-w-[120px]">
+                              {getCollectionBlockReason(collection)}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {collection.status === "in_transit" && (
                         <Badge className="bg-success text-success-foreground text-xs">
@@ -345,7 +382,9 @@ export default function Collection() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <CardTitle className="text-base font-mono">{collection.requestId}</CardTitle>
+                    <CardTitle className="text-base font-mono">
+                      {collection.orderNumber || collection.requestId}
+                    </CardTitle>
                     {getTypeBadge(collection.type)}
                   </div>
                   <CardDescription className="text-sm">{collection.requester}</CardDescription>
@@ -359,10 +398,6 @@ export default function Collection() {
                 <div className="text-sm">
                   <div className="font-medium">{collection.from}</div>
                   <div className="text-muted-foreground">→ {collection.to}</div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                    <IconMapPin className="h-3 w-3" />
-                    {collection.distance} km
-                  </div>
                 </div>
               </div>
               <div>
@@ -373,10 +408,6 @@ export default function Collection() {
                     <span className="flex items-center gap-1">
                       <IconWeight className="h-3 w-3" />
                       {collection.weight} kg
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <IconCurrency className="h-3 w-3" />
-                      KES {collection.amount}
                     </span>
                   </div>
                 </div>
@@ -403,17 +434,26 @@ export default function Collection() {
                 </div>
               )}
               <div className="pt-2">
-                {collection.collectionStatus === "pending" && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleMarkCollection(collection)}
-                    className="w-full"
-                  >
-                    <IconCheck className="mr-2 h-4 w-4" />
-                    Mark Collected
-                  </Button>
+                {collection.status === "accepted" && (
+                  <div className="space-y-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleMarkCollection(collection)}
+                      disabled={!canMarkCollected(collection)}
+                      className="w-full"
+                      title={getCollectionBlockReason(collection) || undefined}
+                    >
+                      <IconCheck className="mr-2 h-4 w-4" />
+                      Mark Collected
+                    </Button>
+                    {!canMarkCollected(collection) && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        {getCollectionBlockReason(collection)}
+                      </p>
+                    )}
+                  </div>
                 )}
-                {collection.collectionStatus === "collected" && (
+                {collection.status === "in_transit" && (
                   <Badge className="bg-success text-success-foreground w-full justify-center py-2">
                     Ready for Delivery
                   </Badge>
@@ -440,8 +480,10 @@ export default function Collection() {
                 <CardContent className="p-4">
                   <div className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
-                      <span className="text-sm font-medium">Request ID:</span>
-                      <span className="text-sm font-mono break-all">{selectedCollection.requestId}</span>
+                      <span className="text-sm font-medium">Order Number:</span>
+                      <span className="text-sm font-mono break-all">
+                        {selectedCollection.orderNumber || selectedCollection.requestId}
+                      </span>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
                       <span className="text-sm font-medium">Type:</span>
