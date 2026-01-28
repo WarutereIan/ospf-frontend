@@ -40,9 +40,12 @@ import {
 } from "@tabler/icons-react";
 import { StatCard } from "@/components/visualizations";
 import { useInput } from "@/contexts/InputContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { showSuccess, showError } from "@/lib/toast";
 import type { InputOrder } from "@/types/input";
 
 export default function InputOrders() {
+  const { user } = useAuth();
   const { inputOrders, fetchInputOrders, updateOrderStatus, isLoading } = useInput();
   
   const [filteredOrders, setFilteredOrders] = useState<InputOrder[]>(inputOrders);
@@ -50,11 +53,14 @@ export default function InputOrders() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
-  // Fetch orders on mount
+  // Fetch orders on mount - filter by current user's providerId
   useEffect(() => {
-    fetchInputOrders();
-  }, [fetchInputOrders]);
+    if (user?.id) {
+      fetchInputOrders({ providerId: user.id });
+    }
+  }, [user?.id, fetchInputOrders]);
 
   // Apply filters
   useEffect(() => {
@@ -83,40 +89,63 @@ export default function InputOrders() {
   };
 
   const handleAcceptOrder = async (orderId: string) => {
+    setUpdatingStatus(orderId);
     try {
       await updateOrderStatus(orderId, "accepted");
+      showSuccess("Order accepted", "The order has been accepted successfully");
       setIsDetailDialogOpen(false);
       // Refresh orders
       await fetchInputOrders();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to accept order. Please try again.";
+      showError("Failed to accept order", errorMessage);
       console.error("Failed to accept order:", error);
-      alert("Failed to accept order. Please try again.");
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
   const handleRejectOrder = async (orderId: string) => {
     if (confirm("Are you sure you want to reject this order?")) {
+      setUpdatingStatus(orderId);
       try {
         await updateOrderStatus(orderId, "rejected");
+        showSuccess("Order rejected", "The order has been rejected");
         setIsDetailDialogOpen(false);
         // Refresh orders
         await fetchInputOrders();
-      } catch (error) {
+      } catch (error: any) {
+        const errorMessage = error?.message || "Failed to reject order. Please try again.";
+        showError("Failed to reject order", errorMessage);
         console.error("Failed to reject order:", error);
-        alert("Failed to reject order. Please try again.");
+      } finally {
+        setUpdatingStatus(null);
       }
     }
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: InputOrder["status"]) => {
+    setUpdatingStatus(orderId);
     try {
       await updateOrderStatus(orderId, newStatus);
+      const statusLabels: Record<string, string> = {
+        processing: "Processing",
+        ready_for_pickup: "Ready for Pickup",
+        in_transit: "In Transit",
+        delivered: "Delivered",
+        completed: "Completed",
+      };
+      const statusLabel = statusLabels[newStatus] || newStatus;
+      showSuccess("Status updated", `Order status changed to ${statusLabel}`);
       setIsDetailDialogOpen(false);
       // Refresh orders
       await fetchInputOrders();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to update order status. Please try again.";
+      showError("Failed to update status", errorMessage);
       console.error("Failed to update order status:", error);
-      alert("Failed to update order status. Please try again.");
+    } finally {
+      setUpdatingStatus(null);
     }
   };
 
@@ -271,7 +300,11 @@ export default function InputOrders() {
                 </TableHeader>
                 <TableBody>
                   {filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
+                    <TableRow 
+                      key={order.id}
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleViewOrder(order)}
+                    >
                       <TableCell className="font-medium">{order.orderNumber}</TableCell>
                       <TableCell>
                         <div>
@@ -301,7 +334,10 @@ export default function InputOrders() {
                       <TableCell>
                         {new Date(order.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell 
+                        className="text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Button
                           size="sm"
                           variant="ghost"
@@ -452,17 +488,40 @@ export default function InputOrders() {
                 <div className="flex flex-wrap gap-2 pt-4 border-t">
                   {selectedOrder.status === "pending" && (
                     <>
-                      <Button onClick={() => handleAcceptOrder(selectedOrder.id)} className="flex-1">
-                        <IconCheck className="mr-2 h-4 w-4" />
-                        Accept Order
+                      <Button 
+                        onClick={() => handleAcceptOrder(selectedOrder.id)} 
+                        className="flex-1"
+                        disabled={updatingStatus === selectedOrder.id}
+                      >
+                        {updatingStatus === selectedOrder.id ? (
+                          <>
+                            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Accepting...
+                          </>
+                        ) : (
+                          <>
+                            <IconCheck className="mr-2 h-4 w-4" />
+                            Accept Order
+                          </>
+                        )}
                       </Button>
                       <Button
                         variant="destructive"
                         onClick={() => handleRejectOrder(selectedOrder.id)}
                         className="flex-1"
+                        disabled={updatingStatus === selectedOrder.id}
                       >
-                        <IconX className="mr-2 h-4 w-4" />
-                        Reject Order
+                        {updatingStatus === selectedOrder.id ? (
+                          <>
+                            <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Rejecting...
+                          </>
+                        ) : (
+                          <>
+                            <IconX className="mr-2 h-4 w-4" />
+                            Reject Order
+                          </>
+                        )}
                       </Button>
                     </>
                   )}
@@ -470,45 +529,95 @@ export default function InputOrders() {
                     <Button
                       onClick={() => handleUpdateStatus(selectedOrder.id, "processing")}
                       className="flex-1"
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      <IconLoader2 className="mr-2 h-4 w-4" />
-                      Start Processing
+                      {updatingStatus === selectedOrder.id ? (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4" />
+                          Start Processing
+                        </>
+                      )}
                     </Button>
                   )}
                   {selectedOrder.status === "processing" && (
                     <Button
                       onClick={() => handleUpdateStatus(selectedOrder.id, "ready_for_pickup")}
                       className="flex-1"
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      <IconPackage className="mr-2 h-4 w-4" />
-                      Mark Ready for Pickup
+                      {updatingStatus === selectedOrder.id ? (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <IconPackage className="mr-2 h-4 w-4" />
+                          Mark Ready for Pickup
+                        </>
+                      )}
                     </Button>
                   )}
                   {selectedOrder.status === "ready_for_pickup" && selectedOrder.requiresTransport && (
                     <Button
                       onClick={() => handleUpdateStatus(selectedOrder.id, "in_transit")}
                       className="flex-1"
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      <IconTruck className="mr-2 h-4 w-4" />
-                      Mark In Transit
+                      {updatingStatus === selectedOrder.id ? (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <IconTruck className="mr-2 h-4 w-4" />
+                          Mark In Transit
+                        </>
+                      )}
                     </Button>
                   )}
                   {(selectedOrder.status === "in_transit" || selectedOrder.status === "ready_for_pickup") && (
                     <Button
                       onClick={() => handleUpdateStatus(selectedOrder.id, "delivered")}
                       className="flex-1"
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      <IconCircleCheck className="mr-2 h-4 w-4" />
-                      Mark Delivered
+                      {updatingStatus === selectedOrder.id ? (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <IconCircleCheck className="mr-2 h-4 w-4" />
+                          Mark Delivered
+                        </>
+                      )}
                     </Button>
                   )}
                   {selectedOrder.status === "delivered" && (
                     <Button
                       onClick={() => handleUpdateStatus(selectedOrder.id, "completed")}
                       className="flex-1"
+                      disabled={updatingStatus === selectedOrder.id}
                     >
-                      <IconCircleCheck className="mr-2 h-4 w-4" />
-                      Complete Order
+                      {updatingStatus === selectedOrder.id ? (
+                        <>
+                          <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <IconCircleCheck className="mr-2 h-4 w-4" />
+                          Complete Order
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>

@@ -205,6 +205,7 @@ export function FarmerOrderDetails() {
         <CardContent>
           <OrderTimeline
             currentStage={order.status as OrderStage}
+            fulfillmentType={order.fulfillmentType}
             stages={[
               {
                 stage: "order_placed",
@@ -218,10 +219,10 @@ export function FarmerOrderDetails() {
               },
               {
                 stage: "payment_secured",
-                timestamp: payment?.confirmedAt || (["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: payment?.confirmedAt || (["payment_secured", "ready_to_process", "processing", "ready_for_collection", "collected", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 12 * 60 * 1000).toISOString()
                   : undefined),
-                completed: payment && (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED" || payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER") || ["payment_secured", "ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: payment && (payment.status?.toLowerCase() === "secured" || payment.status === "SECURED" || payment.status?.toLowerCase() === "confirmed_by_farmer" || payment.status === "CONFIRMED_BY_FARMER") || ["payment_secured", "ready_to_process", "processing", "ready_for_collection", "collected", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "payment_confirmed_by_farmer",
@@ -237,36 +238,53 @@ export function FarmerOrderDetails() {
                   payment.status === "CONFIRMED_BY_FARMER" ||
                   payment.farmerConfirmedAt !== undefined ||
                   payment.farmerConfirmedBy !== undefined
-                ) || ["ready_to_process", "processing", "ready_for_collection", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                ) || ["ready_to_process", "processing", "ready_for_collection", "released", "collected", "in_transit", "at_aggregation", "quality_approved", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "ready_to_process",
-                timestamp: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: ["ready_to_process", "processing", "ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 6 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["ready_to_process", "processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_to_process", "processing", "ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "processing",
-                timestamp: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: ["processing", "ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 4 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["processing", "ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["processing", "ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
                 stage: "ready_for_collection",
-                timestamp: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                timestamp: ["ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status)
                   ? new Date(Date.now() - 2 * 60 * 1000).toISOString()
                   : undefined,
-                completed: ["ready_for_collection", "out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["ready_for_collection", "released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
               {
-                stage: "out_for_delivery",
-                timestamp: ["out_for_delivery", "delivered", "completed"].includes(order.status)
-                  ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
+                stage: "released",
+                timestamp: ["released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? (order.stockOutRecorded ? new Date(Date.now() - 1.5 * 60 * 1000).toISOString() : undefined)
                   : undefined,
-                completed: ["out_for_delivery", "delivered", "completed"].includes(order.status),
+                completed: ["released", "collected", "out_for_delivery", "delivered", "completed"].includes(order.status),
               },
+              {
+                stage: "collected",
+                timestamp: ["collected", "out_for_delivery", "delivered", "completed"].includes(order.status)
+                  ? (order.collected ? new Date(Date.now() - 1 * 60 * 1000).toISOString() : undefined)
+                  : undefined,
+                completed: ["collected", "out_for_delivery", "delivered", "completed"].includes(order.status),
+              },
+              // Only include delivery stages if fulfillmentType is request_transport
+              ...(order.fulfillmentType === "request_transport" ? [
+                {
+                  stage: "out_for_delivery" as OrderStage,
+                  timestamp: ["out_for_delivery", "delivered", "completed"].includes(order.status)
+                    ? new Date(Date.now() - 1 * 60 * 1000).toISOString()
+                    : undefined,
+                  completed: ["out_for_delivery", "delivered", "completed"].includes(order.status),
+                },
+              ] : []),
               {
                 stage: "delivered",
                 timestamp: order.status === "delivered" || order.status === "completed"

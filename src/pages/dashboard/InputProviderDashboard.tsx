@@ -33,12 +33,12 @@ export default function InputProviderDashboard() {
     isLoading: analyticsLoading 
   } = useAnalytics();
 
-  // Fetch data on mount
+  // Fetch data on mount - filter by current user's providerId
   useEffect(() => {
     if (user?.id) {
-      fetchInputs();
-      fetchInputOrders();
-      fetchCustomers();
+      fetchInputs({ providerId: user.id });
+      fetchInputOrders({ providerId: user.id });
+      fetchCustomers({ providerId: user.id });
       fetchTrends({ timeRange: "month" });
       fetchInputProviderAnalytics({ timeRange: "month" });
     }
@@ -146,9 +146,9 @@ export default function InputProviderDashboard() {
       .reverse()
       .map(order => ({
         id: order.id,
-        farmer: order.customerName || "Unknown",
-        input: order.items?.[0]?.productName || "Unknown",
-        quantity: `${order.items?.[0]?.quantity || 0} ${order.items?.[0]?.unit || ""}`,
+        farmer: order.farmerName || order.customerName || "Unknown",
+        input: order.inputName || "Unknown",
+        quantity: `${order.quantity || 0} ${order.unit || ""}`,
         amount: `KES ${(order.totalAmount || 0).toLocaleString()}`,
         status: order.status,
       }));
@@ -164,6 +164,7 @@ export default function InputProviderDashboard() {
       })
       .slice(0, 3)
       .map(p => ({
+        id: p.id,
         name: p.name,
         current: p.stock || 0,
         minimum: p.minimumStock || 0,
@@ -336,9 +337,11 @@ export default function InputProviderDashboard() {
                     {order.status}
                   </div>
                 </div>
-                <Button size="sm" variant="outline">
-                  View
-                </Button>
+                <Link to={`/dashboard/input-orders`}>
+                  <Button size="sm" variant="outline">
+                    View
+                  </Button>
+                </Link>
               </div>
             ))}
           </div>
@@ -354,16 +357,18 @@ export default function InputProviderDashboard() {
 
       {/* Low Stock Alerts */}
       <div className="space-y-3">
-        {lowStockInputs.map((input, index) => (
+        {lowStockInputs.map((input) => (
           <AlertCard
-            key={index}
+            key={input.id}
             type={input.current === 0 ? "error" : "warning"}
             title={input.current === 0 ? `${input.name}: OUT OF STOCK` : `${input.name}: Low Stock`}
             message={`Current: ${input.current} ${input.unit} | Minimum: ${input.minimum} ${input.unit}`}
             action={
-              <Button size="sm" variant="outline">
-                Restock
-              </Button>
+              <Link to="/dashboard/inputs">
+                <Button size="sm" variant="outline">
+                  Restock
+                </Button>
+              </Link>
             }
           />
         ))}

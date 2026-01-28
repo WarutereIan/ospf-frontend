@@ -35,6 +35,8 @@ export type MarketplaceOrderStatus =
   | "ready_to_process" // Payment confirmed by farmer, ready for aggregation center to start processing
   | "processing" // Aggregation center is processing the order
   | "ready_for_collection" // Order processed and ready for buyer collection
+  | "released" // Stock released - stock out recorded by aggregation officer
+  | "collected" // Order collected by buyer
   | "in_transit"
   | "at_aggregation"
   | "quality_checked"
@@ -56,7 +58,8 @@ export type PaymentStatus =
   | "confirmed_by_farmer"
   | "released" 
   | "refunded" 
-  | "disputed";
+  | "disputed"
+  | "failed";
 
 /**
  * Produce Listing

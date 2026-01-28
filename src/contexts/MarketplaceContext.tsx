@@ -36,6 +36,7 @@ import {
   createMarketplaceOrder,
   updateMarketplaceOrderStatus,
   markOrderAsCollected,
+  confirmDeliveryByBuyer,
   getSourcingRequests,
   getSourcingRequestById,
   createSourcingRequest,
@@ -124,6 +125,7 @@ interface MarketplaceContextType {
   createOrder: (order: Partial<MarketplaceOrder>) => Promise<void>;
   updateOrderStatus: (id: string, status: MarketplaceOrder["status"]) => Promise<void>;
   markOrderAsCollected: (id: string) => Promise<void>;
+  confirmDeliveryByBuyer: (id: string) => Promise<void>;
   setOrderFilters: (filters: MarketplaceOrderFilters) => void;
   clearSelectedOrder: () => void;
   
@@ -371,6 +373,25 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setOrders(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark order as collected");
+      throw err; // Re-throw so caller can handle it
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderFilters]);
+
+  const confirmDeliveryByBuyerAction = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await confirmDeliveryByBuyer(id);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      // Refresh orders - call service function directly
+      const data = await getMarketplaceOrders(orderFilters);
+      setOrders(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to confirm delivery");
       throw err; // Re-throw so caller can handle it
     } finally {
       setIsLoading(false);
@@ -1031,6 +1052,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     createOrder,
     updateOrderStatus,
     markOrderAsCollected: markOrderAsCollectedAction,
+    confirmDeliveryByBuyer: confirmDeliveryByBuyerAction,
     setOrderFilters,
     clearSelectedOrder,
     fetchSourcingRequests,

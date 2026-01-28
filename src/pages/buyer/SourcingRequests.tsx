@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -1701,190 +1702,234 @@ export function SourcingRequests() {
         </button>
       </div>
 
-      {/* Request Cards Grid */}
+      {/* Request Table */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="bg-white border-stone-200 animate-pulse">
-              <CardContent className="p-5">
-                <div className="h-48 bg-stone-100 rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Request</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Deadline</TableHead>
+                    <TableHead>Suppliers</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[1, 2, 3].map((i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={7}>
+                        <div className="h-12 bg-stone-100 rounded animate-pulse" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       ) : filteredRequests.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredRequests.map((request) => {
-            const total = typeof request.total === "number" && Number.isFinite(request.total) ? request.total : 0;
-            const fulfilled = typeof request.fulfilled === "number" && Number.isFinite(request.fulfilled) ? request.fulfilled : 0;
-            const percentage = total > 0 ? (fulfilled / total) * 100 : 0;
-            const progressColor = getProgressColor(percentage, request.status);
+        <Card>
+          <CardContent className="p-0">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Request</TableHead>
+                    <TableHead>Quantity</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead>Deadline</TableHead>
+                    <TableHead>Suppliers</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRequests.map((request) => {
+                    const total = typeof request.total === "number" && Number.isFinite(request.total) ? request.total : 0;
+                    const fulfilled = typeof request.fulfilled === "number" && Number.isFinite(request.fulfilled) ? request.fulfilled : 0;
+                    const percentage = total > 0 ? (fulfilled / total) * 100 : 0;
+                    const progressColor = getProgressColor(percentage, request.status);
 
-            return (
-              <Card
-                key={request.id}
-                className="bg-white rounded-xl border border-stone-200 shadow-sm hover:shadow-md transition-shadow group"
-              >
-                <CardContent className="p-5">
-                  {/* Header */}
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg ${getProductIconBg(request.productType)} flex items-center justify-center`}
+                    // Get supplier count
+                    const offers = Array.isArray(request.offers) ? request.offers : [];
+                    const uniqueSupplierIds = new Set(offers.map(offer => offer.farmerId).filter(Boolean));
+                    const offerCount = uniqueSupplierIds.size;
+                    const suppliersList = Array.isArray(request.suppliers) ? request.suppliers : [];
+                    const supplierRefs = suppliersList.filter(
+                      (s): s is { id: string; initials: string; color: string } =>
+                        typeof s === "object" && s != null && "id" in s && "initials" in s
+                    );
+                    const displayCount = offerCount > 0 ? offerCount : supplierRefs.length;
+
+                    return (
+                      <TableRow
+                        key={request.id}
+                        className="cursor-pointer hover:bg-stone-50"
+                        onClick={() => handleManage(request)}
                       >
-                        {getProductIcon(request.productType)}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-bold text-stone-900">{request.title}</h3>
-                          {request.isRecurring && (
-                            <IconRepeat className="h-3.5 w-3.5 text-blue-600" title="Recurring Order" />
-                          )}
-                        </div>
-                        <span className="text-[10px] text-stone-500 font-mono">{request.requestId}</span>
-                        {request.isRecurring && request.recurringFrequency && (
-                          <span className="text-[10px] text-blue-600 ml-2">
-                            {request.recurringFrequency.charAt(0).toUpperCase() + request.recurringFrequency.slice(1)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {getStatusBadge(request.status)}
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Fulfillment Progress */}
-                    <div>
-                      <div className="flex justify-between text-xs mb-1.5">
-                        <span className="text-stone-500">Fulfilled</span>
-                        <span className="font-medium text-stone-900">
-                          {formatQuantity(fulfilled, request.unit)} / {formatQuantity(total, request.unit)}
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${progressColor} transition-all`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Price and Deadline */}
-                    <div className="grid grid-cols-2 gap-3 py-3 border-t border-b border-stone-50">
-                      <div>
-                        <p className="text-[10px] text-stone-400 uppercase tracking-wider">
-                          Price/{request.priceUnit === "unit" ? "Unit" : "Kg"}
-                        </p>
-                        <p className="text-sm font-semibold text-stone-700">
-                          {formatPrice(request)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-stone-400 uppercase tracking-wider">Deadline</p>
-                        <p
-                          className={`text-sm font-semibold ${
-                            request.isPastDue || request.status === "urgent" ? "text-red-600" : "text-stone-700"
-                          }`}
-                        >
-                          {formatDeadline(request.deadline)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Suppliers and Action Buttons */}
-                    <div className="flex justify-between items-center">
-                      {request.status === "draft" ? (
-                        // For drafts, show publish button
-                        <div className="flex-1" />
-                      ) : (
-                        // For published requests, show supplier count
-                        (() => {
-                          // Use offers as source of truth for counting submissions
-                          const offers = Array.isArray(request.offers) ? request.offers : [];
-                          const uniqueSupplierIds = new Set(offers.map(offer => offer.farmerId).filter(Boolean));
-                          const offerCount = uniqueSupplierIds.size;
-                          
-                          // Fallback to suppliers array if offers not available
-                          const suppliersList = Array.isArray(request.suppliers) ? request.suppliers : [];
-                          const supplierRefs = suppliersList.filter(
-                            (s): s is { id: string; initials: string; color: string } =>
-                              typeof s === "object" && s != null && "id" in s && "initials" in s
-                          );
-                          
-                          // Use offers count if available, otherwise use supplier refs
-                          const displayCount = offerCount > 0 ? offerCount : supplierRefs.length;
-                          
-                          return supplierRefs.length > 0 ? (
-                            <div className="flex -space-x-2">
-                              {supplierRefs.slice(0, 3).map((supplier, idx) => (
-                                <div
-                                  key={supplier.id || idx}
-                                  className={`w-7 h-7 rounded-full ${supplier.color} border-2 border-white flex items-center justify-center text-[10px] font-bold ${
-                                    supplier.initials.startsWith("+")
-                                      ? "text-stone-400 bg-stone-50"
-                                      : supplier.color?.includes("blue")
-                                      ? "text-blue-600"
-                                      : supplier.color?.includes("purple")
-                                      ? "text-purple-600"
-                                      : supplier.color?.includes("yellow")
-                                      ? "text-yellow-600"
-                                      : supplier.color?.includes("green")
-                                      ? "text-green-600"
-                                      : "text-stone-600"
-                                  }`}
-                                >
-                                  {supplier.initials}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-10 h-10 rounded-lg ${getProductIconBg(request.productType)} flex items-center justify-center flex-shrink-0`}
+                            >
+                              {getProductIcon(request.productType)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-stone-900 truncate">{request.title}</p>
+                                {request.isRecurring && (
+                                  <IconRepeat className="h-3.5 w-3.5 text-blue-600 flex-shrink-0" title="Recurring Order" />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-stone-500 font-mono">{request.requestId}</span>
+                                {request.isRecurring && request.recurringFrequency && (
+                                  <span className="text-xs text-blue-600">
+                                    {request.recurringFrequency.charAt(0).toUpperCase() + request.recurringFrequency.slice(1)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1.5">
+                                <div className="flex justify-between text-xs mb-1">
+                                  <span className="text-stone-500">Fulfilled</span>
+                                  <span className="font-medium text-stone-900">
+                                    {formatQuantity(fulfilled, request.unit)} / {formatQuantity(total, request.unit)}
+                                  </span>
                                 </div>
-                              ))}
+                                <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full ${progressColor} transition-all`}
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <p className="font-medium">{formatQuantity(total, request.unit)}</p>
+                            {fulfilled > 0 && (
+                              <p className="text-xs text-stone-500 mt-0.5">
+                                {formatQuantity(fulfilled, request.unit)} fulfilled
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <p className="font-medium">{formatPrice(request)}</p>
+                            <p className="text-xs text-stone-500 mt-0.5">
+                              per {request.priceUnit === "unit" ? "Unit" : "Kg"}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <p
+                            className={`text-sm font-medium ${
+                              request.isPastDue || request.status === "urgent" ? "text-red-600" : "text-stone-700"
+                            }`}
+                          >
+                            {formatDeadline(request.deadline)}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          {request.status === "draft" ? (
+                            <span className="text-xs text-stone-400 italic">—</span>
+                          ) : supplierRefs.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                              <div className="flex -space-x-2">
+                                {supplierRefs.slice(0, 3).map((supplier, idx) => (
+                                  <div
+                                    key={supplier.id || idx}
+                                    className={`w-6 h-6 rounded-full ${supplier.color} border-2 border-white flex items-center justify-center text-[10px] font-bold ${
+                                      supplier.initials.startsWith("+")
+                                        ? "text-stone-400 bg-stone-50"
+                                        : supplier.color?.includes("blue")
+                                        ? "text-blue-600"
+                                        : supplier.color?.includes("purple")
+                                        ? "text-purple-600"
+                                        : supplier.color?.includes("yellow")
+                                        ? "text-yellow-600"
+                                        : supplier.color?.includes("green")
+                                        ? "text-green-600"
+                                        : "text-stone-600"
+                                    }`}
+                                  >
+                                    {supplier.initials}
+                                  </div>
+                                ))}
+                                {displayCount > 3 && (
+                                  <div className="w-6 h-6 rounded-full bg-stone-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
+                                    +{displayCount - 3}
+                                  </div>
+                                )}
+                              </div>
                               {displayCount > 3 && (
-                                <div className="w-7 h-7 rounded-full bg-stone-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
-                                  +{displayCount - 3}
-                                </div>
+                                <span className="text-xs text-stone-500">{displayCount}</span>
                               )}
                             </div>
                           ) : displayCount > 0 ? (
                             <span className="text-xs text-stone-500">{displayCount} supplier{displayCount !== 1 ? "s" : ""}</span>
                           ) : (
                             <span className="text-xs text-stone-400 italic">No suppliers yet</span>
-                          );
-                        })()
-                      )}
-                      <div className="flex items-center gap-2">
-                        {request.status === "draft" ? (
-                          <Button
-                            onClick={() => handlePublishDraft(request.id)}
-                            disabled={publishingRequestId === request.id || isLoading}
-                            size="sm"
-                            className="text-xs px-3 py-1.5 h-auto bg-orange-500 hover:bg-orange-600 text-white"
-                          >
-                            {publishingRequestId === request.id ? (
-                              <>
-                                <IconLoader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                                Publishing...
-                              </>
-                            ) : (
-                              <>
-                                <IconArrowRight className="h-3 w-3 mr-1.5" />
-                                Publish
-                              </>
-                            )}
-                          </Button>
-                        ) : null}
-                        <button
-                          onClick={() => handleManage(request)}
-                          className="text-xs font-medium text-stone-600 group-hover:text-orange-600 flex items-center gap-1 transition-colors"
-                        >
-                          Manage
-                          <IconArrowRight className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(request.status)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {request.status === "draft" ? (
+                              <Button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePublishDraft(request.id);
+                                }}
+                                disabled={publishingRequestId === request.id || isLoading}
+                                size="sm"
+                                className="text-xs px-3 py-1.5 h-auto bg-orange-500 hover:bg-orange-600 text-white"
+                              >
+                                {publishingRequestId === request.id ? (
+                                  <>
+                                    <IconLoader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                    Publishing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <IconArrowRight className="h-3 w-3 mr-1.5" />
+                                    Publish
+                                  </>
+                                )}
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManage(request);
+                              }}
+                              className="text-xs"
+                            >
+                              Manage
+                              <IconArrowRight className="h-3 w-3 ml-1" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card className="bg-white border-stone-200">
           <CardContent className="p-12 text-center">

@@ -18,9 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { IconSeeding, IconShoppingCart, IconSearch, IconFilter, IconStar, IconTruck } from "@tabler/icons-react";
+import { IconSeeding, IconShoppingCart, IconSearch, IconFilter, IconStar, IconTruck, IconLoader2 } from "@tabler/icons-react";
 import { useInput } from "@/contexts/InputContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { createInputOrder } from "@/services/inputService";
+import { showSuccess, showError } from "@/lib/toast";
 import type { Input } from "@/types/input";
 
 interface InputItem {
@@ -50,6 +52,7 @@ export default function InputMarketplace() {
   const [quantity, setQuantity] = useState("1");
   const [needsTransport, setNeedsTransport] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   // Fetch inputs on mount
   useEffect(() => {
@@ -103,10 +106,74 @@ export default function InputMarketplace() {
     setOrderDialogOpen(true);
   };
 
-  const handleSubmitOrder = () => {
-    // Handle order submission
-    alert(`Order placed: ${quantity} ${selectedInput?.unit}(s) of ${selectedInput?.name}`);
-    setOrderDialogOpen(false);
+  const handleSubmitOrder = async () => {
+    // Validate user is authenticated
+    if (!user?.id) {
+      showError("Authentication required", "Please log in to place an order");
+      return;
+    }
+
+    // Validate input is selected
+    if (!selectedInput) {
+      showError("No input selected", "Please select an input to order");
+      return;
+    }
+
+    // Validate quantity
+    const qty = parseInt(quantity || "0");
+    if (isNaN(qty) || qty < 1) {
+      showError("Invalid quantity", "Please enter a valid quantity (minimum 1)");
+      return;
+    }
+
+    // Validate stock availability
+    if (qty > selectedInput.stock) {
+      showError(
+        "Insufficient stock",
+        `Only ${selectedInput.stock} ${selectedInput.unit}(s) available. You requested ${qty}.`
+      );
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+
+    try {
+      // Build order object
+      const orderData = {
+        inputId: selectedInput.id,
+        quantity: qty,
+        requiresTransport: needsTransport,
+        transportFee: needsTransport ? 500 : undefined,
+        notes: undefined, // Can be added later if needed
+      };
+
+      // Create the order
+      const result = await createInputOrder(orderData);
+
+      if (result.error) {
+        showError("Failed to place order", result.error);
+      } else {
+        showSuccess(
+          "Order placed successfully",
+          `Your order for ${qty} ${selectedInput.unit}(s) of ${selectedInput.name} has been placed.`
+        );
+        
+        // Close dialog and reset form
+        setOrderDialogOpen(false);
+        setQuantity("1");
+        setNeedsTransport(false);
+        setSelectedInput(null);
+        
+        // Refresh inputs to update stock availability
+        await fetchInputs();
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || "Failed to place order. Please try again.";
+      showError("Order failed", errorMessage);
+      console.error("Error placing order:", error);
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   const calculateTotal = () => {
@@ -281,10 +348,25 @@ export default function InputMarketplace() {
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 placeholder="Enter quantity"
+                className={(() => {
+                  const qty = parseInt(quantity || "0");
+                  return qty > (selectedInput?.stock || 0) ? "border-destructive" : "";
+                })()}
               />
               <p className="text-xs text-muted-foreground">
                 Available: {selectedInput?.stock} {selectedInput?.unit}s
               </p>
+              {(() => {
+                const qty = parseInt(quantity || "0");
+                if (qty > (selectedInput?.stock || 0)) {
+                  return (
+                    <p className="text-xs text-destructive font-medium">
+                      Quantity exceeds available stock. Maximum: {selectedInput?.stock} {selectedInput?.unit}s
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             <div className="space-y-2">
@@ -328,11 +410,27 @@ export default function InputMarketplace() {
             </div>
 
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setOrderDialogOpen(false)} className="flex-1">
+              <Button 
+                variant="outline" 
+                onClick={() => setOrderDialogOpen(false)} 
+                className="flex-1"
+                disabled={isSubmittingOrder}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleSubmitOrder} className="flex-1">
-                Place Order
+              <Button 
+                onClick={handleSubmitOrder} 
+                className="flex-1"
+                disabled={isSubmittingOrder || !selectedInput || !quantity || parseInt(quantity || "0") < 1}
+              >
+                {isSubmittingOrder ? (
+                  <>
+                    <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Placing Order...
+                  </>
+                ) : (
+                  "Place Order"
+                )}
               </Button>
             </div>
           </div>

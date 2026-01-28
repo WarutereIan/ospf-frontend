@@ -50,6 +50,57 @@ let sessionInvalidated = typeof window !== 'undefined'
   : false;
 
 /**
+ * Rate limit tracking - prevents retry loops when rate limited
+ * Maps endpoint patterns to their rate limit expiration times
+ */
+const rateLimitBlocks = new Map<string, number>();
+
+/**
+ * Check if an endpoint is currently rate limited
+ */
+function isRateLimited(endpoint: string): boolean {
+  const blockUntil = rateLimitBlocks.get(endpoint);
+  if (blockUntil && Date.now() < blockUntil) {
+    return true;
+  }
+  if (blockUntil && Date.now() >= blockUntil) {
+    // Block expired, remove it
+    rateLimitBlocks.delete(endpoint);
+  }
+  return false;
+}
+
+/**
+ * Block an endpoint from requests for a specified duration (exponential backoff)
+ */
+function blockEndpoint(endpoint: string, retryCount: number = 0): void {
+  // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
+  const backoffMs = Math.min(1000 * Math.pow(2, retryCount), 30000);
+  const blockUntil = Date.now() + backoffMs;
+  rateLimitBlocks.set(endpoint, blockUntil);
+  
+  // Clean up after block expires
+  setTimeout(() => {
+    rateLimitBlocks.delete(endpoint);
+  }, backoffMs);
+}
+
+/**
+ * Get retry count for an endpoint (for exponential backoff)
+ */
+const endpointRetryCounts = new Map<string, number>();
+function getRetryCount(endpoint: string): number {
+  return endpointRetryCounts.get(endpoint) || 0;
+}
+function incrementRetryCount(endpoint: string): void {
+  const current = getRetryCount(endpoint);
+  endpointRetryCounts.set(endpoint, current + 1);
+}
+function resetRetryCount(endpoint: string): void {
+  endpointRetryCounts.delete(endpoint);
+}
+
+/**
  * Set session as invalidated (persists across page refreshes)
  */
 function setSessionInvalidated(value: boolean): void {
@@ -211,6 +262,36 @@ async function apiRequest<T>(
     ? `${API_BASE_URL}/${API_PREFIX}${endpoint}`
     : `/${API_PREFIX}${endpoint}`;
 
+  // Check if session is invalidated - don't make request if so
+  // EXCEPT for auth endpoints which need to verify/refresh the session
+  const isAuthEndpoint = endpoint.startsWith('/auth/');
+  if (sessionInvalidated && !isAuthEndpoint) {
+    const error: ApiError = {
+      message: 'Session expired',
+      statusCode: 401,
+      error: 'Authentication failed',
+    };
+    if (showErrorToast) {
+      showError('Session expired', 'Please log in again');
+    }
+    throw error;
+  }
+
+  // Check if endpoint is rate limited - don't make request if so
+  if (isRateLimited(endpoint)) {
+    const retryCount = getRetryCount(endpoint);
+    const error: ApiError = {
+      message: 'Too many requests - please wait',
+      statusCode: 429,
+      error: 'Rate limit exceeded',
+    };
+    if (showErrorToast && retryCount === 0) {
+      // Only show toast on first rate limit hit
+      showError('Too many requests', 'Please wait a moment and try again');
+    }
+    throw error;
+  }
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...fetchOptions.headers,
@@ -233,7 +314,12 @@ async function apiRequest<T>(
       setTimeout(() => {
         window.location.href = '/login';
       }, 100);
-      throw new Error('Authentication failed');
+      const error: ApiError = {
+        message: 'Session expired',
+        statusCode: 401,
+        error: 'Authentication failed',
+      };
+      throw error;
     }
 
     const refreshed = await refreshAccessToken();
@@ -248,7 +334,7 @@ async function apiRequest<T>(
       // If retry still returns 401, session is truly expired
       if (response.status === 401) {
         // Mark session as invalidated to prevent further attempts
-        sessionInvalidated = true;
+        setSessionInvalidated(true);
         // Clear lock and local data, redirect to login
         isRefreshing = false;
         refreshPromise = null;
@@ -260,40 +346,73 @@ async function apiRequest<T>(
         setTimeout(() => {
           window.location.href = '/login';
         }, 100);
-        throw new Error('Authentication failed');
+        const error: ApiError = {
+          message: 'Session expired',
+          statusCode: 401,
+          error: 'Authentication failed',
+        };
+        throw error;
       }
     } else {
       // Refresh failed - refreshAccessToken handles redirect if refresh token is invalid
       // For other failures (429, network errors), we still need to handle here
       if (!sessionInvalidated) {
         // Only handle if refreshAccessToken didn't already redirect
+        // If refresh failed due to 429, don't invalidate session - just throw error
+        // The refreshAccessToken function already handles 429 with backoff
         isRefreshing = false;
         refreshPromise = null;
-        clearLocalAuth();
-        if (showErrorToast) {
-          showError('Session expired', 'Please log in again');
+        // Only invalidate and redirect if it's an auth issue, not rate limiting
+        if (response.status !== 429) {
+          setSessionInvalidated(true);
+          clearLocalAuth();
+          if (showErrorToast) {
+            showError('Session expired', 'Please log in again');
+          }
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 100);
         }
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 100);
       }
-      throw new Error('Authentication failed');
+      const error: ApiError = {
+        message: 'Authentication failed',
+        statusCode: 401,
+        error: 'Authentication failed',
+      };
+      throw error;
     }
   }
   
   // Handle 429 (rate limit) errors gracefully
   if (response.status === 429) {
+    const retryCount = getRetryCount(endpoint);
+    incrementRetryCount(endpoint);
+    
+    // Block this endpoint from further requests (exponential backoff)
+    blockEndpoint(endpoint, retryCount);
+    
     const error: ApiError = {
-      message: 'Too many requests',
+      message: 'Too many requests - please wait',
       statusCode: 429,
       error: 'Rate limit exceeded',
     };
     
-    if (showErrorToast) {
+    // Only show toast on first rate limit hit to avoid spam
+    if (showErrorToast && retryCount === 0) {
       showError('Too many requests', 'Please wait a moment and try again');
     }
     
+    // Reset retry count after a delay (successful requests will also reset it)
+    setTimeout(() => {
+      resetRetryCount(endpoint);
+    }, 60000); // Reset after 1 minute
+    
     throw error;
+  }
+  
+  // Reset retry count on successful request
+  if (response.ok) {
+    resetRetryCount(endpoint);
   }
 
   // Parse response JSON (handle empty responses)

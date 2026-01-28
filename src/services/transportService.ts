@@ -311,6 +311,28 @@ function transformTransportRequest(request: any): TransportRequest {
     pickupScheduleId: request.pickupScheduleId,
     pickupSlotId: request.pickupSlotId,
     
+    // Tracking updates
+    trackingUpdates: request.trackingUpdates?.map((update: any) => ({
+      id: update.id,
+      requestId: update.requestId || update.deliveryId || request.id,
+      deliveryId: update.requestId || update.deliveryId || request.id,
+      timestamp: update.createdAt 
+        ? (update.createdAt instanceof Date ? update.createdAt.toISOString() : update.createdAt)
+        : update.timestamp,
+      createdAt: update.createdAt 
+        ? (update.createdAt instanceof Date ? update.createdAt.toISOString() : update.createdAt)
+        : update.timestamp,
+      location: update.location || 'Unknown Location',
+      coordinates: update.coordinates 
+        ? (typeof update.coordinates === 'string' 
+            ? update.coordinates.split(',').map((c: string) => parseFloat(c.trim())) as [number, number]
+            : update.coordinates)
+        : undefined,
+      notes: update.notes,
+      photos: update.photos || [],
+      status: update.status,
+    })) || [],
+    
     // Timestamps
     createdAt: request.createdAt instanceof Date ? request.createdAt.toISOString() : (request.createdAt || new Date().toISOString()),
     updatedAt: request.updatedAt instanceof Date ? request.updatedAt.toISOString() : (request.updatedAt || new Date().toISOString()),
@@ -424,6 +446,7 @@ export async function getTransportRequests(filters?: TransportFilters): Promise<
   try {
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
+    if (filters?.requesterId) params.requesterId = filters.requesterId;
     // Transform status filter to backend format (UPPER_CASE) if provided
     // Note: Frontend "in_transit" maps to both "IN_TRANSIT_PICKUP" and "IN_TRANSIT_DELIVERY" on backend
     // For now, we don't filter by status if it's "in_transit" since backend has separate statuses
@@ -524,7 +547,7 @@ export async function createTransportRequest(request: Partial<TransportRequest>)
   try {
     const dto = toCreateTransportRequestDto(request);
     const created = await apiPost<any>('/transport/requests', dto);
-    showSuccess("Transport request created successfully");
+    // Success message will be shown by the calling component
     return { data: transformTransportRequest(created), message: "Transport request created successfully" };
   } catch (error: any) {
     // Error toast is automatically shown by api-client
@@ -1057,6 +1080,51 @@ export async function getAvailablePickupSchedules(filters?: {
     return schedules;
   } catch (error) {
     console.error('Error fetching available pickup schedules:', error);
+    return [];
+  }
+}
+
+/**
+ * Get bookings for a pickup schedule
+ * Backend: GET /api/v1/transport/pickup-slots/bookings?scheduleId=...
+ */
+export async function getScheduleBookings(scheduleId: string, filters?: {
+  status?: string;
+}): Promise<PickupSlotBooking[]> {
+  try {
+    const params: Record<string, any> = { scheduleId };
+    if (filters?.status) params.status = filters.status;
+    const bookings = await apiGet<any[]>('/transport/pickup-slots/bookings', params, { showErrorToast: false });
+    
+    // Transform backend format to frontend format
+    return bookings.map((booking: any) => ({
+      id: booking.id,
+      slotId: booking.slotId,
+      scheduleId: booking.scheduleId,
+      farmerId: booking.farmerId,
+      farmerName: booking.farmerName || (booking.farmer?.profile 
+        ? `${booking.farmer.profile.firstName} ${booking.farmer.profile.lastName}`
+        : booking.farmer?.email || booking.farmer?.phone || 'Farmer'),
+      quantity: booking.quantity,
+      batchId: booking.batchId,
+      qrCode: booking.qrCode,
+      location: booking.location,
+      coordinates: booking.coordinates ? booking.coordinates.split(',').map(Number) : undefined,
+      contactPhone: booking.contactPhone || booking.farmer?.phone,
+      notes: booking.notes,
+      status: booking.status,
+      bookedAt: booking.bookedAt,
+      cancelledAt: booking.cancelledAt,
+      pickupConfirmed: booking.pickupConfirmed,
+      pickupConfirmedAt: booking.pickupConfirmedAt,
+      pickupConfirmedBy: booking.pickupConfirmedBy,
+      pickupReceiptId: booking.pickupReceiptId,
+      variety: booking.variety,
+      qualityGrade: booking.qualityGrade,
+      photos: booking.photos || [],
+    }));
+  } catch (error) {
+    console.error('Error fetching schedule bookings:', error);
     return [];
   }
 }

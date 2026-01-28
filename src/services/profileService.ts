@@ -218,9 +218,15 @@ interface CreateRatingDto {
  * Map frontend rating to backend CreateRatingDto.
  */
 function toCreateRatingDto(rating: Partial<Rating>): CreateRatingDto {
+  // Support both 'rating' and 'overallRating' fields
+  const ratingValue = typeof rating.rating === 'number' 
+    ? rating.rating 
+    : (typeof (rating as any).overallRating === 'number' 
+      ? (rating as any).overallRating 
+      : 0);
   return {
-    rating: typeof rating.rating === 'number' ? rating.rating : 0,
-    comment: rating.comment,
+    rating: ratingValue,
+    comment: rating.review || rating.comment,
     orderId: rating.orderId,
   };
 }

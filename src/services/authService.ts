@@ -146,6 +146,8 @@ export async function login(
     const user = transformUser(data.user);
     // Store only user info locally (tokens are in HttpOnly cookies)
     storeLocalUser(user);
+    // Reset session invalidation flag on successful login
+    resetSessionInvalidation();
 
     return { success: true, user };
   } catch (error: any) {
@@ -213,6 +215,8 @@ export async function getCurrentUser(): Promise<{ success: boolean; user?: any; 
     const user = transformUser(backendUser);
     // Update local user cache
     storeLocalUser(user);
+    // Reset session invalidation flag - session is valid!
+    resetSessionInvalidation();
 
     return { success: true, user };
   } catch (error: any) {

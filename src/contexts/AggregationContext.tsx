@@ -92,7 +92,13 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
       const appliedFilters = newFilters || centerFilters;
       const data = await getAggregationCenters(appliedFilters);
       setCenters(data);
-    } catch (err) {
+    } catch (err: any) {
+      // Don't set error state for auth errors (401) or rate limit errors (429)
+      // The API client already handles these and prevents retries
+      if (err?.statusCode === 401 || err?.statusCode === 429) {
+        // Silently fail - API client will handle redirect/rate limiting
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to fetch centers");
     } finally {
       setIsLoading(false);
@@ -105,7 +111,13 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
     try {
       const center = await getAggregationCenterById(id);
       setSelectedCenter(center);
-    } catch (err) {
+    } catch (err: any) {
+      // Don't set error state for auth errors (401) or rate limit errors (429)
+      // The API client already handles these and prevents retries
+      if (err?.statusCode === 401 || err?.statusCode === 429) {
+        // Silently fail - API client will handle redirect/rate limiting
+        return;
+      }
       setError(err instanceof Error ? err.message : "Failed to fetch center");
     } finally {
       setIsLoading(false);

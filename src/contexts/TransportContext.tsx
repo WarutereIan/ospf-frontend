@@ -7,7 +7,7 @@
  * - Delivery tracking
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 import type {
   TransportRequest,
   ActiveDelivery,
@@ -273,6 +273,10 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     setSelectedRequest(null);
   }, []);
 
+  // Track when capacities were last fetched to avoid excessive refetches
+  const capacityFetchTimestamps = useRef<Map<string, number>>(new Map());
+  const CAPACITY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   // Pickup Schedule actions
   const fetchPickupSchedules = useCallback(async (newFilters?: PickupScheduleFilters) => {
     setIsLoading(true);
@@ -282,21 +286,39 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       const data = await getPickupSchedules(appliedFilters);
       setPickupSchedules(data);
       
-      // Fetch capacity for each unique center
+      // Only fetch capacity for centers that aren't cached or are stale
       const uniqueCenterIds = [...new Set(data.map(s => s.aggregationCenterId))];
-      const capacityPromises = uniqueCenterIds.map(centerId => 
-        getAggregationCenterCapacity(centerId).then(cap => ({ centerId, capacity: cap }))
-      );
-      const capacities = await Promise.all(capacityPromises);
-      const capacityMap = new Map<string, AggregationCenterCapacity>();
-      capacities.forEach(({ centerId, capacity }) => {
-        if (capacity) {
-          capacityMap.set(centerId, capacity);
-        }
+      const now = Date.now();
+      const centersToFetch = uniqueCenterIds.filter(centerId => {
+        const lastFetch = capacityFetchTimestamps.current.get(centerId);
+        return !lastFetch || (now - lastFetch) > CAPACITY_CACHE_TTL;
       });
-      setCenterCapacities(capacityMap);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch pickup schedules");
+      
+      if (centersToFetch.length > 0) {
+        const capacityPromises = centersToFetch.map(centerId => 
+          getAggregationCenterCapacity(centerId).then(cap => {
+            capacityFetchTimestamps.current.set(centerId, now);
+            return { centerId, capacity: cap };
+          })
+        );
+        const capacities = await Promise.all(capacityPromises);
+        
+        // Merge with existing capacities instead of replacing
+        setCenterCapacities(prev => {
+          const newMap = new Map(prev);
+          capacities.forEach(({ centerId, capacity }) => {
+            if (capacity) {
+              newMap.set(centerId, capacity);
+            }
+          });
+          return newMap;
+        });
+      }
+    } catch (err: any) {
+      // Don't set error state for auth errors (401) or rate limit errors (429)
+      if (err?.statusCode !== 401 && err?.statusCode !== 429) {
+        setError(err instanceof Error ? err.message : "Failed to fetch pickup schedules");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -457,7 +479,13 @@ export function TransportProvider({ children }: { children: ReactNode }) {
         setCenterCapacities(prev => new Map(prev).set(centerId, capacity));
       }
       return capacity;
-    } catch (err) {
+    } catch (err: any) {
+      // Don't log or retry on auth errors (401) or rate limit errors (429)
+      // The API client already handles these and prevents retries
+      if (err?.statusCode === 401 || err?.statusCode === 429) {
+        // Silently fail - API client will handle redirect/rate limiting
+        return null;
+      }
       console.error('Error fetching center capacity:', err);
       return null;
     }

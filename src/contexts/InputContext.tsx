@@ -21,6 +21,9 @@ import type {
 import {
   getInputs,
   getInputById,
+  createInput as createInputService,
+  updateInput as updateInputService,
+  deleteInput as deleteInputService,
   getInputOrders,
   getInputOrderById,
   updateInputOrderStatus,
@@ -143,39 +146,52 @@ export function InputProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const createInput = async (input: Partial<Input>) => {
+  const createInput = useCallback(async (input: Partial<Input>) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Implementation will be added when API is ready
-      await fetchInputs();
+      // Add empty location if not provided (backend requires it but we're not collecting it in the form)
+      const inputWithLocation = { ...input, location: input.location || "" };
+      const result = await createInputService(inputWithLocation);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        // Refresh inputs list after successful creation
+        await fetchInputs();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to create input";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchInputs]);
 
-  const updateInput = async (id: string, input: Partial<Input>) => {
+  const updateInput = useCallback(async (id: string, input: Partial<Input>) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Implementation will be added when API is ready
-      await fetchInputs();
+      const result = await updateInputService(id, input);
+      if (result.error) {
+        setError(result.error);
+      } else {
+        // Refresh inputs list after successful update
+        await fetchInputs();
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to update input";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchInputs]);
 
-  const deleteInput = async (id: string) => {
+  const deleteInput = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      // Implementation will be added when API is ready
+      await deleteInputService(id);
+      // Refresh inputs list after successful deletion
       await fetchInputs();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to delete input";
@@ -183,7 +199,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchInputs]);
 
   const setInputFilters = (newFilters: InputFilters) => {
     setInputFiltersState(newFilters);
@@ -252,7 +268,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Customer Actions
-  const fetchCustomers = async (newFilters?: CustomerFilters) => {
+  const fetchCustomers = useCallback(async (newFilters?: CustomerFilters) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -265,9 +281,9 @@ export function InputProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [customerFilters]);
 
-  const fetchCustomerById = async (id: string) => {
+  const fetchCustomerById = useCallback(async (id: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -279,23 +295,22 @@ export function InputProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCustomerOrderHistory = async (customerId: string) => {
+  const fetchCustomerOrderHistory = useCallback(async (customerId: string) => {
     setIsLoading(true);
     setError(null);
     try {
       const orders = await getCustomerOrderHistory(customerId);
-      if (selectedCustomer) {
-        setSelectedCustomer({ ...selectedCustomer, orderHistory: orders });
-      }
+      // Use functional update to avoid dependency on selectedCustomer
+      setSelectedCustomer(prev => prev ? { ...prev, orderHistory: orders } : null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to fetch order history";
       setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const setCustomerFilters = (newFilters: CustomerFilters) => {
     setCustomerFiltersState(newFilters);
@@ -307,7 +322,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
   };
 
   // Stats Actions
-  const fetchInputStats = async () => {
+  const fetchInputStats = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -319,9 +334,9 @@ export function InputProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchCustomerStats = async () => {
+  const fetchCustomerStats = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -333,7 +348,7 @@ export function InputProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Computed
   const filteredInputs = inputs.filter((input) => {

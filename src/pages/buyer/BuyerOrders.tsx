@@ -14,6 +14,9 @@ import {
   IconEye,
   IconStar,
   IconQrcode,
+  IconChevronUp,
+  IconChevronDown,
+  IconArrowsUpDown,
 } from "@tabler/icons-react";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { PaymentDialog } from "@/components/payments/PaymentDialog";
@@ -37,6 +40,12 @@ export function BuyerOrders() {
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | undefined>(undefined);
+  
+  // Sorting state
+  type SortField = "amount" | "quantity" | "status" | "date" | null;
+  type SortDirection = "asc" | "desc" | null;
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
   // Fetch buyer's orders on mount
   useEffect(() => {
@@ -56,10 +65,30 @@ export function BuyerOrders() {
     fetchOrders(filters);
   }, [statusFilter, user?.id, setMarketplaceFilters, fetchOrders]);
 
-  // Apply client-side search filter
+  // Handle column sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle direction if clicking the same column
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else if (sortDirection === "desc") {
+        setSortField(null);
+        setSortDirection(null);
+      } else {
+        setSortDirection("asc");
+      }
+    } else {
+      // New column, start with ascending
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Apply client-side search filter and sorting
   useEffect(() => {
     let filtered = [...orders];
 
+    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (order) =>
@@ -69,8 +98,46 @@ export function BuyerOrders() {
       );
     }
 
+    // Apply sorting
+    if (sortField && sortDirection) {
+      filtered.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortField) {
+          case "amount":
+            aValue = a.totalAmount || 0;
+            bValue = b.totalAmount || 0;
+            break;
+          case "quantity":
+            aValue = a.quantity || 0;
+            bValue = b.quantity || 0;
+            break;
+          case "status":
+            aValue = a.status || "";
+            bValue = b.status || "";
+            break;
+          case "date":
+            aValue = new Date(a.createdAt).getTime();
+            bValue = new Date(b.createdAt).getTime();
+            break;
+          default:
+            return 0;
+        }
+
+        // Handle comparison
+        if (aValue < bValue) {
+          return sortDirection === "asc" ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortDirection === "asc" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
     setFilteredOrders(filtered);
-  }, [orders, searchTerm]);
+  }, [orders, searchTerm, sortField, sortDirection]);
 
   // Calculate order funnel data
   const orderFunnel = [
@@ -98,6 +165,16 @@ export function BuyerOrders() {
         return "bg-blue-100 text-blue-800";
       case "payment_secured":
         return "bg-cyan-100 text-cyan-800";
+      case "ready_to_process":
+        return "bg-indigo-100 text-indigo-800";
+      case "processing":
+        return "bg-amber-100 text-amber-800";
+      case "ready_for_collection":
+        return "bg-teal-100 text-teal-800";
+      case "released":
+        return "bg-emerald-100 text-emerald-800";
+      case "collected":
+        return "bg-lime-100 text-lime-800";
       case "in_transit":
       case "at_aggregation":
         return "bg-purple-100 text-purple-800";
@@ -116,42 +193,18 @@ export function BuyerOrders() {
     }
   };
 
-  const getPaymentStatusColor = (paymentStatus: string) => {
-    switch (paymentStatus) {
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "secured":
-        return "bg-blue-100 text-blue-800";
-      case "confirmed_by_farmer":
-        return "bg-green-100 text-green-800";
-      case "released":
-        return "bg-green-100 text-green-800";
-      case "refunded":
-        return "bg-orange-100 text-orange-800";
-      case "disputed":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  // Get sort icon for column header
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <IconArrowsUpDown className="h-4 w-4 text-stone-400" />;
     }
-  };
-
-  const getPaymentStatusLabel = (paymentStatus: string) => {
-    switch (paymentStatus) {
-      case "pending":
-        return "Pending";
-      case "secured":
-        return "Secured";
-      case "confirmed_by_farmer":
-        return "Confirmed";
-      case "released":
-        return "Released";
-      case "refunded":
-        return "Refunded";
-      case "disputed":
-        return "Disputed";
-      default:
-        return paymentStatus.replace(/_/g, " ");
+    if (sortDirection === "asc") {
+      return <IconChevronUp className="h-4 w-4 text-stone-600" />;
     }
+    if (sortDirection === "desc") {
+      return <IconChevronDown className="h-4 w-4 text-stone-600" />;
+    }
+    return <IconArrowsUpDown className="h-4 w-4 text-stone-400" />;
   };
 
   return (
@@ -190,6 +243,11 @@ export function BuyerOrders() {
                 <SelectItem value="order_placed">Order Placed</SelectItem>
                 <SelectItem value="order_accepted">Order Accepted</SelectItem>
                 <SelectItem value="payment_secured">Payment Secured</SelectItem>
+                <SelectItem value="ready_to_process">Ready to Process</SelectItem>
+                <SelectItem value="processing">Processing</SelectItem>
+                <SelectItem value="ready_for_collection">Ready for Collection</SelectItem>
+                <SelectItem value="released">Released</SelectItem>
+                <SelectItem value="collected">Collected</SelectItem>
                 <SelectItem value="in_transit">In Transit</SelectItem>
                 <SelectItem value="at_aggregation">At Aggregation</SelectItem>
                 <SelectItem value="quality_approved">Quality Approved</SelectItem>
@@ -214,12 +272,43 @@ export function BuyerOrders() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Order ID</TableHead>
-                  <TableHead>Payment Status</TableHead>
                   <TableHead>Variety</TableHead>
-                  <TableHead>Quantity</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort("quantity")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>Quantity</span>
+                      {getSortIcon("quantity")}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort("amount")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>Amount</span>
+                      {getSortIcon("amount")}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>Status</span>
+                      {getSortIcon("status")}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="cursor-pointer hover:bg-muted/50 select-none"
+                    onClick={() => handleSort("date")}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>Date</span>
+                      {getSortIcon("date")}
+                    </div>
+                  </TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -231,11 +320,6 @@ export function BuyerOrders() {
                     onClick={() => navigate(`/dashboard/buyer/orders/${order.id}`)}
                   >
                     <TableCell className="font-medium">{order.orderNumber}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getPaymentStatusColor(order.paymentStatus || "pending")}>
-                        {getPaymentStatusLabel(order.paymentStatus || "pending")}
-                      </Badge>
-                    </TableCell>
                     <TableCell>{order.variety}</TableCell>
                     <TableCell>{order.quantity} kg</TableCell>
                     <TableCell className="font-semibold">

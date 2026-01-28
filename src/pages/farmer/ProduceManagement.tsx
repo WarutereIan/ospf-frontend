@@ -413,151 +413,7 @@ export function ProduceManagement() {
             View and manage all your produce - listings and picked up batches with full traceability
           </p>
         </div>
-        <Dialog open={newListingOpen} onOpenChange={setNewListingOpen}>
-          <DialogTrigger
-            render={
-              <Button>
-                <IconPlus className="mr-2 h-4 w-4" />
-                Post Produce
-              </Button>
-            }
-          />
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Post New Produce Listing</DialogTitle>
-              <DialogDescription>
-                Add your OFSP produce to the marketplace for buyers to discover
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="variety">OFSP Variety *</FieldLabel>
-                  <Select
-                    value={newListing.variety}
-                    onValueChange={(value) =>
-                      setNewListing({ ...newListing, variety: value || "" })
-                    }
-                  >
-                    <SelectTrigger id="variety">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ofspVarieties.map((variety) => (
-                        <SelectItem key={variety.value} value={variety.value}>
-                          {variety.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="quantity">Quantity (kg) *</FieldLabel>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      placeholder="e.g. 500"
-                      value={newListing.quantity}
-                      onChange={(e) =>
-                        setNewListing({ ...newListing, quantity: e.target.value })
-                      }
-                      min="1"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="qualityGrade">Quality Grade *</FieldLabel>
-                    <Select
-                      value={newListing.qualityGrade}
-                      onValueChange={(value) =>
-                        setNewListing({ ...newListing, qualityGrade: value || "" })
-                      }
-                    >
-                      <SelectTrigger id="qualityGrade">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {qualityGrades.map((grade) => (
-                          <SelectItem key={grade.value} value={grade.value}>
-                            {grade.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Field>
-                    <FieldLabel htmlFor="pricePerKg">Price per kg (KES) *</FieldLabel>
-                    <Input
-                      id="pricePerKg"
-                      type="number"
-                      placeholder="e.g. 150"
-                      value={newListing.pricePerKg}
-                      onChange={(e) =>
-                        setNewListing({ ...newListing, pricePerKg: e.target.value })
-                      }
-                      min="0"
-                      step="0.01"
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="location">Sub-County *</FieldLabel>
-                    <Select
-                      value={newListing.location}
-                      onValueChange={(value) =>
-                        setNewListing({ ...newListing, location: value || "" })
-                      }
-                    >
-                      <SelectTrigger id="location">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subCounties.map((subCounty) => (
-                          <SelectItem key={subCounty.value} value={subCounty.value}>
-                            {subCounty.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-
-                <Field>
-                  <FieldLabel htmlFor="description">Description</FieldLabel>
-                  <Textarea
-                    id="description"
-                    placeholder="Add any additional details about your produce..."
-                    value={newListing.description}
-                    onChange={(e) =>
-                      setNewListing({ ...newListing, description: e.target.value })
-                    }
-                    rows={3}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel>Photos (Optional)</FieldLabel>
-                  <Button variant="outline" type="button" className="w-full">
-                    <IconPhoto className="mr-2 h-4 w-4" />
-                    Upload Photos
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Add photos of your produce to attract buyers
-                  </p>
-                </Field>
-              </FieldGroup>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setNewListingOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddListing}>Post Listing</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+     
       </div>
 
       {/* Tab Navigation */}
@@ -641,40 +497,7 @@ export function ProduceManagement() {
         </CardHeader>
       </Card>
 
-      {/* Visualizations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <StackedBarChart
-          data={varietyBreakdown.map((v) => ({
-            name: v.name,
-            quantity: v.quantity,
-          }))}
-          bars={[
-            {
-              dataKey: "quantity",
-              name: "Quantity (kg)",
-              color: "#22C55E",
-            },
-          ]}
-          title="Variety Breakdown"
-          description="Distribution of produce by variety"
-          layout="horizontal"
-          height={200}
-          formatter={(value) => `${value} kg`}
-        />
-        <Card>
-          <CardHeader>
-            <CardTitle>Listing Status</CardTitle>
-            <CardDescription>Current listing status overview</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <StatusIndicator status="Active" count={statusCounts.active} color="green" />
-              <StatusIndicator status="Pending" count={statusCounts.pending} color="yellow" />
-              <StatusIndicator status="Sold" count={statusCounts.sold} color="blue" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+   
 
    
 
@@ -813,21 +636,7 @@ export function ProduceManagement() {
                               <IconEye className="h-4 w-4" />
                             </Button>
                           )}
-                          {produce.type === "listing" && (
-                            <>
-                              <Button size="sm" variant="ghost">
-                                <IconEdit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteListing(produce.id)}
-                                className="text-destructive"
-                              >
-                                <IconTrash className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
+                         
                         </div>
                       </TableCell>
                     </TableRow>

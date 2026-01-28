@@ -38,12 +38,12 @@ interface MenuItem {
 // Farmer menu items
 const farmerMenuItems: MenuItem[] = [
   { name: "Buyer Requests", path: "/farmer/marketplace", icon: IconShoppingBag },
-  { name: "My RFQs", path: "/dashboard/farmer/rfqs", icon: IconFileText },
+  //{ name: "My RFQs", path: "/dashboard/farmer/rfqs", icon: IconFileText },
   { name: "Inputs", path: "/marketplace/inputs", icon: IconSeeding },
   { name: "My Produce", path: "/dashboard/produce", icon: IconPackage },
   { name: "Pickup Schedules", path: "/dashboard/farmer/pickup-schedules", icon: IconTruck },
   { name: "Orders", path: "/dashboard/orders", icon: IconPackage },
-  { name: "Negotiations", path: "/dashboard/farmer/negotiations", icon: IconMessageCircle },
+  //{ name: "Negotiations", path: "/dashboard/farmer/negotiations", icon: IconMessageCircle },
   { name: "Analytics", path: "/dashboard/farmer/analytics", icon: IconChartBar },
 ];
 
@@ -52,9 +52,9 @@ const buyerMenuItems: MenuItem[] = [
  
   { name: "Marketplace", path: "/dashboard/buyer/marketplace", icon: IconShoppingBag },
   { name: "My Orders", path: "/dashboard/buyer/orders", icon: IconPackage },
-  { name: "Sourcing Requests", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
-  { name: "RFQs", path: "/dashboard/buyer/rfqs", icon: IconFileText },
-  { name: "Negotiations", path: "/dashboard/buyer/negotiations", icon: IconMessageCircle },
+  { name: "Bulk Requests", path: "/dashboard/buyer/recurring-orders", icon: IconRefresh },
+  //{ name: "RFQs", path: "/dashboard/buyer/rfqs", icon: IconFileText },
+  //{ name: "Negotiations", path: "/dashboard/buyer/negotiations", icon: IconMessageCircle },
   { name: "Deliveries", path: "/dashboard/buyer/deliveries", icon: IconTruck },
   { name: "Collection", path: "/dashboard/buyer/collection", icon: IconTruckDelivery },
   { name: "Rate Farmers", path: "/dashboard/buyer/ratings", icon: IconStar },
@@ -92,7 +92,7 @@ const aggregationManagerMenuItems: MenuItem[] = [
   { name: "Receive from Ward", path: "/dashboard/aggregation/receive-ward", icon: IconPackage },
   { name: "Stock Out", path: "/dashboard/aggregation/stock-out", icon: IconTrendingDown },
   { name: "Order Processing", path: "/dashboard/aggregation/order-processing", icon: IconPackage },
-  { name: "Quality Checks", path: "/dashboard/aggregation/quality-checks", icon: IconClipboardCheck },
+  //{ name: "Quality Checks", path: "/dashboard/aggregation/quality-checks", icon: IconClipboardCheck },
   { name: "Buyer Matching", path: "/dashboard/aggregation/buyer-matching", icon: IconUsers },
   { name: "Inventory", path: "/dashboard/aggregation/inventory", icon: IconPackage },
   { name: "Reports", path: "/dashboard/aggregation/reports", icon: IconFileText },

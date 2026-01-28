@@ -15,6 +15,7 @@ import {
   IconCurrency,
   IconDeviceFloppy,
 } from "@tabler/icons-react";
+import { PushNotificationSettings } from "@/components/notifications/PushNotificationSettings";
 
 export function Settings() {
   const [settings, setSettings] = useState({
@@ -370,6 +371,20 @@ export function Settings() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Push Notification Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <IconBell className="h-5 w-5" />
+            <CardTitle>Push Notifications</CardTitle>
+          </div>
+          <CardDescription>Manage browser push notification preferences</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PushNotificationSettings />
         </CardContent>
       </Card>
     </div>

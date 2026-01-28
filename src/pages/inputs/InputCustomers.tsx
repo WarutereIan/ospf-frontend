@@ -70,29 +70,29 @@ export default function InputCustomers() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Total Customers"
-          value={stats?.total.toString() || "0"}
+          value={(stats?.total ?? 0).toString()}
           description="All customers"
           icon={<IconUser className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
           label="Active Customers"
-          value={stats?.active.toString() || "0"}
+          value={(stats?.active ?? 0).toString()}
           description="Regular buyers"
           icon={<IconTrendingUp className="h-5 w-5 text-green-600" />}
           isLoading={isLoading}
         />
         <StatCard
           label="New Customers"
-          value={stats?.new.toString() || "0"}
+          value={(stats?.new ?? 0).toString()}
           description="This month"
           icon={<IconUser className="h-5 w-5 text-blue-600" />}
           isLoading={isLoading}
         />
         <StatCard
           label="Total Revenue"
-          value={`KES ${stats ? (stats.totalRevenue / 1000).toFixed(0) : "0"}K`}
-          description={`Avg: KES ${stats ? stats.averageOrderValue.toFixed(0) : "0"}`}
+          value={`KES ${stats?.totalRevenue ? (stats.totalRevenue / 1000).toFixed(0) : "0"}K`}
+          description={`Avg: KES ${stats?.averageOrderValue ? stats.averageOrderValue.toFixed(0) : "0"}`}
           icon={<IconCurrency className="h-5 w-5 text-green-600" />}
           isLoading={isLoading}
         />

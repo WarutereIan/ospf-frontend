@@ -66,6 +66,8 @@ function mapOrderStatus(backendStatus: string): MarketplaceOrderStatus {
     READY_TO_PROCESS: 'ready_to_process',
     PROCESSING: 'processing',
     READY_FOR_COLLECTION: 'ready_for_collection',
+    RELEASED: 'released',
+    COLLECTED: 'collected',
     IN_TRANSIT: 'in_transit',
     AT_AGGREGATION: 'at_aggregation',
     QUALITY_CHECKED: 'quality_checked',
@@ -117,11 +119,15 @@ function mapPaymentStatus(backendStatus: string): PaymentStatus {
   const statusMap: Record<string, PaymentStatus> = {
     PENDING: 'pending',
     SECURED: 'secured',
+    CONFIRMED_BY_FARMER: 'confirmed_by_farmer',
     RELEASED: 'released',
     REFUNDED: 'refunded',
     DISPUTED: 'disputed',
+    FAILED: 'failed',
   };
-  return statusMap[backendStatus] || 'pending';
+  // Normalize to uppercase for lookup, then map to lowercase frontend format
+  const normalized = backendStatus?.toUpperCase() || 'PENDING';
+  return statusMap[normalized] || 'pending';
 }
 
 /**
@@ -246,10 +252,37 @@ function transformMarketplaceOrder(order: any): MarketplaceOrder {
   const buyerPhone = order.buyer?.profile?.phone || order.buyerPhone;
   const farmerPhone = order.farmer?.profile?.phone || order.farmerPhone;
   
+  // Get payment status from payment relation (source of truth) or order.paymentStatus
+  // Payment relation status is the authoritative source since it's updated by payment service
+  let paymentStatus: string | undefined;
+  
+  // Priority 1: Check payment relation (most accurate)
+  if (order.payment?.status) {
+    paymentStatus = order.payment.status;
+  }
+  // Priority 2: Check order's paymentStatus field (may be denormalized)
+  else if (order.paymentStatus) {
+    paymentStatus = order.paymentStatus;
+  }
+  // Priority 3: Default to pending if no payment exists yet
+  else {
+    paymentStatus = 'PENDING';
+  }
+  
+  // Debug logging in development
+  if (import.meta.env.DEV && order.id) {
+    console.debug(`[Order ${order.id}] Payment status:`, {
+      fromPayment: order.payment?.status,
+      fromOrder: order.paymentStatus,
+      final: paymentStatus,
+      mapped: mapPaymentStatus(paymentStatus),
+    });
+  }
+  
   return {
     ...order,
     status: mapOrderStatus(order.status),
-    paymentStatus: order.paymentStatus ? mapPaymentStatus(order.paymentStatus) : order.paymentStatus,
+    paymentStatus: mapPaymentStatus(paymentStatus),
     variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
     aggregationCenter,
     centerLocation,
@@ -771,6 +804,21 @@ export async function markOrderAsCollected(
     return { data: transformMarketplaceOrder(updated), message: "Order marked as collected" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to mark order as collected" };
+  }
+}
+
+/**
+ * Confirm delivery by buyer (for request_transport orders)
+ * Backend: PUT /api/v1/marketplace/orders/:id/confirm-delivery
+ */
+export async function confirmDeliveryByBuyer(
+  id: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/confirm-delivery`, {});
+    return { data: transformMarketplaceOrder(updated), message: "Delivery confirmed successfully" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to confirm delivery" };
   }
 }
 
@@ -1600,16 +1648,21 @@ interface CreateRFQResponseDto {
   pricePerKg: number;
   notes?: string;
   deliveryDate?: string;
+  batchId: string; // Required - batch selection is mandatory
 }
 
 /**
  * Map frontend RFQ response to backend CreateRFQResponseDto.
  */
 function toCreateRFQResponseDto(response: Partial<RFQResponse>): CreateRFQResponseDto {
+  if (!response.batchId) {
+    throw new Error('Batch selection is required when submitting a quote');
+  }
   return {
-    pricePerKg: typeof response.pricePerKg === 'number' ? response.pricePerKg : 0,
+    pricePerKg: typeof response.pricePerUnit === 'number' ? response.pricePerUnit : 0,
     notes: response.notes,
     deliveryDate: response.deliveryDate,
+    batchId: response.batchId,
   };
 }
 

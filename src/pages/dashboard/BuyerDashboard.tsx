@@ -21,6 +21,7 @@ import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { usePayment } from "@/contexts/PaymentContext";
 import { useAnalytics } from "@/contexts/AnalyticsContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTransport } from "@/contexts/TransportContext";
 
 interface ProcurementStats {
   volumeSourced: number; // in tons
@@ -36,7 +37,7 @@ interface ProcurementStats {
 
 interface PriceTrendData {
   month: string;
-  yourPrice: number;
+  yourPrice: number | null;
   marketAvg: number;
 }
 
@@ -87,6 +88,12 @@ export function BuyerDashboard() {
     isLoading: analyticsLoading 
   } = useAnalytics();
 
+  const {
+    requests,
+    fetchRequests,
+    isLoading: transportLoading
+  } = useTransport();
+
   const [selectedPeriod, setSelectedPeriod] = useState("q3");
 
   // Fetch data on mount
@@ -97,11 +104,14 @@ export function BuyerDashboard() {
       fetchTrends({ timeRange: "quarter" });
       fetchDashboardStats({ timeRange: "quarter" });
       fetchBuyerAnalytics({ timeRange: "quarter" });
+      // Fetch transport requests where buyer is the requester
+      // Note: TransportFilters doesn't have requesterId, so we filter client-side
+      fetchRequests();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  const isLoading = marketplaceLoading || paymentLoading || analyticsLoading;
+  const isLoading = marketplaceLoading || paymentLoading || analyticsLoading || transportLoading;
 
   // Filter buyer's orders
   const buyerOrders = useMemo(() => {
@@ -111,33 +121,73 @@ export function BuyerDashboard() {
   // Calculate stats from context data
   const stats = useMemo<ProcurementStats>(() => {
     const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
-    const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || 0), 0) / 1000; // Convert to tons
+    const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || o.quantity || 0), 0) / 1000; // Convert to tons
     const totalValue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const avgPricePerKg = totalVolume > 0 ? totalValue / (totalVolume * 1000) : 0;
+    const avgPricePerKg = totalVolume > 0 && totalValue > 0 ? totalValue / (totalVolume * 1000) : 0;
     
     // Get market average from trends or dashboard stats
-    const marketAvgPrice = dashboardStats?.averagePrice || 40;
+    const marketAvgPrice = dashboardStats?.averagePrice || trends?.[trends.length - 1]?.averagePrice || 80;
     
-    // Calculate quality acceptance (orders with grade A)
-    const gradeAOrders = completedOrders.filter(o => o.items?.some(item => item.grade === "A")).length;
-    const qualityAcceptance = completedOrders.length > 0 ? (gradeAOrders / completedOrders.length) * 100 : 0;
+    // Calculate quality acceptance (percentage of Grade A items across all orders)
+    let totalGradeAItems = 0;
+    let totalItems = 0;
+    completedOrders.forEach(order => {
+      if (order.items && order.items.length > 0) {
+        order.items.forEach(item => {
+          totalItems += item.quantity || 0;
+          if (item.grade === "A") {
+            totalGradeAItems += item.quantity || 0;
+          }
+        });
+      } else if (order.qualityGrade === "A") {
+        // Single item order with Grade A
+        totalItems += order.quantity || order.totalQuantity || 0;
+        totalGradeAItems += order.quantity || order.totalQuantity || 0;
+      } else {
+        // Single item order without grade A
+        totalItems += order.quantity || order.totalQuantity || 0;
+      }
+    });
+    const qualityAcceptance = totalItems > 0 ? (totalGradeAItems / totalItems) * 100 : 0;
     
-    // Get unique suppliers
+    // Get unique suppliers from completed orders
     const uniqueSuppliers = new Set(completedOrders.map(o => o.sellerId || o.farmerId).filter(Boolean));
     
-    // Deliveries this week
+    // Deliveries this week (from transport requests)
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const deliveriesThisWeek = buyerOrders.filter(o => 
-      new Date(o.createdAt) >= weekAgo && 
-      (o.status === "in_transit" || o.status === "delivered" || o.status === "completed")
-    ).length;
+    const deliveriesThisWeekRequests = requests.filter(
+      req => req.type === "order_delivery" && 
+      req.requesterId === user?.id &&
+      new Date(req.createdAt) >= weekAgo &&
+      (req.status === "in_transit" || req.status === "delivered" || req.status === "accepted" || req.status === "completed")
+    );
+    const deliveriesThisWeek = deliveriesThisWeekRequests.length;
 
-    // Calculate trends (simplified - would need historical data)
-    const volumeTrend = trends.length > 1 ? 
-      ((trends[trends.length - 1].volume || 0) - (trends[0].volume || 0)) / (trends[0].volume || 1) * 100 : 0;
-    const priceTrend = trends.length > 1 ?
-      ((trends[trends.length - 1].averagePrice || 0) - (trends[0].averagePrice || 0)) / (trends[0].averagePrice || 1) * 100 : 0;
+    // Calculate trends with proper zero handling
+    let volumeTrend = 0;
+    if (trends.length > 1) {
+      const currentVolume = trends[trends.length - 1]?.volume || 0;
+      const previousVolume = trends[0]?.volume || 0;
+      if (previousVolume > 0) {
+        volumeTrend = ((currentVolume - previousVolume) / previousVolume) * 100;
+      } else if (currentVolume > 0) {
+        // If previous was 0 and current > 0, show positive trend but cap at reasonable value
+        volumeTrend = Math.min(100, (currentVolume / 0.1) * 100); // Cap at 100% if starting from near-zero
+      }
+    }
+
+    let priceTrend = 0;
+    if (trends.length > 1) {
+      const currentPrice = trends[trends.length - 1]?.averagePrice || 0;
+      const previousPrice = trends[0]?.averagePrice || 0;
+      if (previousPrice > 0) {
+        priceTrend = ((currentPrice - previousPrice) / previousPrice) * 100;
+      } else if (currentPrice > 0 && previousPrice === 0) {
+        // Price went from 0 to something - show as positive
+        priceTrend = 100;
+      }
+    }
 
     return {
       volumeSourced: Math.round(totalVolume * 10) / 10,
@@ -150,14 +200,22 @@ export function BuyerDashboard() {
       activeSuppliers: uniqueSuppliers.size,
       deliveriesThisWeek,
     };
-  }, [buyerOrders, trends, dashboardStats]);
+  }, [buyerOrders, trends, dashboardStats, requests, user?.id]);
 
   // Price trend data from trends
   const priceTrendData = useMemo<PriceTrendData[]>(() => {
-    if (trends.length === 0) return [];
+    if (trends.length === 0) {
+      // If no trends, show current stats for the current month
+      const currentMonth = new Date().toLocaleDateString("en-US", { month: "short" });
+      return [{
+        month: currentMonth,
+        yourPrice: stats.avgPricePerKg > 0 ? stats.avgPricePerKg : null,
+        marketAvg: stats.marketAvgPrice,
+      }];
+    }
     return trends.slice(-5).map(t => ({
       month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
-      yourPrice: t.averagePrice || stats.avgPricePerKg,
+      yourPrice: t.averagePrice && t.averagePrice > 0 ? t.averagePrice : (stats.avgPricePerKg > 0 ? stats.avgPricePerKg : null),
       marketAvg: dashboardStats?.averagePrice || stats.marketAvgPrice,
     }));
   }, [trends, dashboardStats, stats]);
@@ -211,34 +269,73 @@ export function BuyerDashboard() {
       .slice(0, 4);
   }, [buyerOrders]);
 
-  // Recent deliveries from orders
+  // Recent deliveries from transport requests (ORDER_DELIVERY type)
   const recentDeliveries = useMemo<RecentDelivery[]>(() => {
-    return buyerOrders
-      .filter(o => o.status !== "order_placed" && o.status !== "cancelled")
-      .slice(-5)
-      .reverse()
-      .map(order => {
-        const gradeAItems = order.items?.filter(item => item.grade === "A").length || 0;
-        const totalItems = order.items?.length || 1;
-        const grading = `${Math.round((gradeAItems / totalItems) * 100)}% Grade A`;
-        
-        let status: RecentDelivery["status"] = "on_route";
-        if (order.status === "delivered" || order.status === "completed") {
-          status = "approved";
-        } else if (order.status === "in_transit" || order.status === "at_aggregation") {
-          status = "inspecting";
-        }
+      // Get order delivery transport requests for this buyer
+      const orderDeliveryRequests = requests
+        .filter(req => 
+          req.type === "order_delivery" && 
+          req.requesterId === user?.id &&
+          req.status !== "pending" && 
+          req.status !== "rejected" && 
+          req.status !== "cancelled"
+        )
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
 
-        return {
-          batchId: order.id,
-          supplier: order.sellerName || order.farmerName || "Unknown",
-          origin: order.origin || order.location || "Unknown",
-          weight: order.totalQuantity || 0,
-          grading,
-          status,
-        };
-      });
-  }, [buyerOrders]);
+    // Create a map of orders for quick lookup
+    const ordersMap = new Map(buyerOrders.map(order => [order.id, order]));
+
+    return orderDeliveryRequests.map(request => {
+      // Get related order for additional info
+      const order = request.orderId ? ordersMap.get(request.orderId) : null;
+      
+      // Calculate grading from order items or use quality score
+      let grading = "0% Grade A";
+      if (order?.items && order.items.length > 0) {
+        const gradeAQuantity = order.items
+          .filter(item => item.grade === "A")
+          .reduce((sum, item) => sum + (item.quantity || 0), 0);
+        const totalQuantity = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+        if (totalQuantity > 0) {
+          const gradeAPercentage = Math.round((gradeAQuantity / totalQuantity) * 100);
+          grading = `${gradeAPercentage}% Grade A`;
+        }
+      } else if (order?.qualityScore !== undefined) {
+        grading = `${Math.round(order.qualityScore)}% Grade A`;
+      } else if (order?.qualityGrade === "A") {
+        grading = "100% Grade A";
+      }
+      
+      // Determine status from transport request status
+      let status: RecentDelivery["status"] = "on_route";
+      if (request.status === "delivered" || request.status === "completed") {
+        status = "approved";
+      } else if (request.status === "accepted") {
+        status = "inspecting";
+      } else if (request.status === "in_transit") {
+        status = "on_route";
+      }
+
+      // Get supplier name from order or transport request
+      const supplier = order?.farmerName || order?.sellerName || request.providerName || "Unknown";
+      
+      // Get origin from transport request or order
+      const origin = request.from || request.pickupLocation || order?.origin || order?.location || "Unknown";
+      
+      // Get weight from transport request or order
+      const weight = request.weight || order?.totalQuantity || order?.quantity || 0;
+
+      return {
+        batchId: request.orderNumber || request.id.slice(0, 9),
+        supplier,
+        origin,
+        weight,
+        grading,
+        status,
+      };
+    });
+  }, [requests, buyerOrders, user?.id]);
 
   const getStatusColor = (status: RecentDelivery["status"]) => {
     switch (status) {
@@ -308,17 +405,23 @@ export function BuyerDashboard() {
           <CardContent className="pt-6">
             <div className="space-y-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Volume Sourced</div>
-              <div className="text-2xl font-bold text-stone-900">{stats.volumeSourced} tons</div>
-              <div className="flex items-center gap-2">
-                {stats.volumeTrend > 0 ? (
-                  <IconTrendingUp className="h-4 w-4 text-green-600" />
-                ) : (
-                  <IconTrendingDown className="h-4 w-4 text-red-600" />
-                )}
-                <span className={`text-sm font-medium ${stats.volumeTrend > 0 ? "text-green-600" : "text-red-600"}`}>
-                  {Math.abs(stats.volumeTrend)}%
-                </span>
+              <div className="text-2xl font-bold text-stone-900">
+                {stats.volumeSourced > 0 ? `${stats.volumeSourced} tons` : '0 tons'}
               </div>
+              {stats.volumeSourced > 0 && (
+                <div className="flex items-center gap-2">
+                  {stats.volumeTrend > 0 ? (
+                    <IconTrendingUp className="h-4 w-4 text-green-600" />
+                  ) : stats.volumeTrend < 0 ? (
+                    <IconTrendingDown className="h-4 w-4 text-red-600" />
+                  ) : null}
+                  {stats.volumeTrend !== 0 && (
+                    <span className={`text-sm font-medium ${stats.volumeTrend > 0 ? "text-green-600" : "text-red-600"}`}>
+                      {Math.abs(stats.volumeTrend)}%
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-stone-500">
                   <span>{Math.round(volumeProgress)}% of quarterly target achieved</span>
@@ -335,21 +438,34 @@ export function BuyerDashboard() {
             <div className="space-y-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Avg. Price / KG</div>
               <div className="text-2xl font-bold text-stone-900">
-                KES {stats.avgPricePerKg}
-                <span className="text-sm font-normal text-stone-500">/kg</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {stats.priceTrend < 0 ? (
-                  <IconTrendingDown className="h-4 w-4 text-green-600" />
+                {stats.avgPricePerKg > 0 ? (
+                  <>
+                    KES {stats.avgPricePerKg}
+                    <span className="text-sm font-normal text-stone-500">/kg</span>
+                  </>
                 ) : (
-                  <IconTrendingUp className="h-4 w-4 text-red-600" />
+                  <span className="text-sm font-normal text-stone-500">No data</span>
                 )}
-                <span className={`text-sm font-medium ${stats.priceTrend < 0 ? "text-green-600" : "text-red-600"}`}>
-                  {Math.abs(stats.priceTrend)}%
-                </span>
               </div>
+              {stats.avgPricePerKg > 0 && (
+                <div className="flex items-center gap-2">
+                  {stats.priceTrend < 0 ? (
+                    <IconTrendingDown className="h-4 w-4 text-green-600" />
+                  ) : stats.priceTrend > 0 ? (
+                    <IconTrendingUp className="h-4 w-4 text-red-600" />
+                  ) : null}
+                  {stats.priceTrend !== 0 && (
+                    <span className={`text-sm font-medium ${stats.priceTrend < 0 ? "text-green-600" : "text-red-600"}`}>
+                      {Math.abs(stats.priceTrend)}%
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="text-xs text-stone-500">
-                KES {priceDifference.toFixed(2)} below market avg
+                {stats.avgPricePerKg > 0 
+                  ? `KES ${priceDifference.toFixed(2)} ${priceDifference > 0 ? 'below' : 'above'} market avg`
+                  : 'No price data available'
+                }
               </div>
             </div>
           </CardContent>
@@ -363,8 +479,15 @@ export function BuyerDashboard() {
           <CardContent className="pt-6">
             <div className="space-y-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Quality Acceptance</div>
-              <div className="text-2xl font-bold text-stone-900">{stats.qualityAcceptance}%</div>
-              <div className="text-xs text-stone-500">Based on last 5 deliveries</div>
+              <div className="text-2xl font-bold text-stone-900">
+                {stats.qualityAcceptance > 0 ? `${stats.qualityAcceptance}%` : 'N/A'}
+              </div>
+              <div className="text-xs text-stone-500">
+                {stats.qualityAcceptance > 0 
+                  ? `Based on ${buyerOrders.filter(o => o.status === "completed" || o.status === "delivered").length} completed deliveries`
+                  : 'No quality data available'
+                }
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -383,9 +506,11 @@ export function BuyerDashboard() {
                   <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-700">
                     FM
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-600">
-                    +{stats.activeSuppliers - 2}
-                  </div>
+                  {stats.activeSuppliers > 2 && (
+                    <div className="w-8 h-8 rounded-full bg-stone-200 border-2 border-white flex items-center justify-center text-xs font-bold text-stone-600">
+                      +{stats.activeSuppliers - 2}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="text-xs text-stone-500">
@@ -407,11 +532,11 @@ export function BuyerDashboard() {
             <LineChart
               data={priceTrendData.map((item) => ({
                 name: item.month,
-                yourPrice: item.yourPrice,
-                marketAvg: item.marketAvg,
+                yourPrice: item.yourPrice ?? 0,
+                marketAvg: item.marketAvg ?? 0,
               }))}
               lines={[
-          {
+                {
                   dataKey: "yourPrice",
                   name: "Your Price",
                   color: "#FF8C00",
@@ -422,11 +547,11 @@ export function BuyerDashboard() {
                   name: "Market Avg",
                   color: "#94A3B8",
                   strokeWidth: 2,
-          },
-        ]}
+                },
+              ]}
               height={280}
               showLegend={true}
-              formatter={(value) => `KES ${value.toFixed(2)}`}
+              formatter={(value) => value > 0 ? `KES ${value.toFixed(2)}` : 'N/A'}
             />
           </CardContent>
         </Card>
@@ -530,7 +655,9 @@ export function BuyerDashboard() {
                       <TableCell className="font-medium text-stone-900">{delivery.batchId}</TableCell>
                       <TableCell className="text-stone-700">{delivery.supplier}</TableCell>
                       <TableCell className="text-stone-600">{delivery.origin}</TableCell>
-                      <TableCell className="text-stone-700">{(delivery.weight / 1000).toFixed(1)}t</TableCell>
+                      <TableCell className="text-stone-700">
+                        {delivery.weight > 0 ? `${(delivery.weight / 1000).toFixed(1)}t` : 'N/A'}
+                      </TableCell>
                       <TableCell className="text-stone-700">{delivery.grading}</TableCell>
                           <TableCell>
                         <Badge variant="outline" className={getStatusColor(delivery.status)}>

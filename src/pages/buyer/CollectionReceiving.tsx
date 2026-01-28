@@ -24,12 +24,14 @@ export function CollectionReceiving() {
 
   // Convert MarketplaceOrder to CollectionOrder format
   // Filter orders that are ready for collection: 
+  // - Only self_pickup fulfillment type orders
   // - Status is READY_FOR_COLLECTION (when aggregation officer marks as processed), OR
   // - stockOutRecorded=true AND collected=false (legacy flow)
   const collectionOrders = orders
     .filter((order) => 
-      (order.status === 'ready_for_collection' && order.collected === false) ||
-      (order.stockOutRecorded === true && order.collected === false)
+      order.fulfillmentType === 'self_pickup' &&
+      ((order.status === 'ready_for_collection' && order.collected === false) ||
+      (order.stockOutRecorded === true && order.collected === false))
     )
     .map((order) => {
       // Determine aggregation center display: prefer center name, fallback to location, then "N/A"

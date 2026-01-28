@@ -210,7 +210,7 @@ export default function RequestTransport({
 
       // Create transport request
       const result = await createTransportRequest({
-        type: isOrderBased ? "produce_delivery" : (formData.type as "produce_pickup" | "produce_delivery" | "input_delivery"),
+        type: isOrderBased ? "order_delivery" : (formData.type as "produce_pickup" | "produce_delivery" | "input_delivery"),
         pickupLocation,
         pickupCounty,
         deliveryLocation,

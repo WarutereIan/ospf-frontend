@@ -166,7 +166,7 @@ export default function InputCustomerDetails() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">KES {(customer.totalSpent / 1000).toFixed(0)}K</div>
+            <div className="text-3xl font-bold">KES {customer.totalSpent ? (customer.totalSpent / 1000).toFixed(0) : "0"}K</div>
             <p className="text-xs text-muted-foreground mt-1">Lifetime value</p>
           </CardContent>
         </Card>
@@ -178,7 +178,7 @@ export default function InputCustomerDetails() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">KES {customer.averageOrderValue.toLocaleString()}</div>
+            <div className="text-3xl font-bold">KES {(customer.averageOrderValue ?? 0).toLocaleString()}</div>
             <p className="text-xs text-muted-foreground mt-1">Per order</p>
           </CardContent>
         </Card>
@@ -224,9 +224,9 @@ export default function InputCustomerDetails() {
                     <TableCell className="font-medium">{order.orderNumber}</TableCell>
                     <TableCell>{order.inputName}</TableCell>
                     <TableCell>{order.quantity}</TableCell>
-                    <TableCell>KES {order.amount.toLocaleString()}</TableCell>
+                    <TableCell>KES {(order.amount ?? 0).toLocaleString()}</TableCell>
                     <TableCell>
-                      {new Date(order.date).toLocaleDateString()}
+                      {order.date ? new Date(order.date).toLocaleDateString() : "N/A"}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{order.status}</Badge>

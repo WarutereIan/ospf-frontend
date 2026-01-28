@@ -11,6 +11,7 @@ import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import { StaffProvider } from "@/contexts/StaffContext";
 import { Layout } from "@/components/layout/Layout";
 import { Toaster } from "@/components/ui/toaster";
+import { PushNotificationPrompt } from "@/components/notifications/PushNotificationPrompt";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
@@ -69,6 +70,7 @@ import Collection from "@/pages/transport/Collection";
 import ActiveDeliveries from "@/pages/transport/ActiveDeliveries";
 import CompletedDeliveries from "@/pages/transport/CompletedDeliveries";
 import { PickupScheduleManagement } from "@/pages/transport/PickupScheduleManagement";
+import { PickupScheduleDetails } from "@/pages/transport/PickupScheduleDetails";
 import { PickupManagement } from "@/pages/farmer/PickupManagement";
 import { Users } from "@/pages/staff/Users";
 import { Analytics } from "@/pages/staff/Analytics";
@@ -194,6 +196,7 @@ export function App() {
             <Route path="/marketplace/inputs" element={<InputMarketplace />} />
             
             {/* Transport Provider Routes */}
+            <Route path="/dashboard/transport-provider/pickup-schedules/:id" element={<PickupScheduleDetails />} />
             <Route path="/dashboard/transport-provider/pickup-schedules" element={<PickupScheduleManagement />} />
             <Route path="/dashboard/transport-requests" element={<TransportRequests />} />
             <Route path="/dashboard/collection" element={<Collection />} />
@@ -214,8 +217,9 @@ export function App() {
             </MarketplaceProvider>
           </InputProvider>
         </ProfileProvider>
+        <Toaster />
+        <PushNotificationPrompt />
       </AuthProvider>
-      <Toaster />
     </BrowserRouter>
   );
 }

@@ -658,23 +658,13 @@ export function MarketplacePage() {
                         <IconShoppingCart className="h-4 w-4" />
                         Order Now
                       </Button>
-                      <InitiateNegotiationButton
+                    {/*   <InitiateNegotiationButton
                         listing={listing}
                         variant="outline"
                         size="default"
                         className="shrink-0 px-3 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 text-stone-600 transition-colors whitespace-nowrap"
-                      />
-                      <Button
-                        variant="outline"
-                          className="shrink-0 px-3 rounded-lg border border-stone-200 hover:border-orange-500 hover:text-orange-500 text-stone-600 text-xs font-bold transition-colors whitespace-nowrap"
-                        onClick={() => {
-                          setSelectedListing(listing);
-                          setRfqDialogOpen(true);
-                        }}
-                        title="Request Quote"
-                      >
-                        RFQ
-                        </Button>
+                      /> */}
+                    
                       </div>
                       <Button
                         variant="outline"

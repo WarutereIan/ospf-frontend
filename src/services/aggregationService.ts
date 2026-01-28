@@ -396,10 +396,16 @@ export async function createStockOut(transaction: Partial<StockTransaction>): Pr
  * Get inventory items
  * Backend: GET /api/v1/aggregation/inventory
  */
-export async function getInventory(centerId?: string): Promise<InventoryItem[]> {
+export async function getInventory(filters?: {
+  centerId?: string;
+  farmerId?: string;
+  qualityGrade?: string;
+}): Promise<InventoryItem[]> {
   try {
     const params: Record<string, any> = {};
-    if (centerId) params.centerId = centerId;
+    if (filters?.centerId) params.centerId = filters.centerId;
+    if (filters?.farmerId) params.farmerId = filters.farmerId;
+    if (filters?.qualityGrade) params.qualityGrade = filters.qualityGrade;
 
     return await apiGet<InventoryItem[]>('/aggregation/inventory', params);
   } catch (error) {

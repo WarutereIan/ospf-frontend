@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +36,7 @@ import { cn } from "@/lib/utils";
 import type { FarmPickupSchedule, PickupLocation } from "@/types/transport";
 
 export function PickupScheduleManagement() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const {
     pickupSchedules,
@@ -61,6 +64,9 @@ export function PickupScheduleManagement() {
     estimatedArrivalTime: "",
     totalCapacity: "",
     vehicleType: "",
+    vehiclePlateNumber: "",
+    driverName: "",
+    driverPhone: "",
     pricePerKg: "",
     fixedPrice: "",
     notes: "",
@@ -96,6 +102,9 @@ export function PickupScheduleManagement() {
       estimatedArrivalTime: "",
       totalCapacity: "",
       vehicleType: "",
+      vehiclePlateNumber: "",
+      driverName: "",
+      driverPhone: "",
       pricePerKg: "",
       fixedPrice: "",
       notes: "",
@@ -106,6 +115,14 @@ export function PickupScheduleManagement() {
   };
 
   const handleEditSchedule = (schedule: FarmPickupSchedule) => {
+    if (!canEditSchedule(schedule)) {
+      if (schedule.status === "completed" || schedule.status === "cancelled") {
+        alert("Cannot edit schedule: Schedule is already completed or cancelled");
+      } else if (isWithinOneHour(schedule)) {
+        alert("Cannot edit schedule: Less than 1 hour until scheduled time");
+      }
+      return;
+    }
     setSelectedSchedule(schedule);
     setFormData({
       aggregationCenterId: schedule.aggregationCenterId,
@@ -115,6 +132,9 @@ export function PickupScheduleManagement() {
       estimatedArrivalTime: schedule.estimatedArrivalTime?.split("T")[1]?.slice(0, 5) || "",
       totalCapacity: schedule.totalCapacity.toString(),
       vehicleType: schedule.vehicleType || "",
+      vehiclePlateNumber: schedule.vehicleId || "",
+      driverName: schedule.driverName || "",
+      driverPhone: schedule.driverPhone || "",
       pricePerKg: schedule.pricePerKg?.toString() || "",
       fixedPrice: schedule.fixedPrice?.toString() || "",
       notes: schedule.notes || "",
@@ -166,6 +186,9 @@ export function PickupScheduleManagement() {
           : undefined,
         totalCapacity: parseFloat(formData.totalCapacity),
         vehicleType: formData.vehicleType || undefined,
+        vehicleId: formData.vehiclePlateNumber || undefined,
+        driverName: formData.driverName || undefined,
+        driverPhone: formData.driverPhone || undefined,
         pricePerKg: formData.pricePerKg ? parseFloat(formData.pricePerKg) : undefined,
         fixedPrice: formData.fixedPrice ? parseFloat(formData.fixedPrice) : undefined,
         pickupLocations,
@@ -174,7 +197,17 @@ export function PickupScheduleManagement() {
       };
 
       if (selectedSchedule) {
-        await updatePickupSchedule(selectedSchedule.id, scheduleData);
+        // If publishing a draft schedule, update it first (keep as draft), then publish
+        if (!saveAsDraft && selectedSchedule.status === "draft") {
+          // Update schedule data but keep status as draft for now
+          const updateData = { ...scheduleData, status: "draft" };
+          await updatePickupSchedule(selectedSchedule.id, updateData);
+          // Then publish it using the publish endpoint
+          await publishPickupSchedule(selectedSchedule.id);
+        } else {
+          // For non-draft schedules or when saving as draft, just update
+          await updatePickupSchedule(selectedSchedule.id, scheduleData);
+        }
       } else {
         await createPickupSchedule(scheduleData);
       }
@@ -208,6 +241,15 @@ export function PickupScheduleManagement() {
   };
 
   const handleCancel = async (id: string) => {
+    const schedule = pickupSchedules.find(s => s.id === id);
+    if (schedule && !canCancelSchedule(schedule)) {
+      if (hasScheduledTimePassed(schedule)) {
+        alert("Cannot cancel schedule: Scheduled time has already passed");
+      } else {
+        alert("Cannot cancel schedule: Schedule is already completed or cancelled");
+      }
+      return;
+    }
     if (!confirm("Are you sure you want to cancel this schedule? All bookings will be cancelled.")) {
       return;
     }
@@ -237,6 +279,120 @@ export function PickupScheduleManagement() {
       return time;
     }
   };
+
+  // Helper function to get the scheduled datetime
+  const getScheduledDateTime = (schedule: FarmPickupSchedule): Date => {
+    try {
+      // scheduledTime can be ISO 8601 or HH:mm format
+      if (schedule.scheduledTime.includes('T')) {
+        return new Date(schedule.scheduledTime);
+      }
+      // If it's HH:mm format, combine with scheduledDate
+      const dateStr = schedule.scheduledDate.split('T')[0];
+      const timeStr = schedule.scheduledTime.includes(':') 
+        ? schedule.scheduledTime.split('T')[0].split(' ')[0] 
+        : schedule.scheduledTime;
+      return new Date(`${dateStr}T${timeStr}`);
+    } catch {
+      // Fallback: use scheduledDate if parsing fails
+      return new Date(schedule.scheduledDate);
+    }
+  };
+
+  // Check if schedule is less than 1 hour from scheduled time
+  const isWithinOneHour = (schedule: FarmPickupSchedule): boolean => {
+    const scheduledDateTime = getScheduledDateTime(schedule);
+    const now = new Date();
+    const diffMs = scheduledDateTime.getTime() - now.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours > 0 && diffHours < 1;
+  };
+
+  // Check if scheduled time has passed
+  const hasScheduledTimePassed = (schedule: FarmPickupSchedule): boolean => {
+    const scheduledDateTime = getScheduledDateTime(schedule);
+    return scheduledDateTime.getTime() < new Date().getTime();
+  };
+
+  // Check if 24 hours have passed since scheduled time (for auto-completion)
+  const is24HoursPast = (schedule: FarmPickupSchedule): boolean => {
+    const scheduledDateTime = getScheduledDateTime(schedule);
+    const now = new Date();
+    const diffMs = now.getTime() - scheduledDateTime.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+    return diffHours >= 24;
+  };
+
+  // Check if schedule can be edited
+  // Draft schedules can always be edited
+  // Published/active schedules can only be edited if not within 1 hour of scheduled time
+  const canEditSchedule = (schedule: FarmPickupSchedule): boolean => {
+    if (schedule.status === "completed" || schedule.status === "cancelled") {
+      return false;
+    }
+    // Draft schedules can always be edited
+    if (schedule.status === "draft") {
+      return true;
+    }
+    // For published/active schedules, check if within 1 hour
+    return !isWithinOneHour(schedule);
+  };
+
+  // Check if schedule can be cancelled (scheduled time hasn't passed and not completed/cancelled)
+  const canCancelSchedule = (schedule: FarmPickupSchedule): boolean => {
+    if (schedule.status === "completed" || schedule.status === "cancelled") {
+      return false;
+    }
+    return !hasScheduledTimePassed(schedule);
+  };
+
+  // Use ref to access current schedules without triggering re-renders
+  const schedulesRef = useRef(pickupSchedules);
+  schedulesRef.current = pickupSchedules;
+  
+  // Track if we've done the initial auto-complete check
+  const hasCheckedRef = useRef(false);
+
+  // Auto-complete schedules that are 24 hours past (check periodically)
+  // Note: This is a frontend check - ideally handled by a backend cron job
+  useEffect(() => {
+    const checkAndAutoComplete = async () => {
+      const currentSchedules = schedulesRef.current;
+      const schedulesToComplete = currentSchedules.filter(
+        (schedule) => 
+          schedule.status !== "completed" && 
+          schedule.status !== "cancelled" && 
+          is24HoursPast(schedule)
+      );
+
+      // Only fetch if there are schedules that need completion AND we haven't just fetched
+      if (schedulesToComplete.length > 0 && user?.id) {
+        try {
+          await fetchPickupSchedules({ providerId: user.id });
+        } catch (err: any) {
+          // Don't retry on auth errors (401) or rate limit errors (429)
+          // The API client already handles these and prevents retries
+          if (err?.statusCode === 401 || err?.statusCode === 429) {
+            console.warn('Skipping schedule refresh due to auth/rate limit error');
+            return;
+          }
+          console.error('Error refreshing schedules:', err);
+        }
+      }
+    };
+
+    // Only run initial check once after schedules are loaded
+    if (!hasCheckedRef.current && pickupSchedules.length > 0) {
+      hasCheckedRef.current = true;
+      checkAndAutoComplete();
+    }
+
+    // Check every 5 minutes for schedules that need auto-completion
+    const interval = setInterval(checkAndAutoComplete, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+    // Only depend on user?.id - use ref for schedules to avoid re-triggering
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   if (view === "create" || view === "edit") {
     const selectedCenter = aggregationCenters.find(c => c.id === formData.aggregationCenterId);
@@ -321,9 +477,32 @@ export function PickupScheduleManagement() {
                   id="scheduledDate"
                   type="date"
                   value={formData.scheduledDate}
-                  onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
+                  onChange={(e) => {
+                    const selectedDate = e.target.value;
+                    const today = new Date().toISOString().split("T")[0];
+                    const maxDate = new Date();
+                    maxDate.setDate(maxDate.getDate() + 1);
+                    const maxDateStr = maxDate.toISOString().split("T")[0];
+                    
+                    // Ensure date is today or tomorrow (valid for only one day)
+                    if (selectedDate < today) {
+                      alert("Schedule date cannot be in the past");
+                      return;
+                    }
+                    if (selectedDate > maxDateStr) {
+                      alert("Schedule can only be set for today or tomorrow (one day validity)");
+                      return;
+                    }
+                    setFormData({ ...formData, scheduledDate: selectedDate });
+                  }}
                   min={new Date().toISOString().split("T")[0]}
+                  max={(() => {
+                    const maxDate = new Date();
+                    maxDate.setDate(maxDate.getDate() + 1);
+                    return maxDate.toISOString().split("T")[0];
+                  })()}
                 />
+                <p className="text-xs text-stone-500">Schedule is valid for one day only (today or tomorrow)</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="scheduledTime">Pickup Time *</Label>
@@ -367,12 +546,57 @@ export function PickupScheduleManagement() {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="vehiclePlateNumber">Vehicle Plate Number</Label>
+                <Input
+                  id="vehiclePlateNumber"
+                  value={formData.vehiclePlateNumber}
+                  onChange={(e) => setFormData({ ...formData, vehiclePlateNumber: e.target.value })}
+                  placeholder="e.g., KCA 123X"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="driverName">Driver Name</Label>
+                <Input
+                  id="driverName"
+                  value={formData.driverName}
+                  onChange={(e) => setFormData({ ...formData, driverName: e.target.value })}
+                  placeholder="e.g., John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="driverPhone">Driver Phone Number</Label>
+                <Input
+                  id="driverPhone"
+                  type="tel"
+                  value={formData.driverPhone}
+                  onChange={(e) => setFormData({ ...formData, driverPhone: e.target.value })}
+                  placeholder="e.g., +254712345678"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="pricePerKg">Price per kg (KES)</Label>
                 <Input
                   id="pricePerKg"
                   type="number"
                   value={formData.pricePerKg}
                   onChange={(e) => setFormData({ ...formData, pricePerKg: e.target.value })}
+                  placeholder="0"
+                  min={0}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fixedPrice">Fixed Price (KES)</Label>
+                <Input
+                  id="fixedPrice"
+                  type="number"
+                  value={formData.fixedPrice}
+                  onChange={(e) => setFormData({ ...formData, fixedPrice: e.target.value })}
                   placeholder="0"
                   min={0}
                 />
@@ -526,109 +750,170 @@ export function PickupScheduleManagement() {
         </Select>
       </div>
 
-      {/* Schedules List */}
+      {/* Schedules Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <IconLoader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : filteredSchedules.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredSchedules.map((schedule) => {
-            const centerCapacity = centerCapacities.get(schedule.aggregationCenterId);
-            const utilization = (schedule.usedCapacity / schedule.totalCapacity) * 100;
+        <Card>
+          <CardContent className="p-0">
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Schedule #</TableHead>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Center</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Capacity</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSchedules.map((schedule) => {
+                    const centerCapacity = centerCapacities.get(schedule.aggregationCenterId);
+                    const utilization = (schedule.usedCapacity / schedule.totalCapacity) * 100;
 
-            return (
-              <Card key={schedule.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{schedule.route}</CardTitle>
-                      <CardDescription className="mt-1">{schedule.aggregationCenterName}</CardDescription>
-                    </div>
-                    <Badge variant="outline" className={cn(
-                      "text-xs",
-                      schedule.status === "published" && "bg-blue-50 text-blue-700",
-                      schedule.status === "active" && "bg-green-50 text-green-700",
-                      schedule.status === "draft" && "bg-gray-50 text-gray-700"
-                    )}>
-                      {schedule.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1 text-sm">
-                    <div className="flex items-center gap-2 text-stone-600">
-                      <IconCalendar className="h-4 w-4" />
-                      <span>{formatDate(schedule.scheduledDate)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-stone-600">
-                      <IconClock className="h-4 w-4" />
-                      <span>{formatTime(schedule.scheduledTime)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 p-3 bg-stone-50 rounded-lg">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-stone-600">Capacity:</span>
-                      <span className="font-semibold">
-                        {schedule.usedCapacity.toLocaleString()} / {schedule.totalCapacity.toLocaleString()} kg
-                      </span>
-                    </div>
-                    <div className="w-full bg-stone-200 rounded-full h-2">
-                      <div
-                        className="h-2 bg-primary rounded-full"
-                        style={{ width: `${utilization}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-stone-500">
-                      {schedule.availableCapacity.toLocaleString()} kg available
-                    </p>
-                  </div>
-
-                  {centerCapacity && (
-                    <div className="p-2 bg-blue-50 rounded text-xs">
-                      <span className="text-blue-700">Center: </span>
-                      <span className="font-semibold">
-                        {centerCapacity.availableCapacity.toLocaleString()} kg available
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2 border-t">
-                    {schedule.status === "draft" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => handlePublish(schedule.id)}
+                    return (
+                      <TableRow
+                        key={schedule.id}
+                        className="cursor-pointer hover:bg-stone-50"
+                        onClick={() => navigate(`/dashboard/transport-provider/pickup-schedules/${schedule.id}`)}
                       >
-                        Publish
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleEditSchedule(schedule)}
-                    >
-                      <IconEdit className="h-4 w-4 mr-2" />
-                      Edit
-                    </Button>
-                    {schedule.status !== "completed" && schedule.status !== "cancelled" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCancel(schedule.id)}
-                      >
-                        <IconX className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                        <TableCell className="font-medium">
+                          {schedule.scheduleNumber || schedule.id.slice(0, 8)}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{schedule.route}</p>
+                            <div className="text-xs text-stone-500 space-y-0.5">
+                              {schedule.vehicleType && (
+                                <p>{schedule.vehicleType}</p>
+                              )}
+                              {schedule.vehicleId && (
+                                <p>Plate: {schedule.vehicleId}</p>
+                              )}
+                              {schedule.driverName && (
+                                <p>Driver: {schedule.driverName}</p>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm">{schedule.aggregationCenterName}</p>
+                            {centerCapacity && (
+                              <p className="text-xs text-stone-500">
+                                {centerCapacity.availableCapacity.toLocaleString()} kg available
+                              </p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 text-sm">
+                              <IconCalendar className="h-3.5 w-3.5 text-stone-400" />
+                              <span>{formatDate(schedule.scheduledDate)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-stone-500">
+                              <IconClock className="h-3 w-3 text-stone-400" />
+                              <span>{formatTime(schedule.scheduledTime)}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-stone-600">
+                                {schedule.usedCapacity.toLocaleString()} / {schedule.totalCapacity.toLocaleString()} kg
+                              </span>
+                            </div>
+                            <div className="w-full bg-stone-200 rounded-full h-1.5">
+                              <div
+                                className="h-1.5 bg-primary rounded-full"
+                                style={{ width: `${utilization}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-stone-500">
+                              {schedule.availableCapacity.toLocaleString()} kg available
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn(
+                            "text-xs",
+                            schedule.status === "published" && "bg-blue-50 text-blue-700 border-blue-200",
+                            schedule.status === "active" && "bg-green-50 text-green-700 border-green-200",
+                            schedule.status === "draft" && "bg-gray-50 text-gray-700 border-gray-200",
+                            schedule.status === "completed" && "bg-stone-50 text-stone-700 border-stone-200",
+                            schedule.status === "cancelled" && "bg-red-50 text-red-700 border-red-200"
+                          )}>
+                            {schedule.status}
+                          </Badge>
+                          {isWithinOneHour(schedule) && schedule.status !== "draft" && schedule.status !== "completed" && schedule.status !== "cancelled" && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-yellow-700">
+                              <IconAlertCircle className="h-3 w-3" />
+                              <span>Editing disabled</span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                            {schedule.status === "draft" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePublish(schedule.id)}
+                              >
+                                Publish
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditSchedule(schedule)}
+                              disabled={!canEditSchedule(schedule)}
+                              title={
+                                !canEditSchedule(schedule)
+                                  ? schedule.status === "completed" || schedule.status === "cancelled"
+                                    ? "Cannot edit: Schedule is completed or cancelled"
+                                    : isWithinOneHour(schedule)
+                                      ? "Cannot edit: Less than 1 hour until scheduled time"
+                                      : "Cannot edit schedule"
+                                  : "Edit schedule"
+                              }
+                            >
+                              <IconEdit className="h-4 w-4" />
+                            </Button>
+                            {schedule.status !== "completed" && schedule.status !== "cancelled" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleCancel(schedule.id)}
+                                disabled={!canCancelSchedule(schedule)}
+                                title={
+                                  !canCancelSchedule(schedule)
+                                    ? hasScheduledTimePassed(schedule)
+                                      ? "Cannot cancel: Scheduled time has passed"
+                                      : "Cannot cancel: Schedule is completed or cancelled"
+                                    : "Cancel schedule"
+                                }
+                              >
+                                <IconX className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="py-12 text-center">

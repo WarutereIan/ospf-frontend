@@ -19,6 +19,8 @@ export type OrderStage =
   | "ready_to_process"
   | "processing"
   | "ready_for_collection"
+  | "released"
+  | "collected"
   | "in_transit"
   | "at_aggregation"
   | "quality_approved"
@@ -33,6 +35,7 @@ interface OrderTimelineProps {
     timestamp?: string;
     completed: boolean;
   }>;
+  fulfillmentType?: "self_pickup" | "request_transport"; // Optional: to conditionally show delivery stages
 }
 
 const stageConfig: Record<
@@ -74,10 +77,20 @@ const stageConfig: Record<
     icon: IconCircleCheck,
     description: "Order processed and ready for buyer pickup",
   },
+  released: {
+    label: "Released",
+    icon: IconCircleCheck,
+    description: "Stock released - stock out recorded",
+  },
+  collected: {
+    label: "Collected",
+    icon: IconCheck,
+    description: "Order collected by buyer",
+  },
   out_for_delivery: {
     label: "Out for Delivery",
     icon: IconTruckDelivery,
-    description: "Buyer collecting/dispatching",
+    description: "Order out for delivery",
   },
   delivered: {
     label: "Delivered",
@@ -91,8 +104,8 @@ const stageConfig: Record<
   },
 };
 
-// Order workflow stages
-const stageOrder: OrderStage[] = [
+// Base order workflow stages (without delivery stages)
+const baseStageOrder: OrderStage[] = [
   "order_placed",
   "order_accepted",
   "payment_secured",
@@ -100,12 +113,28 @@ const stageOrder: OrderStage[] = [
   "ready_to_process",
   "processing",
   "ready_for_collection",
-  "out_for_delivery",
-  "delivered",
-  "completed",
+  "released",
+  "collected",
 ];
 
-export function OrderTimeline({ currentStage, stages }: OrderTimelineProps) {
+// Delivery stages (only shown for request_transport)
+const deliveryStages: OrderStage[] = [
+  "out_for_delivery",
+  "delivered",
+];
+
+// Final stage
+const finalStage: OrderStage = "completed";
+
+export function OrderTimeline({ currentStage, stages, fulfillmentType }: OrderTimelineProps) {
+  // Build stage order based on fulfillment type
+  // For request_transport: show delivery stages, for self_pickup: skip them
+  const stageOrder: OrderStage[] = [
+    ...baseStageOrder,
+    ...(fulfillmentType === "request_transport" ? deliveryStages : []),
+    finalStage,
+  ];
+
   const currentIndex = stageOrder.indexOf(currentStage);
 
   return (

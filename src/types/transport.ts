@@ -260,6 +260,7 @@ export interface TransportFilters {
   type?: TransportRequestType | "all";
   status?: TransportRequestStatus | "all";
   requesterType?: string;
+  requesterId?: string; // Filter by requester (buyer/farmer)
   providerId?: string; // Filter by transport provider
   dateRange?: {
     start: string; // ISO 8601

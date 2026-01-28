@@ -144,6 +144,15 @@ export function BuyerRequests() {
       // Status filter
       if (selectedStatus !== "all" && card.status !== selectedStatus) return false;
       
+      // Exclude requests with passed deadlines
+      if (card.deadline) {
+        const deadlineDate = new Date(card.deadline);
+        const now = new Date();
+        if (deadlineDate <= now) {
+          return false; // Exclude requests with passed deadlines
+        }
+      }
+      
       // Search filter
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();

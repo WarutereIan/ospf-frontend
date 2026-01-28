@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,15 @@ import {
   IconLoader2,
   IconSend,
 } from "@tabler/icons-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { getInventory } from "@/services/aggregationService";
 import type { RFQ, RFQResponse, QualityGrade, OFSPVariety } from "@/types/marketplace";
+import type { InventoryItem, AggregationCenter } from "@/types/aggregation";
+
+// Extended InventoryItem type that includes center information from API
+interface InventoryItemWithCenter extends InventoryItem {
+  center?: AggregationCenter;
+}
 
 interface RFQResponseFormProps {
   rfq: RFQ;
@@ -18,8 +26,11 @@ interface RFQResponseFormProps {
 }
 
 export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProps) {
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingBatches, setIsLoadingBatches] = useState(false);
+  const [availableBatches, setAvailableBatches] = useState<InventoryItemWithCenter[]>([]);
 
   // Form state
   const [quantity, setQuantity] = useState("");
@@ -27,9 +38,54 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
   const [pricePerUnit, setPricePerUnit] = useState("");
   const [variety, setVariety] = useState<OFSPVariety | "">(rfq.variety || "");
   const [qualityGrade, setQualityGrade] = useState<QualityGrade>(rfq.qualityGrade || "A");
+  const [selectedBatchId, setSelectedBatchId] = useState<string>("");
   const [deliveryTime, setDeliveryTime] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Helper function to convert quantity to kg based on unit
+  const convertToKg = (qty: number, unit: "kg" | "tons" | "units"): number => {
+    if (unit === "tons") {
+      return qty * 1000;
+    } else if (unit === "units") {
+      // Assume 1 unit = 50kg for bags (common for sweet potatoes)
+      return qty * 50;
+    }
+    return qty;
+  };
+
+  // Get selected batch details
+  const selectedBatch = availableBatches.find(batch => batch.batchId === selectedBatchId);
+
+  // Fetch batches when quality grade changes
+  useEffect(() => {
+    const fetchBatches = async () => {
+      if (!user?.id) return;
+      
+      setIsLoadingBatches(true);
+      // Reset selected batch and quantity when quality grade changes
+      setSelectedBatchId("");
+      setQuantity("");
+      
+      try {
+        const batches = await getInventory({
+          farmerId: user.id,
+          qualityGrade: qualityGrade,
+        });
+        // Filter to only include batches that have batchId (checked in at aggregation centers)
+        // Type assertion needed because API returns center data but TypeScript interface doesn't include it
+        const validBatches = (batches as InventoryItemWithCenter[]).filter(batch => batch.batchId);
+        setAvailableBatches(validBatches);
+      } catch (error) {
+        console.error("Failed to fetch batches:", error);
+        setAvailableBatches([]);
+      } finally {
+        setIsLoadingBatches(false);
+      }
+    };
+
+    fetchBatches();
+  }, [user?.id, qualityGrade]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +104,28 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
       return;
     }
 
+    // Validate batch selection is mandatory
+    if (!selectedBatchId || !selectedBatch) {
+      setError("Please select a batch. Batch selection is required to submit a quote.");
+      return;
+    }
+
+    // Convert offer quantity to kg for comparison
+    const qtyInKg = convertToKg(qty, quantityUnit);
+
+    // Validate against selected batch quantity
+    const batchQuantityKg = selectedBatch.quantity; // Already in kg
+    if (qtyInKg > batchQuantityKg) {
+      setError(
+        `Quantity cannot exceed available batch quantity. Available: ${batchQuantityKg.toLocaleString()} kg (${selectedBatch.batchId})`
+      );
+      return;
+    }
+
     // Check if quantity exceeds RFQ requirement
     const rfqQuantity = rfq.total;
     const rfqUnit = rfq.unit;
-    // Simple conversion (can be enhanced)
-    const qtyInKg = quantityUnit === "tons" ? qty * 1000 : qty;
-    const rfqQtyInKg = rfqUnit === "tons" ? rfqQuantity * 1000 : rfqQuantity;
+    const rfqQtyInKg = convertToKg(rfqQuantity, rfqUnit);
 
     if (qtyInKg > rfqQtyInKg) {
       setError(`Quantity cannot exceed RFQ requirement (${rfqQuantity} ${rfqUnit})`);
@@ -70,6 +142,7 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
         totalAmount: qty * price,
         variety: variety || undefined,
         qualityGrade,
+        batchId: selectedBatchId,
         deliveryTime: deliveryTime || undefined,
         paymentTerms: paymentTerms || undefined,
         notes: notes || undefined,
@@ -130,6 +203,13 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
                 step={0.1}
                 required
               />
+              {selectedBatch && quantity && (
+                <p className={`text-xs ${convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity ? "text-destructive" : "text-muted-foreground"}`}>
+                  {convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity
+                    ? `⚠️ Exceeds available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`
+                    : `✓ Within available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="quantityUnit">Unit *</Label>
@@ -197,6 +277,80 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
               </div>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="batchId">Select Batch *</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Select a batch that has been checked in at aggregation centers. Batch selection is required. Only batches matching Grade {qualityGrade} are shown.
+            </p>
+            {isLoadingBatches ? (
+              <div className="flex items-center justify-center py-4 border rounded-lg">
+                <IconLoader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading batches...</span>
+              </div>
+            ) : availableBatches.length > 0 ? (
+              <>
+                <div className="w-full">
+                  <Select value={selectedBatchId} onValueChange={setSelectedBatchId}>
+                    <SelectTrigger className="!w-full">
+                      <SelectValue>
+                        {selectedBatchId 
+                          ? `${selectedBatch?.batchId || "Selected"} - ${selectedBatch?.quantity.toLocaleString() || 0} kg available`
+                          : "Select a batch"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent 
+                      className="min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-4rem)]"
+                      alignItemWithTrigger={true}
+                    >
+                      {availableBatches.map((batch) => (
+                        <SelectItem key={batch.batchId} value={batch.batchId || ""}>
+                          <div className="flex flex-col w-full min-w-0 pr-4">
+                            <span className="font-mono text-sm break-words">{batch.batchId}</span>
+                            <span className="text-xs text-muted-foreground break-words">
+                              Available: {batch.quantity.toLocaleString()} kg • {batch.variety}
+                              {batch.center && ` • ${batch.center.name} (${batch.center.location})`}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedBatch && (
+                  <div className="p-2 bg-muted rounded-lg text-xs">
+                    <p className="font-medium text-foreground mb-1">Selected Batch Information:</p>
+                    <p className="text-muted-foreground">
+                      Batch ID: <span className="font-mono">{selectedBatch.batchId}</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Available Quantity: <span className="font-semibold text-foreground">{selectedBatch.quantity.toLocaleString()} kg</span>
+                    </p>
+                    <p className="text-muted-foreground">
+                      Variety: {selectedBatch.variety}
+                    </p>
+                    {selectedBatch.center && (
+                      <p className="text-muted-foreground">
+                        Aggregation Center: <span className="font-semibold text-foreground">{selectedBatch.center.name}</span> • {selectedBatch.center.location}
+                      </p>
+                    )}
+                    {quantity && (
+                      <p className={`mt-1 ${convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity ? "text-destructive font-semibold" : "text-muted-foreground"}`}>
+                        Your quote: {convertToKg(parseFloat(quantity), quantityUnit).toLocaleString()} kg
+                        {convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity && " (exceeds available)"}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="border rounded-lg p-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No batches available for Grade {qualityGrade} that have been checked in at aggregation centers.
+                </p>
+              </div>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="deliveryTime">Estimated Delivery Time</Label>

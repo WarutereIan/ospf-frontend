@@ -96,12 +96,86 @@ function transformInput(input: any): Input {
 
 /**
  * Transform input order from backend format to frontend format
+ * Extracts nested farmer and input data to flat structure
  */
 function transformInputOrder(order: any): InputOrder {
+  // Extract farmer information from nested structure
+  const farmerName = order.farmer?.profile
+    ? [order.farmer.profile.firstName, order.farmer.profile.lastName].filter(Boolean).join(' ') || order.farmer.email
+    : order.farmerName || order.farmer?.email || 'Unknown';
+  
+  const farmerPhone = order.farmer?.profile?.phone || order.farmer?.phone || order.farmerPhone || '';
+  
+  // Extract farmer location from profile
+  const farmerLocation = order.farmer?.profile?.county || 
+                        order.farmer?.profile?.subCounty || 
+                        order.farmer?.profile?.address ||
+                        order.farmerLocation || 
+                        '';
+
+  // Extract input information from nested structure
+  const inputName = order.input?.name || order.inputName || 'Unknown';
+  const inputCategory = order.input?.category || order.inputCategory || 'Planting Material';
+  
+  // Extract provider information if needed
+  const providerName = order.input?.provider?.profile
+    ? [order.input.provider.profile.firstName, order.input.provider.profile.lastName].filter(Boolean).join(' ') || order.input.provider.email
+    : order.input?.provider?.businessName || 
+      order.providerName || 
+      'Unknown Provider';
+
+  // Extract transport provider if available
+  const transportProvider = order.transportRequest?.provider?.profile
+    ? [order.transportRequest.provider.profile.firstName, order.transportRequest.provider.profile.lastName].filter(Boolean).join(' ') || order.transportRequest.provider.email
+    : order.transportRequest?.provider?.businessName ||
+      order.transportProvider || 
+      undefined;
+
+  // Map category from backend enum to frontend format
+  const categoryMap: Record<string, string> = {
+    'PLANTING_MATERIAL': 'Planting Material',
+    'FERTILIZER': 'Fertilizer',
+    'SOIL_AMENDMENT': 'Soil Amendment',
+    'TOOLS_EQUIPMENT': 'Tools & Equipment',
+    'TRAINING_MATERIALS': 'Training Materials',
+  };
+  const mappedCategory = categoryMap[inputCategory] || inputCategory;
+
   return {
-    ...order,
+    id: order.id,
+    orderNumber: order.orderNumber,
+    farmerId: order.farmerId,
+    farmerName,
+    farmerPhone,
+    farmerLocation,
+    inputId: order.inputId,
+    inputName,
+    inputCategory: mappedCategory as any,
+    quantity: order.quantity,
+    unit: order.unit,
+    pricePerUnit: order.pricePerUnit,
+    subtotal: order.subtotal,
+    transportFee: order.transportFee || 0,
+    totalAmount: order.totalAmount,
     status: mapInputOrderStatus(order.status),
-    paymentStatus: order.paymentStatus ? mapInputPaymentStatus(order.paymentStatus) : order.paymentStatus,
+    paymentStatus: order.paymentStatus ? mapInputPaymentStatus(order.paymentStatus) : 'pending',
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    deliveryDate: order.deliveryDate,
+    notes: order.notes,
+    requiresTransport: order.requiresTransport || false,
+    transportProviderId: order.transportRequestId || order.transportProviderId,
+    transportProvider,
+    // Aliases for compatibility
+    amount: order.totalAmount,
+    date: order.createdAt,
+    customerName: farmerName,
+    // Items array for dashboard compatibility
+    items: [{
+      productName: inputName,
+      quantity: order.quantity,
+      unit: order.unit,
+    }],
   };
 }
 

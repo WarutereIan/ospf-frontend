@@ -6,7 +6,7 @@
  * - Alerts
  */
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import type {
   Notification,
   Alert,
@@ -23,6 +23,12 @@ import {
   acknowledgeAlert,
   getNotificationStats,
 } from "@/services/notificationService";
+import {
+  isPushNotificationSupported,
+  getNotificationPermission,
+  registerServiceWorker,
+  getPushSubscription,
+} from "@/lib/push-notification-utils";
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -32,6 +38,12 @@ interface NotificationContextType {
   stats: NotificationStats | null;
   isLoading: boolean;
   error: string | null;
+  
+  // Push notification state
+  pushNotificationsEnabled: boolean;
+  pushNotificationsSupported: boolean;
+  notificationPermission: NotificationPermission | null;
+  serviceWorkerRegistered: boolean;
   
   fetchNotifications: (filters?: NotificationFilters) => Promise<void>;
   fetchNotificationById: (id: string) => Promise<void>;
@@ -43,6 +55,7 @@ interface NotificationContextType {
   fetchStats: () => Promise<void>;
   setFilters: (filters: NotificationFilters) => void;
   clearSelectedNotification: () => void;
+  refreshPushNotificationStatus: () => Promise<void>;
   
   filteredNotifications: Notification[];
   unreadCount: number;
@@ -58,6 +71,117 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [stats, setStats] = useState<NotificationStats | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
+  const [pushNotificationsSupported, setPushNotificationsSupported] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | null>(null);
+  const [serviceWorkerRegistered, setServiceWorkerRegistered] = useState(false);
+
+  // Function to check and refresh push notification status
+  const refreshPushNotificationStatus = useCallback(async () => {
+    try {
+      // Check browser support
+      const supported = isPushNotificationSupported();
+      setPushNotificationsSupported(supported);
+
+      if (!supported) {
+        setNotificationPermission(null);
+        setServiceWorkerRegistered(false);
+        setPushNotificationsEnabled(false);
+        return;
+      }
+
+      // Check notification permission
+      const permission = getNotificationPermission();
+      setNotificationPermission(permission);
+
+      // Check service worker registration and subscription
+      try {
+        const registration = await registerServiceWorker();
+        setServiceWorkerRegistered(!!registration);
+
+        if (registration) {
+          const subscription = await getPushSubscription(registration);
+          setPushNotificationsEnabled(!!subscription);
+        } else {
+          setServiceWorkerRegistered(false);
+          setPushNotificationsEnabled(false);
+        }
+      } catch (swError) {
+        console.error('Service worker registration check failed:', swError);
+        setServiceWorkerRegistered(false);
+        setPushNotificationsEnabled(false);
+      }
+    } catch (error) {
+      console.error('Error checking push notification status:', error);
+      setPushNotificationsEnabled(false);
+      setServiceWorkerRegistered(false);
+    }
+  }, []);
+
+  // Check push notification status on mount and when permission changes
+  useEffect(() => {
+    refreshPushNotificationStatus();
+
+    let permissionStatus: PermissionStatus | null = null;
+    let interval: NodeJS.Timeout | null = null;
+    let handlePermissionChange: (() => void) | null = null;
+
+    // Listen for permission changes using Permissions API (if available)
+    if ('permissions' in navigator && 'query' in navigator.permissions) {
+      navigator.permissions
+        .query({ name: 'notifications' as PermissionName })
+        .then((status) => {
+          permissionStatus = status;
+          // Set initial permission
+          setNotificationPermission(status.state as NotificationPermission);
+
+          // Listen for permission changes
+          handlePermissionChange = () => {
+            const newState = status.state as NotificationPermission;
+            setNotificationPermission(newState);
+            // Refresh full status if permission changed
+            refreshPushNotificationStatus();
+          };
+
+          status.addEventListener('change', handlePermissionChange);
+        })
+        .catch((error) => {
+          console.warn('Permissions API not fully supported:', error);
+          // Fallback to periodic check
+          interval = setInterval(() => {
+            const currentPermission = getNotificationPermission();
+            if (currentPermission !== notificationPermission) {
+              setNotificationPermission(currentPermission);
+              refreshPushNotificationStatus();
+            }
+          }, 5000);
+        });
+    } else {
+      // Fallback: Check permission periodically (every 5 seconds) in case user changes it in browser settings
+      interval = setInterval(() => {
+        const currentPermission = getNotificationPermission();
+        if (currentPermission !== notificationPermission) {
+          setNotificationPermission(currentPermission);
+          // Refresh full status if permission changed
+          refreshPushNotificationStatus();
+        }
+      }, 5000);
+    }
+
+    // Cleanup function
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (permissionStatus && handlePermissionChange) {
+        try {
+          permissionStatus.removeEventListener('change', handlePermissionChange);
+        } catch (e) {
+          // Ignore cleanup errors (some browsers don't support removeEventListener on PermissionStatus)
+        }
+      }
+    };
+  }, [refreshPushNotificationStatus, notificationPermission]);
 
   const fetchNotifications = useCallback(async (newFilters?: NotificationFilters) => {
     setIsLoading(true);
@@ -204,6 +328,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     stats,
     isLoading,
     error,
+    pushNotificationsEnabled,
+    pushNotificationsSupported,
+    notificationPermission,
+    serviceWorkerRegistered,
     fetchNotifications,
     fetchNotificationById,
     markAsRead,
@@ -214,6 +342,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     fetchStats,
     setFilters,
     clearSelectedNotification,
+    refreshPushNotificationStatus,
     filteredNotifications,
     unreadCount,
   };
