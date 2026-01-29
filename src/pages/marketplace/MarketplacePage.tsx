@@ -198,10 +198,16 @@ export function MarketplacePage() {
         qualityGrade: selectedListing.qualityGrade,
         pricePerKg: selectedListing.pricePerKg,
         totalAmount: quantity * selectedListing.pricePerKg,
-        deliveryAddress: fulfillmentType === "request_transport" ? deliveryLocation : undefined,
         deliveryLocation: fulfillmentType === "request_transport" ? deliveryLocation : undefined,
         deliveryCounty: fulfillmentType === "request_transport" ? deliveryCounty : undefined,
-        deliveryCoordinates: fulfillmentType === "request_transport" ? deliveryCoordinates : undefined,
+        deliveryCoordinates: fulfillmentType === "request_transport" && deliveryCoordinates
+          ? (() => {
+              const parts = deliveryCoordinates.split(",").map((s) => parseFloat(s.trim()));
+              return parts.length === 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])
+                ? ([parts[0], parts[1]] as [number, number])
+                : undefined;
+            })()
+          : undefined,
         fulfillmentType,
         status: "order_placed",
       });
@@ -779,7 +785,7 @@ export function MarketplacePage() {
                     <Label className="text-sm font-medium mb-2 block">Delivery County *</Label>
                     <Select value={deliveryCounty} onValueChange={(value) => setDeliveryCounty(value || "")}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select county" />
+                        <SelectValue>{deliveryCounty ? undefined : "Select county"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="machakos">Machakos</SelectItem>

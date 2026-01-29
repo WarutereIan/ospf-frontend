@@ -158,10 +158,12 @@ export interface ActivityLogFilters {
   userId?: string;
   action?: ActivityAction | "all";
   entityType?: string;
+  entityId?: string;
   dateRange?: {
     start: string; // ISO 8601
     end: string; // ISO 8601
   };
+  limit?: number;
   searchQuery?: string;
 }
 

@@ -259,7 +259,7 @@ export function StockOutForm() {
           quantity: formData.quantity,
           qualityGrade: formData.qualityGrade,
           location: selectedCenter?.name || centers[0]?.name || "Aggregation Center",
-          transactionId: result.data.transactionNumber || result.data.id,
+          transactionId: result.data.transactionNumber ?? result.data.id,
           qrCode: qrCode,
           orderId: formData.orderId,
         };

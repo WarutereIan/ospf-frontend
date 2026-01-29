@@ -116,6 +116,8 @@ export interface MarketplaceOrder {
   updatedAt: string; // ISO 8601
   fulfillmentType?: "self_pickup" | "request_transport"; // How buyer wants to receive order
   deliveryLocation?: string;
+  deliveryAddress?: string; // Full address for delivery (when request_transport)
+  deliveryCounty?: string; // County for delivery (when request_transport)
   aggregationCenter?: string;
   centerLocation?: string;
   estimatedDeliveryDate?: string; // ISO 8601

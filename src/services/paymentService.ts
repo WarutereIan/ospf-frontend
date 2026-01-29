@@ -88,13 +88,14 @@ interface CreatePaymentDto {
  * Map frontend payment to backend CreatePaymentDto.
  */
 function toCreatePaymentDto(payment: Partial<Payment>): CreatePaymentDto {
-  const method = payment.method 
-    ? (payment.method === 'mpesa' ? 'MPESA' :
-       payment.method === 'bank_transfer' ? 'BANK_TRANSFER' :
-       payment.method === 'cash' ? 'CASH' :
-       payment.method === 'credit' ? 'CREDIT' : 'MPESA')
+  const methodKey = (payment as Record<string, unknown>).method as string | undefined;
+  const method = methodKey
+    ? (methodKey === 'mpesa' ? 'MPESA' :
+       methodKey === 'bank_transfer' ? 'BANK_TRANSFER' :
+       methodKey === 'cash' ? 'CASH' :
+       methodKey === 'credit' ? 'CREDIT' : 'MPESA')
     : 'MPESA';
-  
+
   return {
     orderId: payment.orderId,
     transportId: payment.transportId,

@@ -105,21 +105,21 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
               {summary.totalOrders != null && (
                 <StatCard
                   label="Total Orders"
-                  value={fmtNum(summary.totalOrders)}
+                  value={fmtNum(Number(summary.totalOrders))}
                   icon={<IconPackage className="h-5 w-5" />}
                 />
               )}
               {summary.totalFarmers != null && (
                 <StatCard
                   label="Farmers"
-                  value={fmtNum(summary.totalFarmers)}
+                  value={fmtNum(Number(summary.totalFarmers))}
                   icon={<IconUsers className="h-5 w-5" />}
                 />
               )}
               {summary.totalBuyers != null && (
                 <StatCard
                   label="Buyers"
-                  value={fmtNum(summary.totalBuyers)}
+                  value={fmtNum(Number(summary.totalBuyers))}
                   icon={<IconUsers className="h-5 w-5" />}
                 />
               )}
@@ -168,10 +168,10 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
                 <StatCard label="Avg Order Value" value={fmtCurrency(financial.average_order_value as number)} />
               )}
               {financial.total_volume_kg != null && (
-                <StatCard label="Total Volume (kg)" value={fmtNum(financial.total_volume_kg)} icon={<IconPackage className="h-5 w-5" />} />
+                <StatCard label="Total Volume (kg)" value={fmtNum(Number(financial.total_volume_kg))} icon={<IconPackage className="h-5 w-5" />} />
               )}
               {financial.average_price_per_kg != null && (
-                <StatCard label="Avg Price (KES/kg)" value={fmtNum(financial.average_price_per_kg)} />
+                <StatCard label="Avg Price (KES/kg)" value={fmtNum(Number(financial.average_price_per_kg))} />
               )}
             </div>
             {/* Charts row */}
@@ -232,7 +232,7 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
                 <CircularProgress
                   value={Number(quality.quality_grade_a_pct)}
                   maxValue={100}
-                  text={fmtPct(quality.quality_grade_a_pct)}
+                  text={fmtPct(Number(quality.quality_grade_a_pct))}
                   label="Grade A %"
                   size={120}
                   color="#22C55E"
@@ -240,13 +240,13 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {quality.quality_approved_count != null && (
-                  <StatCard label="Approved Checks" value={fmtNum(quality.quality_approved_count)} icon={<IconShieldCheck className="h-5 w-5" />} />
+                  <StatCard label="Approved Checks" value={fmtNum(Number(quality.quality_approved_count))} icon={<IconShieldCheck className="h-5 w-5" />} />
                 )}
                 {quality.quality_rejected_count != null && (
-                  <StatCard label="Rejected Checks" value={fmtNum(quality.quality_rejected_count)} icon={<IconAlertTriangle className="h-5 w-5" />} />
+                  <StatCard label="Rejected Checks" value={fmtNum(Number(quality.quality_rejected_count))} icon={<IconAlertTriangle className="h-5 w-5" />} />
                 )}
                 {quality.wastage_quantity_kg != null && (
-                  <StatCard label="Total Wastage (kg)" value={fmtNum(quality.wastage_quantity_kg)} />
+                  <StatCard label="Total Wastage (kg)" value={fmtNum(Number(quality.wastage_quantity_kg))} />
                 )}
               </div>
             </div>
@@ -306,22 +306,22 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {operational.stock_in_quantity_kg != null && (
-                <StatCard label="Stock In (kg)" value={fmtNum(operational.stock_in_quantity_kg)} icon={<IconTrendingUp className="h-5 w-5" />} />
+                <StatCard label="Stock In (kg)" value={fmtNum(Number(operational.stock_in_quantity_kg))} icon={<IconTrendingUp className="h-5 w-5" />} />
               )}
               {operational.stock_out_quantity_kg != null && (
-                <StatCard label="Stock Out (kg)" value={fmtNum(operational.stock_out_quantity_kg)} />
+                <StatCard label="Stock Out (kg)" value={fmtNum(Number(operational.stock_out_quantity_kg))} />
               )}
               {operational.inventory_fresh_kg != null && (
-                <StatCard label="Fresh Inventory (kg)" value={fmtNum(operational.inventory_fresh_kg)} />
+                <StatCard label="Fresh Inventory (kg)" value={fmtNum(Number(operational.inventory_fresh_kg))} />
               )}
               {operational.centers_count != null && (
-                <StatCard label="Active Centers" value={fmtNum(operational.centers_count)} icon={<IconBuildingStore className="h-5 w-5" />} />
+                <StatCard label="Active Centers" value={fmtNum(Number(operational.centers_count))} icon={<IconBuildingStore className="h-5 w-5" />} />
               )}
               {operational.centers_with_activity_count != null && (
-                <StatCard label="Centers with Activity" value={fmtNum(operational.centers_with_activity_count)} />
+                <StatCard label="Centers with Activity" value={fmtNum(Number(operational.centers_with_activity_count))} />
               )}
               {operational.activity_log_count != null && (
-                <StatCard label="Activity Events" value={fmtNum(operational.activity_log_count)} />
+                <StatCard label="Activity Events" value={fmtNum(Number(operational.activity_log_count))} />
               )}
             </div>
             {/* Charts row: Stock Flow + Inventory Status */}
@@ -393,16 +393,16 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
           <CardContent className="space-y-6">
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {users.total_users != null && <StatCard label="Total Users" value={fmtNum(users.total_users)} icon={<IconUsers className="h-5 w-5" />} />}
-              {users.total_farmers != null && <StatCard label="Farmers" value={fmtNum(users.total_farmers)} />}
-              {users.total_buyers != null && <StatCard label="Buyers" value={fmtNum(users.total_buyers)} />}
+              {users.total_users != null && <StatCard label="Total Users" value={fmtNum(Number(users.total_users))} icon={<IconUsers className="h-5 w-5" />} />}
+              {users.total_farmers != null && <StatCard label="Farmers" value={fmtNum(Number(users.total_farmers))} />}
+              {users.total_buyers != null && <StatCard label="Buyers" value={fmtNum(Number(users.total_buyers))} />}
               {users.user_growth_rate != null && (
-                <StatCard label="User Growth" value={fmtPct(users.user_growth_rate)} trend={{ value: Number(users.user_growth_rate), direction: Number(users.user_growth_rate) >= 0 ? "up" : "down" }} />
+                <StatCard label="User Growth" value={fmtPct(Number(users.user_growth_rate))} trend={{ value: Number(users.user_growth_rate), direction: Number(users.user_growth_rate) >= 0 ? "up" : "down" }} />
               )}
-              {users.new_farmers_in_period != null && <StatCard label="New Farmers (period)" value={fmtNum(users.new_farmers_in_period)} />}
-              {users.new_buyers_in_period != null && <StatCard label="New Buyers (period)" value={fmtNum(users.new_buyers_in_period)} />}
-              {users.active_users_count != null && <StatCard label="Active Users" value={fmtNum(users.active_users_count)} />}
-              {users.last_login_count != null && <StatCard label="Logins (period)" value={fmtNum(users.last_login_count)} />}
+              {users.new_farmers_in_period != null && <StatCard label="New Farmers (period)" value={fmtNum(Number(users.new_farmers_in_period))} />}
+              {users.new_buyers_in_period != null && <StatCard label="New Buyers (period)" value={fmtNum(Number(users.new_buyers_in_period))} />}
+              {users.active_users_count != null && <StatCard label="Active Users" value={fmtNum(Number(users.active_users_count))} />}
+              {users.last_login_count != null && <StatCard label="Logins (period)" value={fmtNum(Number(users.last_login_count))} />}
             </div>
             {/* Distribution charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -498,13 +498,13 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {farmerGroups.farmer_groups_count != null && (
-                <StatCard label="Farmer Groups" value={fmtNum(farmerGroups.farmer_groups_count)} icon={<IconBuildingStore className="h-5 w-5" />} />
+                <StatCard label="Farmer Groups" value={fmtNum(Number(farmerGroups.farmer_groups_count))} icon={<IconBuildingStore className="h-5 w-5" />} />
               )}
               {farmerGroups.farmer_group_members_total != null && (
-                <StatCard label="Total Members in Groups" value={fmtNum(farmerGroups.farmer_group_members_total)} />
+                <StatCard label="Total Members in Groups" value={fmtNum(Number(farmerGroups.farmer_group_members_total))} />
               )}
               {farmerGroups.farmers_unassigned_count != null && (
-                <StatCard label="Farmers Not in a Group" value={fmtNum(farmerGroups.farmers_unassigned_count)} />
+                <StatCard label="Farmers Not in a Group" value={fmtNum(Number(farmerGroups.farmers_unassigned_count))} />
               )}
             </div>
           </CardContent>
@@ -525,7 +525,7 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
                 <CircularProgress
                   value={Number(transactionEvidence.evidence_coverage_pct)}
                   maxValue={100}
-                  text={fmtPct(transactionEvidence.evidence_coverage_pct)}
+                  text={fmtPct(Number(transactionEvidence.evidence_coverage_pct))}
                   label="Evidence Coverage"
                   size={120}
                   color="#22C55E"
@@ -535,7 +535,7 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
                 <CircularProgress
                   value={Number(transactionEvidence.delivery_rate_pct)}
                   maxValue={100}
-                  text={fmtPct(transactionEvidence.delivery_rate_pct)}
+                  text={fmtPct(Number(transactionEvidence.delivery_rate_pct))}
                   label="Delivery Rate"
                   size={120}
                   color="#3B82F6"
@@ -545,7 +545,7 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
                 <CircularProgress
                   value={Number(transactionEvidence.dispute_rate_pct)}
                   maxValue={100}
-                  text={fmtPct(transactionEvidence.dispute_rate_pct)}
+                  text={fmtPct(Number(transactionEvidence.dispute_rate_pct))}
                   label="Dispute Rate"
                   size={120}
                   color={Number(transactionEvidence.dispute_rate_pct) > 5 ? "#EF4444" : "#F59E0B"}
@@ -555,19 +555,19 @@ export function ReportMetricVisualizations({ report, includeCharts }: ReportMetr
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {transactionEvidence.orders_with_payment_evidence != null && (
-                <StatCard label="Orders with Evidence" value={fmtNum(transactionEvidence.orders_with_payment_evidence)} icon={<IconShieldCheck className="h-5 w-5" />} />
+                <StatCard label="Orders with Evidence" value={fmtNum(Number(transactionEvidence.orders_with_payment_evidence))} icon={<IconShieldCheck className="h-5 w-5" />} />
               )}
               {transactionEvidence.orders_without_evidence != null && (
-                <StatCard label="Orders without Evidence" value={fmtNum(transactionEvidence.orders_without_evidence)} icon={<IconAlertTriangle className="h-5 w-5" />} />
+                <StatCard label="Orders without Evidence" value={fmtNum(Number(transactionEvidence.orders_without_evidence))} icon={<IconAlertTriangle className="h-5 w-5" />} />
               )}
               {transactionEvidence.orders_delivered_count != null && (
-                <StatCard label="Delivered Orders" value={fmtNum(transactionEvidence.orders_delivered_count)} />
+                <StatCard label="Delivered Orders" value={fmtNum(Number(transactionEvidence.orders_delivered_count))} />
               )}
               {transactionEvidence.total_orders_in_period != null && (
-                <StatCard label="Total Orders (period)" value={fmtNum(transactionEvidence.total_orders_in_period)} />
+                <StatCard label="Total Orders (period)" value={fmtNum(Number(transactionEvidence.total_orders_in_period))} />
               )}
               {transactionEvidence.disputed_orders_count != null && (
-                <StatCard label="Disputed" value={fmtNum(transactionEvidence.disputed_orders_count)} />
+                <StatCard label="Disputed" value={fmtNum(Number(transactionEvidence.disputed_orders_count))} />
               )}
             </div>
             {/* Distribution pie charts */}

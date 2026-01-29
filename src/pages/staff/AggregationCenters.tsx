@@ -30,6 +30,15 @@ import { createAggregationCenter, updateAggregationCenter } from "@/services/agg
 import { showSuccess, showError } from "@/lib/toast";
 import { VALID_SUBCOUNTIES } from "@/constants/locations";
 
+/** Form state uses coordinates as "lat,lng" string for the Input. */
+type AggregationCenterFormState = Omit<Partial<AggregationCenter>, "coordinates"> & { coordinates?: string };
+
+function parseCoordinates(s: string | undefined): [number, number] | undefined {
+  if (!s?.trim()) return undefined;
+  const parts = s.split(",").map((p) => parseFloat(p.trim()));
+  return parts.length === 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1]) ? [parts[0], parts[1]] : undefined;
+}
+
 export function AggregationCenters() {
   const { centers, fetchCenters, isLoading } = useAggregation();
   const { profiles, fetchProfiles } = useProfile();
@@ -40,7 +49,7 @@ export function AggregationCenters() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedCenter, setSelectedCenter] = useState<AggregationCenter | null>(null);
-  const [formData, setFormData] = useState<Partial<AggregationCenter>>({
+  const [formData, setFormData] = useState<AggregationCenterFormState>({
     name: "",
     location: "",
     county: "",
@@ -84,7 +93,10 @@ export function AggregationCenters() {
         return;
       }
 
-      const result = await createAggregationCenter(formData);
+      const payload = parseCoordinates(formData.coordinates)
+        ? { ...formData, coordinates: parseCoordinates(formData.coordinates) }
+        : { ...formData, coordinates: undefined };
+      const result = await createAggregationCenter(payload as Partial<AggregationCenter>);
       if (result.error) {
         showError(result.error);
         return;
@@ -103,7 +115,10 @@ export function AggregationCenters() {
     if (!selectedCenter) return;
 
     try {
-      const result = await updateAggregationCenter(selectedCenter.id, formData);
+      const payload = parseCoordinates(formData.coordinates)
+        ? { ...formData, coordinates: parseCoordinates(formData.coordinates) }
+        : { ...formData, coordinates: undefined };
+      const result = await updateAggregationCenter(selectedCenter.id, payload as Partial<AggregationCenter>);
       if (result.error) {
         showError(result.error);
         return;
@@ -121,16 +136,20 @@ export function AggregationCenters() {
 
   const openEditDialog = (center: AggregationCenter) => {
     setSelectedCenter(center);
+    const coords =
+      Array.isArray(center.coordinates) && center.coordinates.length === 2
+        ? `${center.coordinates[0]},${center.coordinates[1]}`
+        : "";
     setFormData({
       name: center.name,
       location: center.location,
       county: center.county,
       subCounty: center.subCounty || "",
       ward: center.ward || "",
-      coordinates: center.coordinates || "",
+      coordinates: coords,
       centerType: center.centerType,
       mainCenterId: center.mainCenterId || "",
-      totalCapacity: center.capacity || 0,
+      totalCapacity: center.totalCapacity ?? center.capacity ?? 0,
       managerId: center.managerId || "",
       status: center.status,
       isActive: center.isActive,
@@ -262,7 +281,7 @@ export function AggregationCenters() {
                   <TableRow key={center.id}>
                     <TableCell className="font-medium">{center.name}</TableCell>
                     <TableCell>
-                      <code className="text-xs bg-muted px-2 py-1 rounded">{center.code}</code>
+                      <code className="text-xs bg-muted px-2 py-1 rounded">{center.code ?? center.id.slice(0, 8)}</code>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
@@ -350,7 +369,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select subcounty (optional)" />
+                    <SelectValue>{formData.subCounty ? undefined : "Select subcounty (optional)"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
@@ -376,7 +395,7 @@ export function AggregationCenters() {
               <label className="text-sm font-medium">Coordinates (lat,lng)</label>
               <Input
                 placeholder="e.g., -1.2921,36.8219"
-                value={formData.coordinates}
+                value={formData.coordinates ?? ""}
                 onChange={(e) => setFormData({ ...formData, coordinates: e.target.value })}
               />
             </div>
@@ -407,7 +426,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, mainCenterId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select main center" />
+                    <SelectValue>{formData.mainCenterId ? undefined : "Select main center"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {mainCenters.map((center) => (
@@ -435,7 +454,7 @@ export function AggregationCenters() {
                 onValueChange={(value) => setFormData({ ...formData, managerId: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select aggregation manager" />
+                  <SelectValue>{formData.managerId ? undefined : "Select aggregation manager"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {aggregationManagers.map((manager) => (
@@ -521,7 +540,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select subcounty (optional)" />
+                    <SelectValue>{formData.subCounty ? undefined : "Select subcounty (optional)"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
@@ -545,7 +564,7 @@ export function AggregationCenters() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Coordinates</label>
               <Input
-                value={formData.coordinates}
+                value={formData.coordinates ?? ""}
                 onChange={(e) => setFormData({ ...formData, coordinates: e.target.value })}
               />
             </div>
@@ -575,7 +594,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, mainCenterId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select main center" />
+                    <SelectValue>{formData.mainCenterId ? undefined : "Select main center"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {mainCenters.map((center) => (
@@ -602,7 +621,7 @@ export function AggregationCenters() {
                 onValueChange={(value) => setFormData({ ...formData, managerId: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select aggregation manager" />
+                  <SelectValue>{formData.managerId ? undefined : "Select aggregation manager"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {aggregationManagers.map((manager) => (

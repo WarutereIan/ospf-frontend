@@ -123,7 +123,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     refreshPushNotificationStatus();
 
     let permissionStatus: PermissionStatus | null = null;
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     let handlePermissionChange: (() => void) | null = null;
 
     // Listen for permission changes using Permissions API (if available)

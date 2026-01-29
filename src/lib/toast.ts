@@ -63,7 +63,7 @@ export function showLoading(message: string) {
   });
   return {
     dismiss: () => toastId.dismiss(),
-    update: (newMessage: string) => toastId.update({ title: newMessage }),
+    update: (newMessage: string) => toastId.update({ id: toastId.id, title: newMessage }),
   };
 }
 
@@ -89,6 +89,7 @@ export function showPromise<T>(
         ? messages.success(data)
         : messages.success;
       loadingToast.update({
+        id: loadingToast.id,
         title: successMessage,
         variant: "default",
       });
@@ -99,6 +100,7 @@ export function showPromise<T>(
         ? messages.error(error)
         : messages.error;
       loadingToast.update({
+        id: loadingToast.id,
         title: errorMessage,
         variant: "destructive",
       });
@@ -150,27 +152,27 @@ export async function handleApiResponse<T>(
   options?: {
     successMessage?: string;
     errorMessage?: string;
-    showSuccess?: boolean;
-    showError?: boolean;
+    showSuccessToast?: boolean;
+    showErrorToast?: boolean;
   }
 ): Promise<T> {
   const {
     successMessage,
     errorMessage,
-    showSuccess = false,
-    showError = true,
+    showSuccessToast = false,
+    showErrorToast = true,
   } = options || {};
 
   try {
     const result = await promise;
-    
-    if (showSuccess && successMessage) {
+
+    if (showSuccessToast && successMessage) {
       showSuccess(successMessage);
     }
-    
+
     return result;
   } catch (error) {
-    if (showError) {
+    if (showErrorToast) {
       const message = errorMessage || formatApiError(error);
       showError(message);
     }

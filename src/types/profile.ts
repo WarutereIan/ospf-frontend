@@ -162,6 +162,7 @@ export interface Rating {
   orderType?: "marketplace" | "input" | "transport";
   farmerId?: string; // Alias for ratedUserId (used in some contexts)
   overallRating: number; // 1-5
+  rating?: number; // Alias for overallRating (from backend)
   qualityRating?: number; // 1-5
   deliveryRating?: number; // 1-5
   communicationRating?: number; // 1-5

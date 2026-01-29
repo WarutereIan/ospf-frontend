@@ -216,6 +216,8 @@ export interface PickupSlotBooking {
   variety?: string; // Produce variety
   qualityGrade?: "A" | "B" | "C"; // Quality grade
   photos?: string[]; // Photos taken at pickup
+  /** Nested receipt returned by confirm API */
+  pickupReceipt?: PickupReceipt;
 }
 
 /**

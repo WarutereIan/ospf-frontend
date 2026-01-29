@@ -82,6 +82,21 @@ const stageConfig: Record<
     icon: IconCircleCheck,
     description: "Stock released - stock out recorded",
   },
+  in_transit: {
+    label: "In Transit",
+    icon: IconTruckDelivery,
+    description: "Order in transit",
+  },
+  at_aggregation: {
+    label: "At Aggregation",
+    icon: IconPackage,
+    description: "At aggregation center",
+  },
+  quality_approved: {
+    label: "Quality Approved",
+    icon: IconCircleCheck,
+    description: "Quality check passed",
+  },
   collected: {
     label: "Collected",
     icon: IconCheck,

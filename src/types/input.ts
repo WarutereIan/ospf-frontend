@@ -138,6 +138,8 @@ export interface InputFilters {
   category?: InputCategory | "all";
   status?: InputStatus | "all";
   searchQuery?: string;
+  /** Alias for searchQuery; backend param is often "search" */
+  search?: string;
   providerId?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -150,6 +152,7 @@ export interface InputOrderFilters {
   status?: InputOrderStatus | "all";
   paymentStatus?: InputPaymentStatus | "all";
   farmerId?: string;
+  providerId?: string;
   inputId?: string;
   dateRange?: {
     start: string; // ISO 8601
@@ -165,6 +168,7 @@ export interface CustomerFilters {
   searchQuery?: string;
   status?: "active" | "inactive" | "new" | "all";
   location?: string;
+  providerId?: string; // Filter customers by input provider
   dateRange?: {
     start: string; // ISO 8601
     end: string; // ISO 8601

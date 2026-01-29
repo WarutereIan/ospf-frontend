@@ -107,6 +107,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     
     return {
       id: user.id,
+      userId: user.id,
       name,
       email: user.email,
       phone: user.phone,
@@ -194,7 +195,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const appliedFilters = newFilters || filters;
       
       // For admin/staff users, use the /users endpoint which has more complete data
-      const isAdminOrStaff = currentUser?.role === 'staff' || currentUser?.role === 'admin';
+      const isAdminOrStaff = currentUser?.role === 'staff' || (currentUser?.role as string) === 'admin';
       
       if (isAdminOrStaff) {
         // Use getUsers for admin/staff to get full user data
@@ -225,7 +226,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     // Call service function directly to avoid circular dependency
     void (async () => {
       try {
-        const isAdminOrStaff = currentUser?.role === 'staff' || currentUser?.role === 'admin';
+        const isAdminOrStaff = currentUser?.role === 'staff' || (currentUser?.role as string) === 'admin';
         
         if (isAdminOrStaff) {
           const users = await getUsers({

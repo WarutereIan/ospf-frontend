@@ -64,6 +64,8 @@ export interface Payment {
   paymentDate?: string; // ISO 8601 - Date when payment was made
   paymentDetails?: string; // Additional payment details
   paymentEvidence?: string; // Evidence URL or base64
+  transportId?: string; // Related transport request ID (when orderType is transport)
+  inputOrderId?: string; // Related input order ID (when orderType is input)
   confirmedBy?: string; // Buyer ID who confirmed payment
   confirmedAt?: string; // ISO 8601 - When buyer confirmed payment
   farmerConfirmedBy?: string; // Farmer ID who confirmed receipt
@@ -129,10 +131,14 @@ export interface PaymentFilters {
   orderType?: "marketplace" | "input" | "transport" | "all";
   orderId?: string; // Filter by specific order ID
   userId?: string; // Filter by user ID (buyer/farmer)
+  payerId?: string; // Filter by payer user ID
+  payeeId?: string; // Filter by payee user ID
   dateRange?: {
     start: string; // ISO 8601
     end: string; // ISO 8601
   };
+  dateFrom?: string; // ISO 8601 - alternate filter
+  dateTo?: string; // ISO 8601 - alternate filter
   searchQuery?: string;
 }
 

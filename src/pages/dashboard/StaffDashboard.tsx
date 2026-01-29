@@ -44,7 +44,8 @@ interface BeneficiaryGrowth {
   farmers: number;
 }
 
-interface TrendData {
+/** Local shape for trend chart items (label/value/data/dataKey/color/formatter). */
+interface StaffTrendChartItem {
   label: string;
   value: number;
   data: Array<{ name: string; [key: string]: string | number }>;
@@ -153,8 +154,8 @@ export function StaffDashboard() {
         order.quantity,
         order.totalAmount,
         order.status,
-        order.farmerId || order.farmer?.id,
-        order.buyerId || order.buyer?.id,
+        order.farmerId,
+        order.buyerId,
       ];
       const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
       return validFields / requiredFields.length;
@@ -173,7 +174,7 @@ export function StaffDashboard() {
         item.quantity,
         item.qualityGrade || item.grade,
         item.batchId,
-        item.centerId || item.center?.id,
+        item.centerId,
       ];
       const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
       return validFields / requiredFields.length;
@@ -190,7 +191,7 @@ export function StaffDashboard() {
       const requiredFields = [
         transaction.type,
         transaction.quantity,
-        transaction.centerId || transaction.center?.id,
+        transaction.centerId,
         transaction.createdAt,
       ];
       const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
@@ -268,7 +269,7 @@ export function StaffDashboard() {
   }, [trends]);
 
   // Calculate trendline data from trends and real data sources
-  const trendlineData = useMemo<TrendData[]>(() => {
+  const trendlineData = useMemo<StaffTrendChartItem[]>(() => {
     // Farmers data from trends (real backend data)
     const farmersData = trends.length > 0 
       ? trends.map((t) => {
@@ -403,7 +404,7 @@ export function StaffDashboard() {
     return [
       {
         label: "Farmers",
-        value: latest.farmers || profiles.filter(p => p.role === "farmer").length,
+        value: (latest as { farmers?: number }).farmers ?? profiles.filter(p => p.role === "farmer").length,
         data: farmersData.length > 0 ? farmersData : [{ name: "No Data", farmers: profiles.filter(p => p.role === "farmer").length }],
         dataKey: "farmers",
         color: "#3B82F6",
@@ -809,12 +810,12 @@ export function StaffDashboard() {
           nodes={[
             { name: "Farmers", value: (profiles || []).filter(p => p.role === "farmer").length || 0, color: "#3B82F6" },
             { name: "Centres", value: (centers || []).length || 0, color: "#22C55E" },
-            { name: "Buyers", value: new Set((orders || []).map(o => o.buyerId || o.buyer?.id).filter(Boolean)).size || 0, color: "#F59E0B" },
+            { name: "Buyers", value: new Set((orders || []).map(o => o.buyerId).filter(Boolean)).size || 0, color: "#F59E0B" },
             { name: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0, color: "#8B5CF6" },
           ]}
           links={[
             { source: "Farmers", target: "Centres", value: (profiles || []).filter(p => p.role === "farmer").length || 0 },
-            { source: "Centres", target: "Buyers", value: new Set((orders || []).map(o => o.buyerId || o.buyer?.id).filter(Boolean)).size || 0 },
+            { source: "Centres", target: "Buyers", value: new Set((orders || []).map(o => o.buyerId).filter(Boolean)).size || 0 },
             { source: "Buyers", target: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0 },
           ]}
           title="Value Chain Flow"

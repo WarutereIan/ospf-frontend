@@ -531,7 +531,7 @@ export function MarketInfo() {
           <div className="flex flex-col md:flex-row gap-4 mb-6">
             <Select value={selectedLocation} onValueChange={(value) => setSelectedLocation(value || "all")}>
               <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Filter by location" />
+                <SelectValue>{selectedLocation === "all" ? "Filter by location" : undefined}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Locations</SelectItem>
@@ -544,7 +544,7 @@ export function MarketInfo() {
             </Select>
             <Select value={selectedVariety} onValueChange={(value) => setSelectedVariety(value || "all")}>
               <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Filter by variety" />
+                <SelectValue>{selectedVariety === "all" ? "Filter by variety" : undefined}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>

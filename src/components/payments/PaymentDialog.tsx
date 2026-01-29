@@ -315,7 +315,7 @@ export function PaymentDialog({
               </>
             ) : (
               <>
-                Pay KES {totalAmount.toLocaleString()}
+                Pay KES {amount.toLocaleString()}
               </>
             )}
           </Button>

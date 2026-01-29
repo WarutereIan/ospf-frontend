@@ -45,9 +45,10 @@ export function Farmers() {
   const officerJurisdiction = useMemo(() => {
     // Try to get from profiles first (if already loaded)
     const officerProfile = profiles.find(p => p.userId === user?.id);
+    const prof = officerProfile as { county?: string; subCounty?: string } | undefined;
     return {
-      county: officerProfile?.county || user?.subCounty ? undefined : undefined, // Will need to fetch profile for county
-      subCounty: officerProfile?.subCounty || user?.subCounty,
+      county: prof?.county ?? undefined,
+      subCounty: prof?.subCounty ?? user?.subCounty,
     };
   }, [profiles, user?.id, user?.subCounty]);
 

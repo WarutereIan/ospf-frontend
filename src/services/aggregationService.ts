@@ -166,15 +166,23 @@ interface CreateAggregationCenterDto {
  * Map frontend aggregation center to backend CreateAggregationCenterDto.
  */
 function toCreateAggregationCenterDto(center: Partial<AggregationCenter>): CreateAggregationCenterDto {
-  const centerType = center.centerType 
+  const centerType = center.centerType
     ? (center.centerType === 'main' ? 'MAIN' : 'SATELLITE')
     : 'MAIN';
-  
-  // Capacity: ensure number >= 0 (form may send number or string from input)
+
+  const cap = center.totalCapacity ?? center.capacity;
   const totalCapacity =
-    typeof center.totalCapacity === "number" && !Number.isNaN(center.totalCapacity)
-      ? Math.max(0, center.totalCapacity)
-      : Math.max(0, Number(center.totalCapacity) || 0);
+    typeof cap === "number" && !Number.isNaN(cap)
+      ? Math.max(0, cap)
+      : Math.max(0, Number(cap) || 0);
+
+  const coords = center.coordinates;
+  const coordinatesStr =
+    Array.isArray(coords) && coords.length === 2 && Number.isFinite(coords[0]) && Number.isFinite(coords[1])
+      ? `${coords[0]},${coords[1]}`
+      : typeof coords === "string"
+        ? coords
+        : "";
 
   return {
     name: center.name || '',
@@ -182,14 +190,14 @@ function toCreateAggregationCenterDto(center: Partial<AggregationCenter>): Creat
     county: center.county || '',
     subCounty: center.subCounty,
     ward: center.ward,
-    coordinates: center.coordinates || '',
+    coordinates: coordinatesStr,
     centerType: centerType as CreateAggregationCenterDto['centerType'],
     mainCenterId: center.centerType === "main" || !center.mainCenterId?.trim() ? undefined : center.mainCenterId?.trim(),
     totalCapacity,
     managerId: center.managerId || '',
     managerName: center.managerName,
     managerPhone: center.managerPhone,
-    status: center.status 
+    status: center.status
       ? (center.status === 'operational' ? 'OPERATIONAL' :
          center.status === 'maintenance' ? 'MAINTENANCE' : 'CLOSED') as CreateAggregationCenterDto['status']
       : undefined,
@@ -227,8 +235,9 @@ function toUpdateAggregationCenterPayload(updates: Partial<AggregationCenter>): 
           : "CLOSED";
   }
   // Capacity: ensure number >= 0 (backend @Min(0))
-  if (updates.totalCapacity !== undefined) {
-    const num = Number(updates.totalCapacity);
+  const cap = updates.totalCapacity ?? (updates as Record<string, unknown>).capacity;
+  if (cap !== undefined) {
+    const num = Number(cap);
     payload.totalCapacity = Number.isNaN(num) ? 0 : Math.max(0, num);
   }
   // Main centers must have mainCenterId null; avoid sending empty string (FK violation)
@@ -643,18 +652,18 @@ interface CreateWastageEntryDto {
  * Map frontend wastage entry to backend CreateWastageEntryDto.
  */
 function toCreateWastageEntryDto(entry: Partial<WastageEntry>): CreateWastageEntryDto {
+  const cat = entry.category ? String(entry.category).toUpperCase() : 'OTHER';
+  const category = (cat === 'SPOILAGE' || cat === 'DAMAGE' || cat === 'EXPIRED' || cat === 'OTHER' ? cat : 'OTHER') as CreateWastageEntryDto['category'];
   return {
     centerId: entry.centerId || '',
-    inventoryItemId: entry.inventoryItemId,
+    inventoryItemId: entry.inventoryItemId ?? entry.inventoryId,
     batchId: entry.batchId,
     variety: entry.variety || '',
     quantity: typeof entry.quantity === 'number' ? entry.quantity : 0,
     qualityGrade: (entry.qualityGrade === 'A' || entry.qualityGrade === 'B' || entry.qualityGrade === 'C')
       ? entry.qualityGrade
       : 'B',
-    category: (entry.category === 'SPOILAGE' || entry.category === 'DAMAGE' || entry.category === 'EXPIRED' || entry.category === 'OTHER')
-      ? entry.category
-      : 'OTHER',
+    category,
     reason: entry.reason,
     notes: entry.notes,
   };

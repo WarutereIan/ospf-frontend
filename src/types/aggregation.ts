@@ -53,14 +53,20 @@ export interface AggregationCenter {
   name: string;
   location: string;
   subCounty: string;
+  county?: string; // County (for create/update and filters)
   ward?: string; // For satellite centers
   centerType: CenterType;
   mainCenterId?: string; // For satellite centers - links to parent
   managerId: string;
   managerName: string;
+  managerPhone?: string; // Manager contact (for create/update)
   coordinates: [number, number]; // [lat, lng]
+  /** Optional code/short id (e.g. from backend) */
+  code?: string;
   currentStock: number; // kg
   capacity: number; // kg
+  /** Total capacity in kg (for create/update; API uses totalCapacity) */
+  totalCapacity?: number;
   activeFarmers: number;
   status: CenterStatus;
   // Backend has a separate isActive flag on aggregation_centers;
@@ -79,6 +85,7 @@ export interface AggregationCenter {
  */
 export interface StockTransaction {
   id: string; // UUID
+  transactionNumber?: string; // Human-readable transaction ref (from backend)
   centerId: string;
   centerName: string;
   type: StockTransactionType;
@@ -95,6 +102,8 @@ export interface StockTransaction {
   totalAmount?: number;
   photos?: string[]; // Image URLs
   notes?: string;
+  sourceCenterId?: string; // For transfer: source aggregation center
+  transferTransactionId?: string; // For transfer: related stock-in transaction ID
   createdAt: string; // ISO 8601
   createdBy: string; // User ID
   batchId?: string; // Batch ID for traceability
@@ -160,6 +169,13 @@ export interface QualityCheck {
   failed?: boolean; // Whether quality check failed
   status?: "approved" | "rejected" | "pending"; // Quality check status (used in some contexts)
   batchId?: string;
+  // Backend / grading matrix fields (optional)
+  orderId?: string;
+  weightRange?: string;
+  colorIntensity?: number;
+  physicalCondition?: string;
+  freshness?: string;
+  daysSinceHarvest?: number;
 }
 
 /**
@@ -200,6 +216,7 @@ export interface AggregationFilters {
   centerId?: string;
   centerType?: CenterType | "all";
   status?: CenterStatus | "all";
+  county?: string;
   subCounty?: string;
   searchQuery?: string;
 }
@@ -216,6 +233,8 @@ export interface StockFilters {
     start: string; // ISO 8601
     end: string; // ISO 8601
   };
+  dateFrom?: string; // ISO 8601 - alternate filter
+  dateTo?: string; // ISO 8601 - alternate filter
   farmerId?: string;
   buyerId?: string;
   searchQuery?: string;
@@ -233,6 +252,8 @@ export interface WastageEntry {
   farmerId: string; // Track farmer origin
   farmerName: string; // Denormalized
   inventoryId?: string; // Link to inventory batch
+  inventoryItemId?: string; // Backend alias for inventory batch
+  batchId?: string; // Batch ID for traceability
   variety: string;
   qualityGrade: QualityGrade;
   quantity: number; // kg
@@ -257,6 +278,8 @@ export interface WastageFilters {
     start: string; // ISO 8601
     end: string; // ISO 8601
   };
+  dateFrom?: string; // ISO 8601 - alternate filter
+  dateTo?: string; // ISO 8601 - alternate filter
   farmerId?: string;
   searchQuery?: string;
 }

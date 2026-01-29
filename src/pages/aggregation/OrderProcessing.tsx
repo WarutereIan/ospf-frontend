@@ -204,7 +204,7 @@ export function OrderProcessing() {
                 }}
               >
                 <SelectTrigger id="center-select" className="w-full">
-                  <SelectValue placeholder="Select an aggregation center" />
+                  <SelectValue>{selectedCenter ? undefined : "Select an aggregation center"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {centers.map((center) => (
@@ -227,7 +227,7 @@ export function OrderProcessing() {
               </div>
               <Select value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)}>
                 <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Filter by status" />
+                  <SelectValue>{statusFilter ? undefined : "Filter by status"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>

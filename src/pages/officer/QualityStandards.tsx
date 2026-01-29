@@ -120,8 +120,9 @@ export function QualityStandards() {
     filters.dateTo = dateRangeBounds.end.toISOString();
     
     // Jurisdiction filtering
-    if (officerProfile?.subCounty) {
-      filters.subCounty = officerProfile.subCounty;
+    const profSubCounty = (officerProfile as { subCounty?: string } | undefined)?.subCounty;
+    if (profSubCounty) {
+      filters.subCounty = profSubCounty;
     }
     
     // Sub-county filter

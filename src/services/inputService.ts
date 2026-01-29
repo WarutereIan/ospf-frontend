@@ -291,7 +291,8 @@ export async function getInputs(filters?: InputFilters): Promise<Input[]> {
     }
     if (filters?.minPrice) params.minPrice = filters.minPrice;
     if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
-    if (filters?.search) params.search = filters.search;
+    if (filters?.search !== undefined) params.search = filters.search;
+    else if (filters?.searchQuery !== undefined) params.search = filters.searchQuery;
 
     const inputs = await apiGet<any[]>('/inputs', params);
     return inputs.map(transformInput);
@@ -536,9 +537,7 @@ export async function getInputCustomers(filters?: CustomerFilters): Promise<Inpu
   try {
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
-    // CustomerFilters in frontend uses searchQuery
-    if ((filters as any)?.search) params.search = (filters as any).search;
-    if ((filters as any)?.searchQuery) params.search = (filters as any).searchQuery;
+    if (filters?.searchQuery !== undefined) params.search = filters.searchQuery;
     if ((filters as any)?.minOrders) params.minOrders = (filters as any).minOrders;
     if ((filters as any)?.minSpent) params.minSpent = (filters as any).minSpent;
 

@@ -161,7 +161,7 @@ export default function ActiveDeliveries() {
       await addTracking(selectedDelivery.id, {
         status: selectedDelivery.status || "in_transit",
         location: locationForm.location,
-        coordinates: coordinates ? `${coordinates[0]},${coordinates[1]}` : undefined,
+        coordinates,
         timestamp: locationForm.timestamp || new Date().toISOString(),
       });
 
@@ -543,7 +543,7 @@ export default function ActiveDeliveries() {
                   <Button
                     variant="outline"
                     onClick={() => {
-                      setLocationForm({ location: "", coordinates: "" });
+                      setLocationForm({ location: "", coordinates: "", timestamp: "" });
                       setLocationError(null);
                     }}
                     className="flex-1"

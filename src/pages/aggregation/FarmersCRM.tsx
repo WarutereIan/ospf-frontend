@@ -139,7 +139,7 @@ export function FarmersCRM() {
           gradeCounts: {},
           gradeAKg: 0,
           currentStockKg: 0,
-          status: "inactive",
+          status: "active" as FarmerStatus,
         });
       }
 
@@ -175,7 +175,7 @@ export function FarmersCRM() {
       return b.totalDeliveredKg - a.totalDeliveredKg;
     });
 
-    return rows;
+    return rows as FarmerCRMRow[];
   }, [centerStockInTransactions, centerInventory]);
 
   const filteredRows = useMemo(() => {
@@ -253,7 +253,7 @@ export function FarmersCRM() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a centre" />
+                  <SelectValue>{selectedCenter ? undefined : "Select a centre"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {centers.map((c) => (

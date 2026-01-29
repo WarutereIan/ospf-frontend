@@ -129,7 +129,7 @@ export async function subscribeToPush(
     
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey,
+      applicationServerKey: applicationServerKey as BufferSource,
     });
 
     return subscription;

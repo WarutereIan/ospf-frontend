@@ -179,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           // Show cached user immediately for better UX
-          setUser(cachedUser as User);
+          setUser(cachedUser as unknown as User);
 
           // Verify session with backend (this validates the HttpOnly cookie)
           // Suppress error toast for /auth/me calls during session restore

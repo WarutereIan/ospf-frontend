@@ -132,7 +132,7 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
             <Label htmlFor="productType">Product Type *</Label>
             <Select value={productType} onValueChange={(value) => setProductType(value as SourcingProductType)}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select product type" />
+                <SelectValue>{productType ? undefined : "Select product type"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="fresh_roots">
@@ -162,7 +162,7 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
               <Label htmlFor="variety">OFSP Variety</Label>
               <Select value={variety} onValueChange={(value) => setVariety(value as OFSPVariety)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select variety (optional)" />
+                  <SelectValue>{variety ? undefined : "Select variety (optional)"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Kenya">Kenya</SelectItem>
@@ -193,7 +193,7 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
               <Label htmlFor="quantityUnit">Unit *</Label>
               <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value as "kg" | "tons" | "units")}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select unit" />
+                  <SelectValue>{quantityUnit ? undefined : "Select unit"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="kg">Kilograms (kg)</SelectItem>
@@ -208,7 +208,7 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
             <Label htmlFor="qualityGrade">Quality Grade</Label>
             <Select value={qualityGrade} onValueChange={(value) => setQualityGrade(value as QualityGrade)}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select quality grade (optional)" />
+                <SelectValue>{qualityGrade ? undefined : "Select quality grade (optional)"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="A">Grade A</SelectItem>
@@ -379,7 +379,7 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
                 <Label htmlFor="recurringFrequency">Frequency</Label>
                 <Select value={recurringFrequency} onValueChange={(value) => setRecurringFrequency(value as RecurringFrequency)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select frequency" />
+                    <SelectValue>{recurringFrequency ? undefined : "Select frequency"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="weekly">Weekly</SelectItem>

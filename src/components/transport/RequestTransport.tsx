@@ -295,7 +295,7 @@ export default function RequestTransport({
                   onValueChange={setDeliveryCounty}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select county" />
+                    <SelectValue>{deliveryCounty ? undefined : "Select county"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="machakos">Machakos</SelectItem>

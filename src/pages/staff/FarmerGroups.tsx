@@ -193,7 +193,7 @@ export function FarmerGroups() {
             </div>
             <Select value={countyFilter} onValueChange={setCountyFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="All Counties" />
+                <SelectValue>{countyFilter === "all" ? "All Counties" : undefined}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Counties</SelectItem>
@@ -206,7 +206,7 @@ export function FarmerGroups() {
             </Select>
             <Select value={subCountyFilter} onValueChange={setSubCountyFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="All Subcounties" />
+                <SelectValue>{subCountyFilter === "all" ? "All Subcounties" : undefined}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subcounties</SelectItem>
@@ -343,7 +343,7 @@ export function FarmerGroups() {
                 onValueChange={(value) => setFormData({ ...formData, subCounty: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select subcounty" />
+                  <SelectValue>{formData.subCounty ? undefined : "Select subcounty"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {VALID_SUBCOUNTIES.map((subCounty) => (
@@ -423,7 +423,7 @@ export function FarmerGroups() {
                 onValueChange={(value) => setFormData({ ...formData, subCounty: value })}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select subcounty" />
+                  <SelectValue>{formData.subCounty ? undefined : "Select subcounty"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {VALID_SUBCOUNTIES.map((subCounty) => (

@@ -30,6 +30,7 @@ import {
 } from "@tabler/icons-react";
 import QRCode from "react-qr-code";
 import { useTransport } from "@/contexts/TransportContext";
+import { extractReceiptFromBooking } from "@/services/transportService";
 import { useAuth } from "@/contexts/AuthContext";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -242,42 +243,15 @@ export function MyPickupBookings() {
         notes: confirmationForm.notes || undefined,
       });
 
-      if (result.data) {
-        // Extract receipt from booking response
-        const bookingReceipt = result.data.pickupReceipt;
+      if (result) {
+        // Extract receipt from booking response (context returns PickupSlotBooking | null)
+        const bookingReceipt = extractReceiptFromBooking(result);
         if (bookingReceipt) {
-          // Transform backend receipt to frontend format
-          const transformedReceipt: PickupReceipt = {
-            id: bookingReceipt.id,
-            receiptNumber: bookingReceipt.receiptNumber,
-            bookingId: bookingReceipt.bookingId,
-            scheduleId: bookingReceipt.scheduleId,
-            farmerId: bookingReceipt.farmerId,
-            farmerName: result.data.farmerName || user?.name || "Unknown Farmer",
-            providerId: bookingReceipt.providerId,
-            providerName: result.data.slot?.schedule?.providerName || "Unknown Provider",
-            aggregationCenterId: bookingReceipt.aggregationCenterId,
-            aggregationCenterName: bookingReceipt.aggregationCenter?.name || "Unknown Center",
-            batchId: bookingReceipt.batchId,
-            qrCode: bookingReceipt.qrCode,
-            quantity: bookingReceipt.quantity,
-            variety: bookingReceipt.variety,
-            qualityGrade: bookingReceipt.qualityGrade,
-            pickupLocation: bookingReceipt.pickupLocation,
-            pickupDate: bookingReceipt.pickupDate ? new Date(bookingReceipt.pickupDate).toISOString() : new Date().toISOString(),
-            pickupTime: bookingReceipt.pickupTime || new Date().toTimeString().slice(0, 5),
-            scheduledDeliveryDate: bookingReceipt.scheduledDeliveryDate ? new Date(bookingReceipt.scheduledDeliveryDate).toISOString() : undefined,
-            photos: bookingReceipt.photos || [],
-            notes: bookingReceipt.notes,
-            createdAt: bookingReceipt.createdAt ? new Date(bookingReceipt.createdAt).toISOString() : new Date().toISOString(),
-            createdBy: bookingReceipt.createdBy,
-          };
-
           showSuccess(
             "Pickup confirmed successfully",
-            `Batch ${transformedReceipt.batchId} has been confirmed and receipt generated`
+            `Batch ${bookingReceipt.batchId} has been confirmed and receipt generated`
           );
-          setReceipt(transformedReceipt);
+          setReceipt(bookingReceipt);
           setConfirmDialogOpen(false);
           setReceiptDialogOpen(true);
         } else {
@@ -298,7 +272,7 @@ export function MyPickupBookings() {
           console.warn("Failed to reload bookings after confirmation:", err);
         }
       } else {
-        showError("Failed to confirm pickup", result.error || "An error occurred while confirming pickup");
+        showError("Failed to confirm pickup", "An error occurred while confirming pickup");
       }
     } catch (err) {
       console.error("Failed to confirm pickup:", err);
@@ -539,7 +513,7 @@ export function MyPickupBookings() {
                     }}
                   >
                     <SelectTrigger id="variety" className="w-full">
-                      <SelectValue placeholder="Select variety" />
+                      <SelectValue>{confirmationForm.variety ? undefined : "Select variety"}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {OFSP_VARIETY_VALUES.map((variety) => (

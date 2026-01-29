@@ -712,7 +712,9 @@ function toAddTrackingUpdateDto(update: Partial<DeliveryTrackingUpdate>): AddTra
   return {
     status: backendStatus,
     location: update.location || '',
-    coordinates: update.coordinates,
+    coordinates: update.coordinates
+      ? `${update.coordinates[0]},${update.coordinates[1]}`
+      : undefined,
     notes: update.notes,
     timestamp: update.timestamp || new Date().toISOString(), // Capture timestamp when location was captured
   };
@@ -845,12 +847,19 @@ function toCreatePickupScheduleDto(schedule: Partial<FarmPickupSchedule>): Creat
     throw new Error('Aggregation Center ID is required');
   }
   
+  const sd = schedule.scheduledDate;
+  const scheduledDateStr =
+    sd == null
+      ? ''
+      : typeof sd === 'string'
+        ? sd
+        : typeof sd === 'object' && sd !== null && 'toISOString' in sd
+          ? (sd as Date).toISOString()
+          : String(sd);
   return {
     aggregationCenterId: schedule.aggregationCenterId,
     route: schedule.route || '',
-    scheduledDate: schedule.scheduledDate instanceof Date 
-      ? schedule.scheduledDate.toISOString() 
-      : (schedule.scheduledDate || ''),
+    scheduledDate: scheduledDateStr,
     scheduledTime: schedule.scheduledTime || '',
     totalCapacity: typeof schedule.totalCapacity === 'number' ? schedule.totalCapacity : 0,
     vehicleId: schedule.vehicleId,
@@ -887,7 +896,17 @@ export async function updatePickupSchedule(id: string, schedule: Partial<FarmPic
     // Map frontend fields to backend DTO format
     const updateData: any = {};
     if (schedule.route !== undefined) updateData.route = schedule.route;
-    if (schedule.scheduledDate !== undefined) updateData.scheduledDate = schedule.scheduledDate instanceof Date ? schedule.scheduledDate.toISOString() : schedule.scheduledDate;
+    if (schedule.scheduledDate !== undefined) {
+      const sd = schedule.scheduledDate;
+      updateData.scheduledDate =
+        sd == null
+          ? ''
+          : typeof sd === 'string'
+            ? sd
+            : typeof sd === 'object' && sd !== null && 'toISOString' in sd
+              ? (sd as Date).toISOString()
+              : String(sd);
+    }
     if (schedule.scheduledTime !== undefined) updateData.scheduledTime = schedule.scheduledTime;
     if (schedule.totalCapacity !== undefined) updateData.totalCapacity = schedule.totalCapacity;
     if (schedule.vehicleId !== undefined) updateData.vehicleId = schedule.vehicleId;
@@ -967,7 +986,9 @@ function toBookPickupSlotDto(booking: Partial<PickupSlotBooking>): BookPickupSlo
   return {
     quantity: typeof booking.quantity === 'number' ? booking.quantity : 0,
     location: booking.location || '',
-    coordinates: booking.coordinates,
+    coordinates: booking.coordinates
+      ? `${booking.coordinates[0]},${booking.coordinates[1]}`
+      : undefined,
     contactPhone: booking.contactPhone || '',
     notes: booking.notes,
     variety: booking.variety,

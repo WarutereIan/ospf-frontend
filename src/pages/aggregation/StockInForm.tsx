@@ -715,7 +715,7 @@ export function StockInForm() {
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select weight range" />
+                        <SelectValue>{formData.weightRange ? undefined : "Select weight range"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {weightRangeDefinitions.map((def) => (
@@ -762,7 +762,7 @@ export function StockInForm() {
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select physical condition" />
+                        <SelectValue>{formData.physicalCondition ? undefined : "Select physical condition"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         {physicalConditionDefinitions.map((def) => (
@@ -785,7 +785,7 @@ export function StockInForm() {
                         }
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select freshness level" />
+                          <SelectValue>{formData.freshness ? undefined : "Select freshness level"}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {freshnessDefinitions.map((def) => (

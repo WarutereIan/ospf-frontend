@@ -129,7 +129,7 @@ export function Ratings() {
       }
       const stats = farmerRatingsMap.get(farmerId)!;
       stats.totalRatings++;
-      stats.sumRatings += rating.overallRating || rating.rating || 0;
+      stats.sumRatings += rating.overallRating ?? rating.rating ?? 0;
     });
     
     // Build supplier ratings list

@@ -18,6 +18,7 @@ interface RFQComparisonViewProps {
   onSelectResponse: (id: string) => void;
   onUpdateStatus?: (responseId: string, status: RFQResponseStatus) => Promise<void>;
   onConvertToOrder?: (responseId: string) => Promise<void>;
+  isFarmerView?: boolean;
 }
 
 type SortField = "price" | "quantity" | "total" | "rating" | "delivery";
@@ -29,6 +30,7 @@ export function RFQComparisonView({
   onSelectResponse,
   onUpdateStatus,
   onConvertToOrder,
+  isFarmerView,
 }: RFQComparisonViewProps) {
   const [sortField, setSortField] = useState<SortField>("price");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");

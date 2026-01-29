@@ -184,9 +184,10 @@ function toUpdateProfileDto(updates: Partial<Profile>): UpdateProfileDto {
   if (updates.firstName !== undefined) dto.firstName = updates.firstName;
   if (updates.lastName !== undefined) dto.lastName = updates.lastName;
   if (updates.phone !== undefined) dto.phoneNumber = updates.phone;
-  if (updates.county !== undefined) dto.county = updates.county;
-  if (updates.subCounty !== undefined) dto.subcounty = updates.subCounty;
-  if (updates.ward !== undefined) dto.ward = updates.ward;
+  const u = updates as Record<string, unknown>;
+  if (u.county !== undefined) dto.county = u.county as string;
+  if (u.subCounty !== undefined) dto.subcounty = u.subCounty as string;
+  if (u.ward !== undefined) dto.ward = u.ward as string;
   if (updates.location !== undefined) dto.location = updates.location;
   if ((updates as any).businessName !== undefined) dto.businessName = (updates as any).businessName;
   if ((updates as any).businessRegistrationNumber !== undefined) dto.businessRegistrationNumber = (updates as any).businessRegistrationNumber;
@@ -229,15 +230,15 @@ interface CreateRatingDto {
  * Map frontend rating to backend CreateRatingDto.
  */
 function toCreateRatingDto(rating: Partial<Rating>): CreateRatingDto {
-  // Support both 'rating' and 'overallRating' fields
-  const ratingValue = typeof rating.rating === 'number' 
-    ? rating.rating 
-    : (typeof (rating as any).overallRating === 'number' 
-      ? (rating as any).overallRating 
-      : 0);
+  // Rating type uses overallRating and review; backend expects rating and comment
+  const ratingValue = typeof (rating as Record<string, unknown>).rating === 'number'
+    ? (rating as Record<string, unknown>).rating as number
+    : typeof rating.overallRating === 'number'
+      ? rating.overallRating
+      : 0;
   return {
     rating: ratingValue,
-    comment: rating.review || rating.comment,
+    comment: rating.review ?? (rating as Record<string, unknown>).comment as string | undefined,
     orderId: rating.orderId,
   };
 }

@@ -558,8 +558,6 @@ export function SourcingRequests() {
           priceRange: priceMin !== undefined && priceMax !== undefined
             ? { min: priceMin, max: priceMax }
             : selectedSourcingRequest.priceRange,
-          priceRangeMin: priceMin,
-          priceRangeMax: priceMax,
           priceUnit,
           deadline: formData.deadline || selectedSourcingRequest.deadline,
           deliveryRegion: formData.deliveryLocation || selectedSourcingRequest.deliveryRegion,

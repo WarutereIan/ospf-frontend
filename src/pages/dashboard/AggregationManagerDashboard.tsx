@@ -338,7 +338,7 @@ export function AggregationManagerDashboard() {
         buyerName: t.type === "stock_out" ? t.buyerName : undefined,
         quantity: t.quantity || 0,
         qualityGrade: t.grade || t.qualityGrade || "N/A",
-        timestamp: typeof t.createdAt === 'string' ? t.createdAt : t.createdAt.toISOString(),
+        timestamp: typeof t.createdAt === 'string' ? t.createdAt : (t.createdAt as Date).toISOString(),
         status: "completed" as const,
       }));
   }, [transactions, center?.id]);

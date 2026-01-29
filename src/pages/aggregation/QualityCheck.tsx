@@ -607,11 +607,11 @@ export function QualityCheck() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Color Score</span>
-                  <span className="font-medium">{formData.colorScore}/10</span>
+                  <span className="font-medium">{formData.colorIntensity}/10</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Damage</span>
-                  <span className="font-medium">{formData.damagePercentage}%</span>
+                  <span className="font-medium">{formData.physicalCondition === "poor" ? 80 : formData.physicalCondition === "fair" ? 40 : 0}%</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Photos</span>

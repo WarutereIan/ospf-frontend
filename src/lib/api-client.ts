@@ -34,11 +34,12 @@ export interface ApiError {
 }
 
 export interface ApiResponse<T> {
-  success: boolean;
+  success?: boolean;
   data: T;
-  statusCode: number;
+  statusCode?: number;
   timestamp?: string;
   message?: string;
+  error?: string;
 }
 
 /**
@@ -376,7 +377,7 @@ async function apiRequest<T>(
         isRefreshing = false;
         refreshPromise = null;
         // Only invalidate and redirect if it's an auth issue, not rate limiting
-        if (response.status !== 429) {
+        if ((response.status as number) !== 429) {
           setSessionInvalidated(true);
           clearLocalAuth();
           if (showErrorToast) {

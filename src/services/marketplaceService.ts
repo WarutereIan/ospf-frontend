@@ -533,28 +533,24 @@ interface CreateListingDto {
  * Map frontend listing to backend CreateListingDto.
  */
 function toCreateListingDto(listing: Partial<ProduceListing>): CreateListingDto {
-  const variety = listing.variety 
-    ? (listing.variety === 'Kenya' ? 'KENYA' : 
-       listing.variety === 'SPK004' ? 'SPK004' :
-       listing.variety === 'Kakamega' ? 'KAKAMEGA' :
-       listing.variety === 'Kabode' ? 'KABODE' : 'OTHER')
-    : 'KENYA';
-  
+  const variety = (listing.variety as string) || 'KENYA';
+  const varietyNorm = typeof variety === 'string' ? variety.toUpperCase().replace(/^SPK004$/i, 'SPK004').replace(/^KENYA$/i, 'KENYA').replace(/^KAKAMEGA$/i, 'KAKAMEGA').replace(/^KABODE$/i, 'KABODE') : 'OTHER';
+  const L: Record<string, unknown> = listing as Record<string, unknown>;
   return {
-    variety: variety as CreateListingDto['variety'],
+    variety: (varietyNorm === 'KENYA' || varietyNorm === 'SPK004' || varietyNorm === 'KAKAMEGA' || varietyNorm === 'KABODE' ? varietyNorm : 'OTHER') as CreateListingDto['variety'],
     quantity: typeof listing.quantity === 'number' ? listing.quantity : 0,
     qualityGrade: (listing.qualityGrade === 'A' || listing.qualityGrade === 'B' || listing.qualityGrade === 'C') 
       ? listing.qualityGrade 
       : 'B',
     pricePerKg: typeof listing.pricePerKg === 'number' ? listing.pricePerKg : 0,
-    county: listing.county || '',
-    subcounty: listing.subcounty,
-    ward: listing.ward,
+    county: (L.county as string) || (listing.location || ''),
+    subcounty: (L.subcounty as string) ?? listing.subCounty,
+    ward: L.ward as string | undefined,
     location: listing.location,
     description: listing.description,
     photos: listing.photos,
     batchId: listing.batchId,
-    harvestDate: listing.harvestDate,
+    harvestDate: L.harvestDate as string | undefined,
   };
 }
 
@@ -595,12 +591,10 @@ interface UpdateListingDto {
  */
 function toUpdateListingDto(listing: Partial<ProduceListing>): UpdateListingDto {
   const dto: UpdateListingDto = {};
-  
+  const ext = listing as Record<string, unknown>;
   if (listing.variety) {
-    dto.variety = (listing.variety === 'Kenya' ? 'KENYA' : 
-                   listing.variety === 'SPK004' ? 'SPK004' :
-                   listing.variety === 'Kakamega' ? 'KAKAMEGA' :
-                   listing.variety === 'Kabode' ? 'KABODE' : 'OTHER') as UpdateListingDto['variety'];
+    const v = String(listing.variety).toUpperCase();
+    dto.variety = (v === 'KENYA' || v === 'SPK004' || v === 'KAKAMEGA' || v === 'KABODE' || v === 'OTHER' ? v : 'OTHER') as UpdateListingDto['variety'];
   }
   if (listing.quantity !== undefined) dto.quantity = listing.quantity;
   if (listing.availableQuantity !== undefined) dto.availableQuantity = listing.availableQuantity;
@@ -608,14 +602,13 @@ function toUpdateListingDto(listing: Partial<ProduceListing>): UpdateListingDto 
     dto.qualityGrade = listing.qualityGrade;
   }
   if (listing.pricePerKg !== undefined) dto.pricePerKg = listing.pricePerKg;
-  if (listing.county) dto.county = listing.county;
-  if (listing.subcounty) dto.subcounty = listing.subcounty;
-  if (listing.ward) dto.ward = listing.ward;
+  if (ext.county) dto.county = ext.county as string;
+  if (ext.subcounty) dto.subcounty = ext.subcounty as string;
+  if (ext.ward) dto.ward = ext.ward as string;
   if (listing.location) dto.location = listing.location;
   if (listing.description) dto.description = listing.description;
   if (listing.photos) dto.photos = listing.photos;
   if (listing.status) dto.status = listing.status;
-  
   return dto;
 }
 
@@ -689,6 +682,7 @@ export async function getMarketplaceOrderById(id: string): Promise<MarketplaceOr
 /**
  * Backend CreateOrderDto shape (POST /marketplace/orders).
  */
+/** Matches backend CreateOrderDto (POST /marketplace/orders). deliveryCoordinates sent as "lat,lng" string. */
 interface CreateOrderDto {
   listingId?: string;
   farmerId: string;
@@ -697,41 +691,46 @@ interface CreateOrderDto {
   qualityGrade: 'A' | 'B' | 'C';
   pricePerKg: number;
   deliveryAddress?: string;
+  deliveryCounty?: string;
   notes?: string;
   rfqResponseId?: string;
   supplierOfferId?: string;
   negotiationId?: string;
-  deliveryCounty: string;
+  fulfillmentType?: 'self_pickup' | 'request_transport';
+  /** Backend expects string e.g. "lat,lng" */
+  deliveryCoordinates?: string;
 }
 
 /**
  * Map frontend order to backend CreateOrderDto.
  */
 function toCreateOrderDto(order: Partial<MarketplaceOrder>): CreateOrderDto {
-  const variety = order.variety 
-    ? (order.variety === 'Kenya' ? 'KENYA' : 
-       order.variety === 'SPK004' ? 'SPK004' :
-       order.variety === 'Kakamega' ? 'KAKAMEGA' :
-       order.variety === 'Kabode' ? 'KABODE' : 'OTHER')
-    : 'KENYA';
-  
+  const v = order.variety ? String(order.variety).toUpperCase() : 'KENYA';
+  const variety = (v === 'KENYA' || v === 'SPK004' || v === 'KAKAMEGA' || v === 'KABODE' || v === 'OTHER' ? v : 'OTHER') as CreateOrderDto['variety'];
+  const ext = order as Record<string, unknown>;
+  const deliveryAddress = (ext.deliveryAddress as string)?.trim() || (order.deliveryLocation && order.deliveryLocation.trim()) || undefined;
   return {
     listingId: order.listingId,
     farmerId: order.farmerId || '',
-    variety: variety as CreateOrderDto['variety'],
+    variety,
     quantity: typeof order.quantity === 'number' ? order.quantity : 0,
-    qualityGrade: (order.qualityGrade === 'A' || order.qualityGrade === 'B' || order.qualityGrade === 'C') 
-      ? order.qualityGrade 
+    qualityGrade: (order.qualityGrade === 'A' || order.qualityGrade === 'B' || order.qualityGrade === 'C')
+      ? order.qualityGrade
       : 'B',
     pricePerKg: typeof order.pricePerKg === 'number' ? order.pricePerKg : 0,
-    deliveryAddress: (order.deliveryAddress && order.deliveryAddress.trim()) || ((order as any).deliveryLocation && (order as any).deliveryLocation.trim()) || undefined,
+    deliveryAddress,
     notes: order.notes,
-    rfqResponseId: order.rfqResponseId,
-    supplierOfferId: order.supplierOfferId,
-    negotiationId: order.negotiationId,
-    deliveryCounty: order.deliveryCounty,
-    fulfillmentType: (order as any).fulfillmentType || 'self_pickup',
-    deliveryCoordinates: (order as any).deliveryCoordinates,
+    rfqResponseId: ext.rfqResponseId as string | undefined,
+    supplierOfferId: ext.supplierOfferId as string | undefined,
+    negotiationId: ext.negotiationId as string | undefined,
+    deliveryCounty: ext.deliveryCounty as string | undefined,
+    fulfillmentType: ((ext.fulfillmentType as string) || 'self_pickup') as 'self_pickup' | 'request_transport',
+    deliveryCoordinates: (() => {
+      const coords = ext.deliveryCoordinates as [number, number] | undefined;
+      return coords && coords.length === 2 && Number.isFinite(coords[0]) && Number.isFinite(coords[1])
+        ? `${coords[0]},${coords[1]}`
+        : undefined;
+    })(),
   };
 }
 
@@ -995,10 +994,12 @@ export async function updateSourcingRequest(id: string, request: Partial<Sourcin
     if (request.additionalRequirements !== undefined) updateData.description = request.additionalRequirements;
     
     // Map price information
-    // Check for priceRangeMin/priceRangeMax directly first (set explicitly in handleSaveEdit)
-    if (request.priceRangeMin !== undefined && request.priceRangeMax !== undefined) {
-      updateData.priceRangeMin = request.priceRangeMin;
-      updateData.priceRangeMax = request.priceRangeMax;
+    const reqExt = request as Record<string, unknown>;
+    const priceRangeMin = reqExt.priceRangeMin as number | undefined;
+    const priceRangeMax = reqExt.priceRangeMax as number | undefined;
+    if (priceRangeMin !== undefined && priceRangeMax !== undefined) {
+      updateData.priceRangeMin = priceRangeMin;
+      updateData.priceRangeMax = priceRangeMax;
       updateData.priceUnit = request.priceUnit || (request.unit === 'kg' ? 'kg' : request.unit === 'units' ? 'unit' : 'kg');
     } else if (request.priceRange && typeof request.priceRange.min === 'number' && typeof request.priceRange.max === 'number') {
       updateData.priceRangeMin = request.priceRange.min;
@@ -1062,14 +1063,15 @@ interface CreateSupplierOfferDto {
  * Map frontend offer to backend CreateSupplierOfferDto.
  */
 function toCreateSupplierOfferDto(offer: Partial<SupplierOffer>): CreateSupplierOfferDto {
+  const ext = offer as Record<string, unknown>;
   return {
     quantity: typeof offer.quantity === 'number' ? offer.quantity : 0,
     quantityUnit: offer.quantityUnit || 'kg',
     pricePerKg: typeof offer.pricePerKg === 'number' ? offer.pricePerKg : 0,
     qualityGrade: offer.grade,
     batchId: offer.batchId,
-    notes: offer.notes,
-    deliveryDate: offer.deliveryDate,
+    notes: ext.notes as string | undefined,
+    deliveryDate: ext.deliveryDate as string | undefined,
   };
 }
 
@@ -1279,10 +1281,13 @@ interface CreateNegotiationDto {
  * Map frontend negotiation to backend CreateNegotiationDto.
  */
 function toCreateNegotiationDto(listingId: string, message: Partial<NegotiationMessage>): CreateNegotiationDto {
+  const ext = message as Record<string, unknown>;
+  const proposedPrice = typeof ext.proposedPrice === 'number' ? ext.proposedPrice : typeof message.pricePerKg === 'number' ? message.pricePerKg : 0;
+  const proposedQuantity = typeof ext.proposedQuantity === 'number' ? ext.proposedQuantity : typeof message.quantity === 'number' ? message.quantity : 0;
   return {
     listingId,
-    proposedPrice: typeof message.proposedPrice === 'number' ? message.proposedPrice : 0,
-    proposedQuantity: typeof message.proposedQuantity === 'number' ? message.proposedQuantity : 0,
+    proposedPrice,
+    proposedQuantity,
     message: message.message,
   };
 }
@@ -1320,10 +1325,11 @@ interface SendNegotiationMessageDto {
  * Map frontend message to backend SendNegotiationMessageDto.
  */
 function toSendNegotiationMessageDto(message: Partial<NegotiationMessage>): SendNegotiationMessageDto {
+  const ext = message as Record<string, unknown>;
   return {
     message: message.message || '',
-    counterPrice: typeof message.counterPrice === 'number' ? message.counterPrice : undefined,
-    counterQuantity: typeof message.counterQuantity === 'number' ? message.counterQuantity : undefined,
+    counterPrice: typeof ext.counterPrice === 'number' ? ext.counterPrice : undefined,
+    counterQuantity: typeof ext.counterQuantity === 'number' ? ext.counterQuantity : undefined,
   };
 }
 
@@ -1665,10 +1671,11 @@ function toCreateRFQResponseDto(response: Partial<RFQResponse>): CreateRFQRespon
   if (!response.batchId) {
     throw new Error('Batch selection is required when submitting a quote');
   }
+  const ext = response as Record<string, unknown>;
   return {
     pricePerKg: typeof response.pricePerUnit === 'number' ? response.pricePerUnit : 0,
     notes: response.notes,
-    deliveryDate: response.deliveryDate,
+    deliveryDate: (ext.deliveryDate as string | undefined) ?? response.deliveryTime,
     batchId: response.batchId,
   };
 }

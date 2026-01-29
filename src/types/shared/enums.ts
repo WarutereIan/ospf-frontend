@@ -1,42 +1,49 @@
 /**
  * Centralized Enum Type Definitions
- * 
+ *
  * This file contains shared enum types used across the frontend.
- * These enums should match the backend Prisma schema definitions.
+ * Uses const objects (erasableSyntaxOnly-safe) instead of TypeScript enums.
+ * These values should match the backend Prisma schema definitions.
  */
 
 /**
- * OFSP Variety Enum
+ * OFSP Variety
  * Matches backend OFSPVariety enum (uppercase)
  */
-export enum OFSPVariety {
-  KENYA = 'KENYA',
-  SPK004 = 'SPK004',
-  KAKAMEGA = 'KAKAMEGA',
-  KABODE = 'KABODE',
-  OTHER = 'OTHER',
-}
+export const OFSPVariety = {
+  KENYA: 'KENYA',
+  SPK004: 'SPK004',
+  KAKAMEGA: 'KAKAMEGA',
+  KABODE: 'KABODE',
+  OTHER: 'OTHER',
+} as const;
+
+export type OFSPVariety = (typeof OFSPVariety)[keyof typeof OFSPVariety];
 
 /**
- * Sourcing Product Type Enum
+ * Sourcing Product Type
  * Matches backend SourcingProductType enum
  */
-export enum SourcingProductType {
-  FRESH_ROOTS = 'FRESH_ROOTS',
-  PROCESS_GRADE = 'PROCESS_GRADE',
-  PLANTING_VINES = 'PLANTING_VINES',
-  OFSP = 'OFSP',
-}
+export const SourcingProductType = {
+  FRESH_ROOTS: 'FRESH_ROOTS',
+  PROCESS_GRADE: 'PROCESS_GRADE',
+  PLANTING_VINES: 'PLANTING_VINES',
+  OFSP: 'OFSP',
+} as const;
+
+export type SourcingProductType = (typeof SourcingProductType)[keyof typeof SourcingProductType];
 
 /**
- * Quality Grade Enum
+ * Quality Grade
  * Matches backend QualityGrade enum
  */
-export enum QualityGrade {
-  A = 'A',
-  B = 'B',
-  C = 'C',
-}
+export const QualityGrade = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+} as const;
+
+export type QualityGrade = (typeof QualityGrade)[keyof typeof QualityGrade];
 
 /**
  * Array of valid OFSP variety values

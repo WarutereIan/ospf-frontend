@@ -38,11 +38,13 @@ export default function TransportProviderDashboard() {
     const pendingRequests = requests.filter(r => r.status === "pending");
     
     // Calculate delivery status counts
+    const statusStr = (s: string) => s?.toLowerCase() ?? "";
+    const rawStatus = (d: (typeof transportActiveDeliveries)[0]) => d.status as string;
     const inTransitCount = transportActiveDeliveries.filter(
-      d => d.status === "in_transit" || d.status === "IN_TRANSIT_PICKUP" || d.status === "IN_TRANSIT_DELIVERY"
+      d => statusStr(d.status) === "in_transit" || rawStatus(d) === "IN_TRANSIT_PICKUP" || rawStatus(d) === "IN_TRANSIT_DELIVERY"
     ).length;
     const pickupCount = transportActiveDeliveries.filter(
-      d => d.status === "accepted" || d.status === "ACCEPTED" || d.collectionStatus === "pending"
+      d => statusStr(d.status) === "accepted" || rawStatus(d) === "ACCEPTED" || (d as { collectionStatus?: string }).collectionStatus === "pending"
     ).length;
 
     return {

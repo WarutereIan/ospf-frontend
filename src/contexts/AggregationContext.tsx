@@ -142,7 +142,7 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getInventory(centerId);
+      const data = await getInventory(centerId != null ? { centerId } : undefined);
       setInventory(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch inventory");

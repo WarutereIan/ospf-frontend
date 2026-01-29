@@ -76,7 +76,7 @@ export function PaymentHistory() {
     return filtered;
   }, [paymentHistory, searchTerm, statusFilter]);
 
-  const getStatusColor = (status: EscrowStatus) => {
+  const getStatusColor = (status: EscrowStatus | string) => {
     switch (status) {
       case "pending":
         return "bg-yellow-100 text-yellow-800";

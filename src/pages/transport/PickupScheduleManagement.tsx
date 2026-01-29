@@ -33,7 +33,7 @@ import { useTransport } from "@/contexts/TransportContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { cn } from "@/lib/utils";
-import type { FarmPickupSchedule, PickupLocation } from "@/types/transport";
+import type { FarmPickupSchedule, PickupLocation, PickupScheduleStatus } from "@/types/transport";
 
 export function PickupScheduleManagement() {
   const navigate = useNavigate();
@@ -193,14 +193,14 @@ export function PickupScheduleManagement() {
         fixedPrice: formData.fixedPrice ? parseFloat(formData.fixedPrice) : undefined,
         pickupLocations,
         notes: formData.notes || undefined,
-        status: saveAsDraft ? "draft" : "published",
+        status: (saveAsDraft ? "draft" : "published") as PickupScheduleStatus,
       };
 
       if (selectedSchedule) {
         // If publishing a draft schedule, update it first (keep as draft), then publish
         if (!saveAsDraft && selectedSchedule.status === "draft") {
           // Update schedule data but keep status as draft for now
-          const updateData = { ...scheduleData, status: "draft" };
+          const updateData = { ...scheduleData, status: "draft" as PickupScheduleStatus };
           await updatePickupSchedule(selectedSchedule.id, updateData);
           // Then publish it using the publish endpoint
           await publishPickupSchedule(selectedSchedule.id);

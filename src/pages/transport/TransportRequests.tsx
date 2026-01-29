@@ -182,11 +182,12 @@ export default function TransportRequests() {
                 <TableRow key={request.id}>
                   <TableCell>{getTypeBadge(request.type)}</TableCell>
                   <TableCell>
-                    {request.requesterName || 
-                     (typeof request.requester === 'string' ? request.requester : 
-                      request.requester?.profile?.name || 
-                      request.requester?.email || 
-                      'Unknown')}
+                    {request.requesterName ||
+                     (typeof request.requester === "string"
+                       ? request.requester
+                       : (request.requester as { profile?: { name?: string }; email?: string } | undefined)?.profile?.name ||
+                         (request.requester as { profile?: { name?: string }; email?: string } | undefined)?.email ||
+                         "Unknown")}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm truncate max-w-[200px]" title={request.to}>
@@ -251,11 +252,12 @@ export default function TransportRequests() {
               <div className="space-y-2">
                 <Label className="text-muted-foreground">Requested By</Label>
                 <div className="font-medium">
-                  {selectedRequest.requesterName || 
-                   (typeof selectedRequest.requester === 'string' ? selectedRequest.requester : 
-                    selectedRequest.requester?.profile?.name || 
-                    selectedRequest.requester?.email || 
-                    'Unknown')}
+                  {selectedRequest.requesterName ||
+                   (typeof selectedRequest.requester === "string"
+                     ? selectedRequest.requester
+                     : (selectedRequest.requester as { profile?: { name?: string }; email?: string } | undefined)?.profile?.name ||
+                       (selectedRequest.requester as { profile?: { name?: string }; email?: string } | undefined)?.email ||
+                       "Unknown")}
                 </div>
               </div>
 
