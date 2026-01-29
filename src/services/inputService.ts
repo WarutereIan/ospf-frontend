@@ -179,6 +179,101 @@ function transformInputOrder(order: any): InputOrder {
   };
 }
 
+/**
+ * Transform input customer from backend format to frontend format
+ * Supports both:
+ * - flat customer objects returned by GET /inputs/customers
+ * - nested User objects returned by GET /inputs/customers/:id
+ */
+function transformInputCustomer(customer: any): InputCustomer {
+  // If backend already returned the flattened shape, normalize + add safe defaults.
+  const looksFlat =
+    typeof customer?.farmerName === "string" &&
+    customer?.totalOrders !== undefined &&
+    customer?.totalSpent !== undefined;
+
+  if (looksFlat) {
+    return {
+      id: customer.id,
+      farmerId: customer.farmerId || customer.id,
+      farmerName: customer.farmerName || "Unknown",
+      farmerPhone: customer.farmerPhone || "",
+      farmerEmail: customer.farmerEmail || customer.farmerEmail || undefined,
+      location: customer.location || "",
+      totalOrders: customer.totalOrders ?? 0,
+      totalSpent: customer.totalSpent ?? 0,
+      lastOrderDate: customer.lastOrderDate || customer.lastOrderDate || "",
+      firstOrderDate: customer.firstOrderDate || customer.firstOrderDate || "",
+      averageOrderValue: customer.averageOrderValue ?? 0,
+      status: customer.status || "active",
+      favoriteCategory: customer.favoriteCategory || undefined,
+      createdAt: customer.createdAt || undefined,
+      orderHistory: Array.isArray(customer.orderHistory) ? customer.orderHistory : [],
+    };
+  }
+
+  // Nested user shape (from getInputCustomerById)
+  const firstName = customer?.profile?.firstName || "";
+  const lastName = customer?.profile?.lastName || "";
+  const farmerName = [firstName, lastName].filter(Boolean).join(" ").trim() || customer?.email || "Unknown";
+
+  const location =
+    customer?.profile?.county ||
+    customer?.profile?.subCounty ||
+    customer?.profile?.address ||
+    "";
+
+  const rawOrders = Array.isArray(customer?.inputOrders) ? customer.inputOrders : [];
+  const orderHistory = rawOrders.map(transformInputOrder);
+
+  const totalOrders = orderHistory.length;
+  const totalSpent = orderHistory.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const averageOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+
+  const lastOrderDate = orderHistory[0]?.createdAt || "";
+  const firstOrderDate = orderHistory[orderHistory.length - 1]?.createdAt || "";
+
+  // Status heuristic: new if first order is within 30 days; inactive if no orders; else active
+  let status: InputCustomer["status"] = "active";
+  if (totalOrders === 0) status = "inactive";
+  else {
+    const first = firstOrderDate ? new Date(firstOrderDate) : null;
+    if (first && !isNaN(first.getTime())) {
+      const days = (Date.now() - first.getTime()) / (1000 * 60 * 60 * 24);
+      if (days <= 30) status = "new";
+    }
+  }
+
+  // Favorite category from orders (uses already-mapped order.inputCategory)
+  let favoriteCategory: InputCustomer["favoriteCategory"] | undefined;
+  const categoryCounts: Record<string, number> = {};
+  for (const o of orderHistory) {
+    if (!o.inputCategory) continue;
+    const key = String(o.inputCategory);
+    categoryCounts[key] = (categoryCounts[key] || 0) + 1;
+  }
+  const favoriteKey = Object.keys(categoryCounts).sort((a, b) => categoryCounts[b] - categoryCounts[a])[0];
+  if (favoriteKey) favoriteCategory = favoriteKey as any;
+
+  return {
+    id: customer.id,
+    farmerId: customer.id,
+    farmerName,
+    farmerPhone: customer.phone || "",
+    farmerEmail: customer.email || undefined,
+    location,
+    totalOrders,
+    totalSpent,
+    lastOrderDate,
+    firstOrderDate,
+    averageOrderValue,
+    status,
+    favoriteCategory,
+    createdAt: customer.createdAt || undefined,
+    orderHistory,
+  };
+}
+
 // ==================== Input Products ====================
 
 /**
@@ -441,11 +536,14 @@ export async function getInputCustomers(filters?: CustomerFilters): Promise<Inpu
   try {
     const params: Record<string, any> = {};
     if (filters?.providerId) params.providerId = filters.providerId;
-    if (filters?.search) params.search = filters.search;
-    if (filters?.minOrders) params.minOrders = filters.minOrders;
-    if (filters?.minSpent) params.minSpent = filters.minSpent;
+    // CustomerFilters in frontend uses searchQuery
+    if ((filters as any)?.search) params.search = (filters as any).search;
+    if ((filters as any)?.searchQuery) params.search = (filters as any).searchQuery;
+    if ((filters as any)?.minOrders) params.minOrders = (filters as any).minOrders;
+    if ((filters as any)?.minSpent) params.minSpent = (filters as any).minSpent;
 
-    return await apiGet<InputCustomer[]>('/inputs/customers', params);
+    const customers = await apiGet<any[]>('/inputs/customers', params);
+    return customers.map(transformInputCustomer);
   } catch (error) {
     console.error('Error fetching input customers:', error);
     return [];
@@ -458,7 +556,8 @@ export async function getInputCustomers(filters?: CustomerFilters): Promise<Inpu
  */
 export async function getInputCustomerById(id: string): Promise<InputCustomer | null> {
   try {
-    return await apiGet<InputCustomer>(`/inputs/customers/${id}`);
+    const customer = await apiGet<any>(`/inputs/customers/${id}`);
+    return transformInputCustomer(customer);
   } catch (error) {
     console.error('Error fetching input customer:', error);
     return null;

@@ -48,6 +48,7 @@ import { AggregationReports } from "@/pages/aggregation/Reports";
 import { BuyerDemandMatching } from "@/pages/aggregation/BuyerDemandMatching";
 import { OrderProcessing } from "@/pages/aggregation/OrderProcessing";
 import { AggregationOrderDetails } from "@/pages/aggregation/AggregationOrderDetails";
+import { FarmersCRM } from "@/pages/aggregation/FarmersCRM";
 import { PaymentHistory } from "@/pages/payments/PaymentHistory";
 import { BuyerOrders } from "@/pages/buyer/BuyerOrders";
 import { BuyerOrderDetails } from "@/pages/buyer/BuyerOrderDetails";
@@ -80,6 +81,8 @@ import { DataQuality } from "@/pages/staff/DataQuality";
 import { TransactionEvidence } from "@/pages/staff/TransactionEvidence";
 import { StaffReports } from "@/pages/staff/Reports";
 import { Settings } from "@/pages/staff/Settings";
+import { FarmerGroups } from "@/pages/staff/FarmerGroups";
+import { AggregationCenters } from "@/pages/staff/AggregationCenters";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
@@ -87,15 +90,15 @@ export function App() {
     <BrowserRouter>
       <AuthProvider>
         <ProfileProvider>
-          <InputProvider>
-            <MarketplaceProvider>
-              <TransportProvider>
-                <AggregationProvider>
-                  <PaymentProvider>
-                    <NotificationProvider>
-                      <AnalyticsProvider>
-                        <StaffProvider>
-          <Routes>
+        <InputProvider>
+          <MarketplaceProvider>
+            <TransportProvider>
+              <AggregationProvider>
+                <PaymentProvider>
+                  <NotificationProvider>
+                    <AnalyticsProvider>
+                      <StaffProvider>
+                        <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -157,7 +160,7 @@ export function App() {
             <Route path="/dashboard/aggregation/quality-checks/:id" element={<QualityCheck />} />
             <Route path="/dashboard/aggregation/buyer-matching" element={<BuyerDemandMatching />} />
             <Route path="/dashboard/aggregation/reports" element={<AggregationReports />} />
-            <Route path="/dashboard/aggregation/farmers" element={<PeerLeaderboard />} />
+            <Route path="/dashboard/aggregation/farmers" element={<FarmersCRM />} />
             
             {/* County Officer Routes */}
             <Route path="/dashboard/county-officer/farmers" element={<Farmers />} />
@@ -170,13 +173,15 @@ export function App() {
             
             {/* Staff Routes */}
             <Route path="/dashboard/staff/users" element={<Users />} />
+            <Route path="/dashboard/staff/farmer-groups" element={<FarmerGroups />} />
+            <Route path="/dashboard/staff/aggregation-centers" element={<AggregationCenters />} />
             <Route path="/dashboard/staff/analytics" element={<Analytics />} />
             <Route path="/dashboard/staff/settings" element={<Settings />} />
             <Route path="/dashboard/staff/partners" element={<Partners />} />
             <Route path="/dashboard/staff/activity-logs" element={<ActivityLogs />} />
             <Route path="/dashboard/staff/data-quality" element={<DataQuality />} />
             <Route path="/dashboard/staff/transaction-evidence" element={<TransactionEvidence />} />
-            <Route path="/dashboard/staff/reports" element={<StaffReports />} />
+            <Route path="/dashboard/staff/reports" element={<AnalyticsProvider><StaffReports /></AnalyticsProvider>} />
             
             {/* Buyer Additional Routes */}
             <Route path="/dashboard/buyer/recurring-orders" element={<SourcingRequests />} />
@@ -207,15 +212,15 @@ export function App() {
           
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-                        </StaffProvider>
-                      </AnalyticsProvider>
-                    </NotificationProvider>
-                  </PaymentProvider>
-                </AggregationProvider>
-              </TransportProvider>
-            </MarketplaceProvider>
-          </InputProvider>
+                        </Routes>
+                      </StaffProvider>
+                    </AnalyticsProvider>
+                  </NotificationProvider>
+                </PaymentProvider>
+              </AggregationProvider>
+            </TransportProvider>
+          </MarketplaceProvider>
+        </InputProvider>
         </ProfileProvider>
         <Toaster />
         <PushNotificationPrompt />

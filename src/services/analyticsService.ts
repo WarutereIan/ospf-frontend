@@ -31,6 +31,8 @@ import type {
   PerformanceMetric,
   ReportTemplate,
   Report,
+  ReportFormat,
+  ReportType,
   Leaderboard,
   LeaderboardEntry,
   Advisory,
@@ -367,61 +369,98 @@ export async function refreshAnalyticsViews(): Promise<{ success: boolean; messa
   return await apiGet<any>('/analytics/refresh-views');
 }
 
-// ==================== Reports (Placeholder - Not yet implemented in backend) ====================
+// ==================== Reports ====================
 
 /**
- * Get report templates
- * TODO: Implement when backend endpoint is available
+ * Map backend report template to frontend ReportTemplate
  */
-export async function getReportTemplates(): Promise<ReportTemplate[]> {
-  // Placeholder - backend endpoint not yet implemented
-  return [];
-}
-
-/**
- * Generate report
- * TODO: Implement when backend endpoint is available
- */
-export async function generateReport(
-  templateId: string,
-  parameters: Record<string, unknown>
-): Promise<ApiResponse<Report>> {
-  // Placeholder - backend endpoint not yet implemented
+function mapReportTemplate(backend: any): ReportTemplate {
   return {
-    data: {
-      id: "",
-      templateId,
-      templateName: "",
-      type: "sales",
-      format: "pdf",
-      dateRange: {
-        start: new Date().toISOString(),
-        end: new Date().toISOString(),
-      },
-      generatedAt: new Date().toISOString(),
-      generatedBy: "",
-      status: "generating",
-    },
-    message: "Report generation not yet implemented",
+    id: backend.id,
+    name: backend.name,
+    description: backend.description || '',
+    type: (backend.type || 'performance') as ReportTemplate['type'],
+    category: backend.category,
+    frequency: backend.frequency,
+    availableFormats: Array.isArray(backend.availableFormats) ? backend.availableFormats : ['pdf', 'csv'],
   };
 }
 
 /**
- * Get reports
- * TODO: Implement when backend endpoint is available
+ * Get report templates from backend
  */
-export async function getReports(): Promise<Report[]> {
-  // Placeholder - backend endpoint not yet implemented
-  return [];
+export async function getReportTemplates(): Promise<ReportTemplate[]> {
+  const data = await apiGet<any[]>('/analytics/report-templates');
+  return (Array.isArray(data) ? data : []).map(mapReportTemplate);
 }
 
 /**
- * Get report by ID
- * TODO: Implement when backend endpoint is available
+ * Generate report from template (returns report payload for download/preview)
+ */
+export async function generateReport(
+  templateId: string,
+  parameters: Record<string, unknown>
+): Promise<{ data: any }> {
+  const response = await apiPost<any>('/analytics/reports/generate', {
+    templateId,
+    parameters: parameters || {},
+  });
+  return { data: response };
+}
+
+/** Saved report list item (from GET /analytics/reports) */
+export interface SavedReportListItem {
+  id: string;
+  templateId: string;
+  templateName: string;
+  parameters: Record<string, unknown>;
+  generatedBy: string | null;
+  createdAt: string;
+}
+
+/**
+ * Get list of saved/generated reports
+ */
+export async function getSavedReports(options?: { limit?: number; templateId?: string }): Promise<SavedReportListItem[]> {
+  const params: Record<string, string> = {};
+  if (options?.limit != null) params.limit = String(options.limit);
+  if (options?.templateId) params.templateId = options.templateId;
+  const response = await apiGet<SavedReportListItem[]>("/analytics/reports", params);
+  return Array.isArray(response) ? response : [];
+}
+
+/**
+ * Get full report payload by id (for viewing/export)
+ */
+export async function getSavedReportById(id: string): Promise<Record<string, unknown> | null> {
+  const response = await apiGet<Record<string, unknown> | null>(`/analytics/reports/${encodeURIComponent(id)}`);
+  return response ?? null;
+}
+
+/**
+ * Get reports (list) - for AnalyticsContext; maps saved reports to Report[] shape
+ */
+export async function getReports(): Promise<Report[]> {
+  const list = await getSavedReports({ limit: 100 });
+  return list.map((r) => ({
+    id: r.id,
+    templateId: r.templateId,
+    templateName: r.templateName,
+    type: "performance" as ReportType,
+    format: "pdf" as ReportFormat,
+    dateRange: { start: "", end: "" },
+    generatedAt: r.createdAt,
+    generatedBy: r.generatedBy ?? "",
+    status: "ready" as const,
+  }));
+}
+
+/**
+ * Get report by ID (full payload) - for AnalyticsContext
  */
 export async function getReportById(id: string): Promise<Report | null> {
-  // Placeholder - backend endpoint not yet implemented
-  return null;
+  const payload = await getSavedReportById(id);
+  return payload as unknown as Report | null;
 }
 
 /**

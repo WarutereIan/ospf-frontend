@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,14 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useProfile } from "@/contexts/ProfileContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
 import type { FarmerProfile } from "@/types/profile";
 
 export function Farmers() {
-  const { profiles, fetchProfiles, isLoading } = useProfile();
+  const { profiles, fetchProfiles, isLoading: profileLoading } = useProfile();
+  const { user } = useAuth();
+  const { orders, fetchOrders, isLoading: marketplaceLoading } = useMarketplace();
   
   const [searchQuery, setSearchQuery] = useState("");
   const [subCountyFilter, setSubCountyFilter] = useState<string>("all");
@@ -35,13 +39,89 @@ export function Farmers() {
   const [selectedFarmer, setSelectedFarmer] = useState<FarmerProfile | null>(null);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
 
-  // Fetch farmers on mount
-  useEffect(() => {
-    fetchProfiles({ role: "farmer" });
-  }, [fetchProfiles]);
+  const isLoading = profileLoading || marketplaceLoading;
 
-  // Filter profiles to get only farmers
-  const farmers = profiles.filter(p => p.role === "farmer") as FarmerProfile[];
+  // Get officer's jurisdiction from user or profile
+  const officerJurisdiction = useMemo(() => {
+    // Try to get from profiles first (if already loaded)
+    const officerProfile = profiles.find(p => p.userId === user?.id);
+    return {
+      county: officerProfile?.county || user?.subCounty ? undefined : undefined, // Will need to fetch profile for county
+      subCounty: officerProfile?.subCounty || user?.subCounty,
+    };
+  }, [profiles, user?.id, user?.subCounty]);
+
+  // Fetch farmers on mount with jurisdiction filtering
+  useEffect(() => {
+    const filters: any = { role: "farmer" };
+    // Filter by officer's jurisdiction if available
+    if (officerJurisdiction.county) {
+      filters.county = officerJurisdiction.county;
+    }
+    if (officerJurisdiction.subCounty) {
+      filters.subcounty = officerJurisdiction.subCounty;
+    }
+    fetchProfiles(filters);
+  }, [fetchProfiles, officerJurisdiction.county, officerJurisdiction.subCounty]);
+
+  // Fetch orders to calculate farmer stats
+  useEffect(() => {
+    fetchOrders({});
+  }, [fetchOrders]);
+
+  // Enrich farmers with calculated fields from orders
+  const farmers = useMemo(() => {
+    const farmerProfiles = profiles.filter(p => p.role === "farmer") as FarmerProfile[];
+    
+    return farmerProfiles.map(farmer => {
+      // Get orders for this farmer
+      const farmerOrders = orders.filter(o => o.farmerId === farmer.userId);
+      const completedOrders = farmerOrders.filter(o => 
+        o.status === "completed" || o.status === "delivered"
+      );
+      
+      // Calculate total sales (revenue) from completed orders
+      const totalSales = completedOrders.reduce((sum, order) => 
+        sum + (order.totalAmount || 0), 0
+      );
+      
+      // Calculate order count
+      const orderCount = farmerOrders.length;
+      
+      // Get last activity (most recent order or profile update)
+      const lastOrderDate = farmerOrders.length > 0
+        ? farmerOrders.sort((a, b) => 
+            new Date(b.createdAt || b.updatedAt || 0).getTime() - 
+            new Date(a.createdAt || a.updatedAt || 0).getTime()
+          )[0]?.createdAt || farmerOrders[0]?.updatedAt
+        : null;
+      
+      const lastActivity = lastOrderDate || farmer.updatedAt || farmer.createdAt;
+      
+      // Format name from firstName/lastName if needed
+      const name = farmer.name || 
+        ((farmer as any).firstName && (farmer as any).lastName
+          ? `${(farmer as any).firstName} ${(farmer as any).lastName}`
+          : farmer.userId);
+      
+      // Format phone
+      const phone = farmer.phone || (farmer as any).phoneNumber || "N/A";
+      
+      return {
+        ...farmer,
+        name,
+        phone,
+        totalSales: totalSales || 0,
+        orderCount: orderCount || 0,
+        registrationDate: farmer.createdAt 
+          ? new Date(farmer.createdAt).toLocaleDateString()
+          : "N/A",
+        lastActivity: lastActivity
+          ? new Date(lastActivity).toLocaleDateString()
+          : "N/A",
+      } as FarmerProfile;
+    });
+  }, [profiles, orders]);
 
   // Calculate stats
   const stats = {
@@ -56,20 +136,23 @@ export function Farmers() {
     }).length,
   };
 
-  const subCounties = Array.from(new Set(farmers.map((f) => f.subCounty)));
+  const subCounties = useMemo(() => {
+    return Array.from(new Set(farmers.map((f) => f.subCounty).filter(Boolean)));
+  }, [farmers]);
 
-  const filteredFarmers = farmers.filter(
-    (farmer) => {
+  const filteredFarmers = useMemo(() => {
+    return farmers.filter((farmer) => {
       const matchesSearch =
-        farmer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        farmer.phone.includes(searchQuery) ||
-        farmer.subCounty.toLowerCase().includes(searchQuery.toLowerCase());
+        farmer.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        farmer.phone?.includes(searchQuery) ||
+        farmer.subCounty?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        false;
       const matchesSubCounty = subCountyFilter === "all" || farmer.subCounty === subCountyFilter;
       const matchesStatus = statusFilter === "all" || farmer.status === statusFilter;
       const matchesGroup = farmerGroupFilter === "all"; // TODO: Add farmer group field to interface
       return matchesSearch && matchesSubCounty && matchesStatus && matchesGroup;
-    }
-  );
+    });
+  }, [farmers, searchQuery, subCountyFilter, statusFilter, farmerGroupFilter]);
 
   return (
     <div className="space-y-6">
@@ -221,12 +304,12 @@ export function Farmers() {
                     <TableCell>{farmer.phone}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div>{farmer.subCounty}</div>
-                        <div className="text-muted-foreground">{farmer.ward}</div>
+                        <div>{farmer.subCounty || "N/A"}</div>
+                        <div className="text-muted-foreground">{farmer.ward || "N/A"}</div>
                       </div>
                     </TableCell>
-                    <TableCell>KES {farmer.totalSales.toLocaleString()}</TableCell>
-                    <TableCell>{farmer.orderCount}</TableCell>
+                    <TableCell>KES {(farmer.totalSales || 0).toLocaleString()}</TableCell>
+                    <TableCell>{farmer.orderCount || 0}</TableCell>
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -309,19 +392,19 @@ export function Farmers() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Sales</p>
-                  <p className="font-medium">KES {selectedFarmer.totalSales.toLocaleString()}</p>
+                  <p className="font-medium">KES {(selectedFarmer.totalSales || 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Total Orders</p>
-                  <p className="font-medium">{selectedFarmer.orderCount}</p>
+                  <p className="font-medium">{selectedFarmer.orderCount || 0}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Registration Date</p>
-                  <p className="font-medium">{selectedFarmer.registrationDate}</p>
+                  <p className="font-medium">{selectedFarmer.registrationDate || "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Last Activity</p>
-                  <p className="font-medium">{selectedFarmer.lastActivity}</p>
+                  <p className="font-medium">{selectedFarmer.lastActivity || "N/A"}</p>
                 </div>
               </div>
               <div className="flex gap-2 pt-4 border-t">

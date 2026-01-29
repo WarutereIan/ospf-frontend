@@ -36,6 +36,8 @@ interface ManagerStats {
   pendingChecks: number;
   capacityUtilization: number;
   maxCapacity: number;
+  uniqueFarmersToday: number;
+  uniqueOrdersToday: number;
 }
 
 interface StockByVariety {
@@ -96,22 +98,28 @@ export function AggregationManagerDashboard() {
     isLoading: analyticsLoading 
   } = useAnalytics();
 
-  // Fetch data on mount
-  useEffect(() => {
-    fetchCenters();
-    fetchInventory();
-    fetchTransactions();
-    fetchQualityChecks();
-    fetchStats();
-    fetchTrends({ timeRange: "week" });
-    fetchAggregationManagerAnalytics({ timeRange: "week" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const isLoading = aggregationLoading || analyticsLoading;
 
   // Get center info from selectedCenter or first center
   const center = selectedCenter || (centers.length > 0 ? centers[0] : null);
+
+  // Fetch data on mount and when center changes
+  useEffect(() => {
+    fetchCenters();
+    if (center?.id) {
+      fetchInventory(center.id);
+      fetchTransactions({ centerId: center.id });
+      fetchQualityChecks({ centerId: center.id });
+    } else {
+      fetchInventory();
+      fetchTransactions();
+      fetchQualityChecks();
+    }
+    fetchStats();
+    fetchTrends({ timeRange: "week" });
+    fetchAggregationManagerAnalytics({ timeRange: "week" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center?.id]);
   const centerName = center?.name || "Aggregation Center";
   const centerType = center?.centerType || "main";
   const centerSubCounty = center?.subCounty || "";
@@ -119,19 +127,64 @@ export function AggregationManagerDashboard() {
 
   // Calculate stats from context data
   const stats = useMemo<ManagerStats>(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const todayTransactions = transactions.filter(t => t.createdAt.startsWith(today));
+    // Get today's date in local timezone (YYYY-MM-DD format)
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    
+    // Filter transactions by center and today - handle both ISO strings and Date objects
+    const centerTransactions = center?.id 
+      ? transactions.filter(t => t.centerId === center.id)
+      : transactions;
+    
+    const todayTransactions = centerTransactions.filter(t => {
+      if (!t.createdAt) return false;
+      const transactionDate = typeof t.createdAt === 'string' 
+        ? t.createdAt.split("T")[0] 
+        : new Date(t.createdAt).toISOString().split("T")[0];
+      return transactionDate === todayStr;
+    });
+    
     const stockInToday = todayTransactions
       .filter(t => t.type === "stock_in")
-      .reduce((sum, t) => sum + t.quantity, 0);
+      .reduce((sum, t) => sum + (t.quantity || 0), 0);
     const stockOutToday = todayTransactions
       .filter(t => t.type === "stock_out")
-      .reduce((sum, t) => sum + t.quantity, 0);
+      .reduce((sum, t) => sum + (t.quantity || 0), 0);
     
-    const todayQualityChecks = qualityChecks.filter(q => (q.createdAt || q.checkedAt)?.startsWith(today));
-    const pendingChecks = qualityChecks.filter(q => !q.passed && !q.failed).length;
+    // Count unique farmers for stock in today
+    const uniqueFarmersToday = new Set(
+      todayTransactions
+        .filter(t => t.type === "stock_in" && t.farmerId)
+        .map(t => t.farmerId)
+    ).size;
     
-    const currentStock = inventory.reduce((sum, item) => sum + item.quantity, 0);
+    // Count unique orders for stock out today
+    const uniqueOrdersToday = new Set(
+      todayTransactions
+        .filter(t => t.type === "stock_out" && t.orderId)
+        .map(t => t.orderId)
+    ).size;
+    
+    // Filter quality checks by center and today
+    const centerQualityChecks = center?.id 
+      ? qualityChecks.filter(q => q.centerId === center.id)
+      : qualityChecks;
+    
+    const todayQualityChecks = centerQualityChecks.filter(q => {
+      const checkDate = (q.createdAt || q.checkedAt);
+      if (!checkDate) return false;
+      const dateStr = typeof checkDate === 'string' 
+        ? checkDate.split("T")[0] 
+        : new Date(checkDate).toISOString().split("T")[0];
+      return dateStr === todayStr;
+    });
+    const pendingChecks = centerQualityChecks.filter(q => !q.passed && !q.failed).length;
+    
+    // Filter inventory by center if center is selected
+    const centerInventory = center?.id 
+      ? inventory.filter(item => item.centerId === center.id)
+      : inventory;
+    const currentStock = centerInventory.reduce((sum, item) => sum + (item.quantity || 0), 0);
     const maxCapacity = center?.capacity || 5000;
     const capacityUtilization = maxCapacity > 0 ? Math.round((currentStock / maxCapacity) * 100) : 0;
 
@@ -143,18 +196,23 @@ export function AggregationManagerDashboard() {
       pendingChecks,
       capacityUtilization,
       maxCapacity,
+      uniqueFarmersToday,
+      uniqueOrdersToday,
     };
-  }, [transactions, qualityChecks, inventory, center]);
+  }, [transactions, qualityChecks, inventory, center?.id]);
 
-  // Calculate stock by variety
+  // Calculate stock by variety - filter by center if center is selected
   const stockByVariety = useMemo<StockByVariety[]>(() => {
+    const centerInventory = center?.id 
+      ? inventory.filter(item => item.centerId === center.id)
+      : inventory;
     const varietyMap = new Map<string, number>();
-    inventory.forEach(item => {
+    centerInventory.forEach(item => {
       const current = varietyMap.get(item.variety) || 0;
-      varietyMap.set(item.variety, current + item.quantity);
+      varietyMap.set(item.variety, current + (item.quantity || 0));
     });
     return Array.from(varietyMap.entries()).map(([name, value]) => ({ name, value }));
-  }, [inventory]);
+  }, [inventory, center?.id]);
 
   // Calculate stock movement from trends or transactions
   const stockMovement = useMemo<StockMovement[]>(() => {
@@ -165,7 +223,11 @@ export function AggregationManagerDashboard() {
         stockOut: t.stockOut || 0,
       }));
     }
-    // Fallback: calculate from transactions
+    // Fallback: calculate from transactions filtered by center
+    const centerTransactions = center?.id 
+      ? transactions.filter(t => t.centerId === center.id)
+      : transactions;
+    
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - i);
@@ -173,32 +235,46 @@ export function AggregationManagerDashboard() {
     }).reverse();
     
     return last7Days.map(date => {
-      const dayTransactions = transactions.filter(t => t.createdAt.startsWith(date));
+      const dayTransactions = centerTransactions.filter(t => {
+        if (!t.createdAt) return false;
+        const transactionDate = typeof t.createdAt === 'string' 
+          ? t.createdAt.split("T")[0] 
+          : new Date(t.createdAt).toISOString().split("T")[0];
+        return transactionDate === date;
+      });
       return {
         day: new Date(date).toLocaleDateString("en-US", { weekday: "short" }),
-        stockIn: dayTransactions.filter(t => t.type === "stock_in").reduce((sum, t) => sum + t.quantity, 0),
-        stockOut: dayTransactions.filter(t => t.type === "stock_out").reduce((sum, t) => sum + t.quantity, 0),
+        stockIn: dayTransactions
+          .filter(t => t.type === "stock_in")
+          .reduce((sum, t) => sum + (t.quantity || 0), 0),
+        stockOut: dayTransactions
+          .filter(t => t.type === "stock_out")
+          .reduce((sum, t) => sum + (t.quantity || 0), 0),
       };
     });
-  }, [trends, transactions]);
+  }, [trends, transactions, center?.id]);
 
-  // Calculate stock aging
+  // Calculate stock aging - filter by center if center is selected
   const stockAging = useMemo<StockAging[]>(() => {
+    const centerInventory = center?.id 
+      ? inventory.filter(item => item.centerId === center.id)
+      : inventory;
+    
     const now = new Date();
-    const fresh = inventory.filter(item => {
+    const fresh = centerInventory.filter(item => {
       const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
       return age <= 3;
     }).length;
-    const aging = inventory.filter(item => {
+    const aging = centerInventory.filter(item => {
       const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
       return age > 3 && age <= 6;
     }).length;
-    const critical = inventory.filter(item => {
+    const critical = centerInventory.filter(item => {
       const age = Math.floor((now.getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24));
       return age > 6;
     }).length;
     
-    const total = inventory.length;
+    const total = centerInventory.length;
     if (total === 0) return [];
     
     return [
@@ -206,41 +282,66 @@ export function AggregationManagerDashboard() {
       { category: "Aging (4-6d)", value: Math.round((aging / total) * 100), color: "#F59E0B" },
       { category: "Critical (7+)", value: Math.round((critical / total) * 100), color: "#EF4444" },
     ];
-  }, [inventory]);
+  }, [inventory, center?.id]);
 
-  // Calculate quality distribution
+  // Calculate quality distribution - filter by center if center is selected
   const qualityDistribution = useMemo<QualityDistribution[]>(() => {
+    const centerInventory = center?.id 
+      ? inventory.filter(item => item.centerId === center.id)
+      : inventory;
+    
     const gradeMap = new Map<string, number>();
-    inventory.forEach(item => {
+    centerInventory.forEach(item => {
       const grade = item.grade || item.qualityGrade;
       const current = gradeMap.get(grade) || 0;
       gradeMap.set(grade, current + 1);
     });
-    const total = inventory.length;
+    const total = centerInventory.length;
     if (total === 0) return [];
     
     return Array.from(gradeMap.entries()).map(([name, count]) => ({
       name: `Grade ${name}`,
       value: Math.round((count / total) * 100),
     }));
-  }, [inventory]);
+  }, [inventory, center?.id]);
 
-  // Recent activity from transactions
+  // Recent activity from transactions - filter by center and today only
   const recentActivity = useMemo<StockActivity[]>(() => {
-    return transactions
-      .slice(-10)
-      .reverse()
+    // Get today's date in local timezone (YYYY-MM-DD format)
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    
+    // Filter transactions by center and today only
+    const centerTransactions = center?.id 
+      ? transactions.filter(t => t.centerId === center.id)
+      : transactions;
+    
+    const todayTransactions = centerTransactions.filter(t => {
+      if (!t.createdAt) return false;
+      const transactionDate = typeof t.createdAt === 'string' 
+        ? t.createdAt.split("T")[0] 
+        : new Date(t.createdAt).toISOString().split("T")[0];
+      return transactionDate === todayStr;
+    });
+    
+    // Sort by most recent first
+    return todayTransactions
+      .sort((a, b) => {
+        const dateA = typeof a.createdAt === 'string' ? new Date(a.createdAt) : a.createdAt;
+        const dateB = typeof b.createdAt === 'string' ? new Date(b.createdAt) : b.createdAt;
+        return dateB.getTime() - dateA.getTime();
+      })
       .map(t => ({
         id: t.id,
         type: (t.type === "stock_in" ? "in" : "out") as "in" | "out",
         farmerName: t.type === "stock_in" ? t.farmerName : undefined,
         buyerName: t.type === "stock_out" ? t.buyerName : undefined,
-        quantity: t.quantity,
+        quantity: t.quantity || 0,
         qualityGrade: t.grade || t.qualityGrade || "N/A",
-        timestamp: t.createdAt,
+        timestamp: typeof t.createdAt === 'string' ? t.createdAt : t.createdAt.toISOString(),
         status: "completed" as const,
       }));
-  }, [transactions]);
+  }, [transactions, center?.id]);
 
   return (
     <div className="space-y-6">
@@ -313,14 +414,14 @@ export function AggregationManagerDashboard() {
         <StatCard
           label="Today's In"
           value={`${stats.stockInToday.toLocaleString()} kg`}
-          description={`▲ From ${stats.stockInToday > 0 ? 8 : 0} farmers`}
+          description={`▲ From ${stats.uniqueFarmersToday} farmer${stats.uniqueFarmersToday !== 1 ? 's' : ''}`}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
           label="Today's Out"
           value={`${stats.stockOutToday.toLocaleString()} kg`}
-          description={`To ${stats.stockOutToday > 0 ? 3 : 0} orders`}
+          description={`To ${stats.uniqueOrdersToday} order${stats.uniqueOrdersToday !== 1 ? 's' : ''}`}
           icon={<IconTrendingDown className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />

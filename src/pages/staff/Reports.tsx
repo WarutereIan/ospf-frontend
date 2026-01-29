@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,52 +19,226 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LineChart } from "@/components/visualizations";
+import { ReportMetricVisualizations } from "@/components/reports/ReportMetricVisualizations";
 import { useAnalytics } from "@/contexts/AnalyticsContext";
-import type { ReportTemplate } from "@/types/analytics";
+import { getSavedReportById, getSavedReports, type SavedReportListItem } from "@/services/analyticsService";
+import { showSuccess, showError } from "@/lib/toast";
+import { exportReportToPdf } from "@/lib/export-report-pdf";
+
+/** Map backend trends to chart data { name, value, revenue?, orders? } */
+function trendsToChartData(trends: Array<{ date?: string; revenue?: number; orders?: number; volume?: number }> | undefined) {
+  if (!Array.isArray(trends) || trends.length === 0) {
+    return [];
+  }
+  return trends.map((t) => ({
+    name: t.date ? new Date(t.date).toLocaleDateString("en-GB", { month: "short", day: "numeric" }) : "",
+    value: t.revenue ?? 0,
+    revenue: t.revenue ?? 0,
+    orders: t.orders ?? 0,
+    volume: t.volume ?? 0,
+  }));
+}
+
+const PARAMETER_SECTIONS = ["financial", "quality", "operational", "users", "geographic", "farmerGroups", "transactionEvidence"] as const;
+
+/** Flatten a parameter object for CSV (key, value rows; skip nested arrays/objects or add sub-rows) */
+function flattenParams(obj: Record<string, unknown> | null | undefined): string[][] {
+  if (!obj || typeof obj !== "object") return [];
+  const rows: string[][] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v != null && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date)) {
+      if (Array.isArray((v as any)?.length) || (v as any)?.[0] != null) continue;
+      rows.push([k, ""]);
+      flattenParams(v as Record<string, unknown>).forEach((r) => rows.push(["", r[0], r[1]]));
+      continue;
+    }
+    if (Array.isArray(v)) continue;
+    rows.push([k, String(v)]);
+  }
+  return rows;
+}
+
+/** Build CSV from report payload (summary, trends, and framework parameter sections) */
+function downloadReportAsCsv(payload: any, filename: string) {
+  const rows: string[][] = [];
+  if (payload.summary) {
+    rows.push(["Summary", ""]);
+    Object.entries(payload.summary).forEach(([k, v]) => {
+      if (typeof v === "object" && v !== null && !Array.isArray(v)) return;
+      rows.push([String(k), String(v)]);
+    });
+    rows.push([]);
+  }
+  for (const section of PARAMETER_SECTIONS) {
+    if (payload[section] && typeof payload[section] === "object") {
+      rows.push([section, ""]);
+      flattenParams(payload[section]).forEach((r) => rows.push(r));
+      rows.push([]);
+    }
+  }
+  if (Array.isArray(payload.trends) && payload.trends.length > 0) {
+    rows.push(["Date", "Revenue", "Orders", "Volume"]);
+    payload.trends.forEach((t: any) => {
+      rows.push([t.date || "", String(t.revenue ?? 0), String(t.orders ?? 0), String(t.volume ?? 0)]);
+    });
+  }
+  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function StaffReports() {
-  const { reportTemplates, fetchReportTemplates, generateReportAction, isLoading } = useAnalytics();
+  const { fetchReports, generateReportAction, isLoading } = useAnalytics();
   
   const [reportType, setReportType] = useState<string>("");
   const [dateRange, setDateRange] = useState<string>("month");
   const [exportFormat, setExportFormat] = useState<string>("pdf");
+  const [includeCharts, setIncludeCharts] = useState<"yes" | "no">("yes");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedReport, setGeneratedReport] = useState<any>(null);
+  const [savedReportsList, setSavedReportsList] = useState<SavedReportListItem[]>([]);
+  const [loadingReportId, setLoadingReportId] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [trendsChartData, setTrendsChartData] = useState<Array<{ name: string; value: number; revenue?: number; orders?: number }>>([]);
+  const reportContentRef = useRef<HTMLDivElement>(null);
 
-  // Fetch report templates on mount
+  const loadSavedReportsList = useCallback(async () => {
+    try {
+      const list = await getSavedReports({ limit: 100 });
+      setSavedReportsList(list);
+    } catch {
+      setSavedReportsList([]);
+    }
+  }, []);
+
+  // Fetch saved/generated reports list on mount and keep context in sync
   useEffect(() => {
-    fetchReportTemplates();
-  }, [fetchReportTemplates]);
+    loadSavedReportsList();
+    fetchReports();
+  }, [fetchReports, loadSavedReportsList]);
 
-  // Mock data removed - using context data
+  // Fetch trends for chart preview on load
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { getTrends } = await import("@/services/analyticsService");
+        const data = await getTrends({ timeRange: "month" });
+        if (!cancelled && Array.isArray(data)) {
+          setTrendsChartData(trendsToChartData(data));
+        }
+      } catch {
+        if (!cancelled) setTrendsChartData([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (!reportType) return;
     setIsGenerating(true);
-    // Simulate report generation
-    setTimeout(() => {
+    setGeneratedReport(null);
+    try {
+      const result = await generateReportAction(reportType, {
+        timeRange: dateRange,
+        format: exportFormat,
+      });
+      setGeneratedReport(result);
+      setSelectedReportId(result?.id ?? null);
+      await loadSavedReportsList();
+      showSuccess("Report generated and saved. View it below or export.");
+      if (result?.trends && result.trends.length > 0) {
+        setTrendsChartData(trendsToChartData(result.trends));
+      }
+    } catch {
+      showError("Failed to generate report.");
+    } finally {
       setIsGenerating(false);
-      alert(`Report generated successfully! Downloading ${exportFormat.toUpperCase()}...`);
-    }, 2000);
-  };
-
-  const handleQuickDownload = (templateId: string, format: "pdf" | "excel" | "csv") => {
-    const template = reportTemplates.find((t) => t.id === templateId);
-    if (template) {
-      alert(`Downloading ${template.name} in ${format.toUpperCase()} format...`);
     }
   };
 
-  const getCategoryColor = (category: ReportTemplate["category"]) => {
-    switch (category) {
-      case "performance":
-        return "bg-blue-100 text-blue-800";
-      case "financial":
-        return "bg-green-100 text-green-800";
-      case "operational":
-        return "bg-purple-100 text-purple-800";
-      case "compliance":
-        return "bg-orange-100 text-orange-800";
+  const handleSelectReport = async (id: string) => {
+    setLoadingReportId(id);
+    try {
+      const payload = await getSavedReportById(id);
+      if (payload) {
+        setGeneratedReport(payload);
+        setSelectedReportId(id);
+        if (payload.trends && Array.isArray(payload.trends) && payload.trends.length > 0) {
+          setTrendsChartData(trendsToChartData(payload.trends as any));
+        }
+      } else {
+        showError("Report not found.");
+      }
+    } catch {
+      showError("Failed to load report.");
+    } finally {
+      setLoadingReportId(null);
     }
+  };
+
+  const runPdfExport = useCallback((baseName: string) => {
+    const el = reportContentRef.current;
+    if (!el) {
+      showError("Report content not ready. Ensure a report is loaded and charts are visible, then try again.");
+      return;
+    }
+    setIsExportingPdf(true);
+    exportReportToPdf(el, {
+      filename: `${baseName}.pdf`,
+      onStart: () => showSuccess("Generating PDF…"),
+      onComplete: () => showSuccess("PDF downloaded."),
+      onError: (err) => showError(err.message || "PDF export failed."),
+    })
+      .catch(() => showError("PDF export failed."))
+      .finally(() => setIsExportingPdf(false));
+  }, []);
+
+  const handleExportReport = async (format: "pdf" | "excel" | "csv", reportId?: string, report?: any, name?: string) => {
+    let data = report ?? generatedReport;
+    let didLoadReport = false;
+    // If export from list row and report not loaded, fetch by id
+    if (!data && reportId) {
+      try {
+        data = await getSavedReportById(reportId);
+        if (data) {
+          setGeneratedReport(data);
+          setSelectedReportId(reportId);
+          didLoadReport = true;
+        }
+      } catch {
+        showError("Failed to load report for export.");
+        return;
+      }
+    }
+    if (!data) {
+      showError("No report loaded. Generate or select a report first.");
+      return;
+    }
+    const baseName = name ?? (data.templateName || "report").replace(/\s+/g, "-") + "-" + new Date().toISOString().slice(0, 10);
+    if (format === "csv") {
+      downloadReportAsCsv(data, baseName);
+      showSuccess("Report downloaded as CSV.");
+      return;
+    }
+    if (format === "pdf") {
+      if (didLoadReport) {
+        // Wait for report content and charts to render before capturing
+        requestAnimationFrame(() => {
+          setTimeout(() => runPdfExport(baseName), 400);
+        });
+      } else {
+        runPdfExport(baseName);
+      }
+      return;
+    }
+    showSuccess(`Export as ${format.toUpperCase()} uses the same data; use CSV or PDF for now.`);
   };
 
   const getFormatIcon = (format: string) => {
@@ -80,15 +254,13 @@ export function StaffReports() {
     }
   };
 
-  // Sample chart data for preview
-  const performanceData = [
-    { name: "Jan", value: 65, target: 70 },
-    { name: "Feb", value: 72, target: 75 },
-    { name: "Mar", value: 78, target: 80 },
-    { name: "Apr", value: 82, target: 85 },
-    { name: "May", value: 88, target: 90 },
-    { name: "Jun", value: 92, target: 95 },
-  ];
+  // Chart data: from last generated report trends or from initial fetch
+  const performanceData =
+    trendsChartData.length > 0
+      ? trendsChartData
+      : [
+          { name: "—", value: 0, revenue: 0, orders: 0 },
+        ];
 
   return (
     <div className="space-y-6">
@@ -107,8 +279,8 @@ export function StaffReports() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Available Reports</p>
-                <p className="text-2xl font-bold">{reportTemplates.length}</p>
+                <p className="text-sm text-muted-foreground">Saved Reports</p>
+                <p className="text-2xl font-bold">{savedReportsList.length}</p>
               </div>
               <IconFileText className="h-8 w-8 text-primary" />
             </div>
@@ -119,7 +291,9 @@ export function StaffReports() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Generated Today</p>
-                <p className="text-2xl font-bold">12</p>
+                <p className="text-2xl font-bold">
+                  {savedReportsList.filter((r) => new Date(r.createdAt).toDateString() === new Date().toDateString()).length}
+                </p>
               </div>
               <IconDownload className="h-8 w-8 text-blue-600" />
             </div>
@@ -130,7 +304,13 @@ export function StaffReports() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">This Month</p>
-                <p className="text-2xl font-bold">156</p>
+                <p className="text-2xl font-bold">
+                  {savedReportsList.filter((r) => {
+                    const d = new Date(r.createdAt);
+                    const n = new Date();
+                    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+                  }).length}
+                </p>
               </div>
               <IconTrendingUp className="h-8 w-8 text-green-600" />
             </div>
@@ -140,8 +320,8 @@ export function StaffReports() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Downloads</p>
-                <p className="text-2xl font-bold">1,234</p>
+                <p className="text-sm text-muted-foreground">Report Loaded</p>
+                <p className="text-2xl font-bold">{generatedReport ? "Yes" : "—"}</p>
               </div>
               <IconChartBar className="h-8 w-8 text-purple-600" />
             </div>
@@ -226,13 +406,13 @@ export function StaffReports() {
 
             <div className="space-y-2">
               <Label>Include Charts</Label>
-              <Select defaultValue="yes">
+              <Select value={includeCharts} onValueChange={(v) => setIncludeCharts(v as "yes" | "no")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
+                  <SelectItem value="yes">Yes — show chart preview on this page</SelectItem>
+                  <SelectItem value="no">No — hide chart preview</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -254,82 +434,111 @@ export function StaffReports() {
         </CardContent>
       </Card>
 
-      {/* Report Templates */}
+      {/* Generated Reports — list of saved reports; click to load content, export uses loaded data */}
       <Card>
         <CardHeader>
-          <CardTitle>Report Templates</CardTitle>
-          <CardDescription>Quick access to frequently used reports</CardDescription>
+          <CardTitle>Generated Reports</CardTitle>
+          <CardDescription>Saved reports. Click a report to view it below; use export when a report is loaded.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {reportTemplates.map((template) => (
-              <Card key={template.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">{template.name}</CardTitle>
-                      <CardDescription className="mt-1">{template.description}</CardDescription>
-                    </div>
-                    <Badge variant="outline" className={getCategoryColor(template.category)}>
-                      {template.category}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Frequency:</span>
-                      <Badge variant="outline">{template.frequency}</Badge>
-                    </div>
-                    {template.lastGenerated && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Last Generated:</span>
-                        <span>{template.lastGenerated}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Available Formats:</span>
-                      <div className="flex gap-2">
-                        {template.availableFormats.filter(f => f !== "json").map((format) => (
-                          <Button
-                            key={format}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleQuickDownload(template.id, format as "pdf" | "excel" | "csv")}
-                            title={`Download as ${format.toUpperCase()}`}
-                          >
-                            {getFormatIcon(format)}
-                          </Button>
-                        ))}
+          {savedReportsList.length === 0 ? (
+            <p className="text-muted-foreground text-sm py-4">No reports yet. Generate a report above to save it here.</p>
+          ) : (
+            <div className="space-y-3">
+              {savedReportsList.map((report) => {
+                const params = report.parameters ?? {};
+                const timeRange = (params as any).timeRange ?? "—";
+                const generatedAt = report.createdAt
+                  ? new Date(report.createdAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+                  : "—";
+                const isSelected = selectedReportId === report.id;
+                const isLoading = loadingReportId === report.id;
+                return (
+                  <div
+                    key={report.id}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 transition-colors ${
+                      isSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{report.templateName}</p>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-1">
+                        <span>Time range: {String(timeRange)}</span>
+                        <span>Generated: {generatedAt}</span>
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleSelectReport(report.id)}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Loading…" : "View"}
+                      </Button>
+                      {(["csv", "pdf", "excel"] as const).map((format) => (
+                        <Button
+                          key={format}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleExportReport(format, report.id, undefined, `${report.templateName.replace(/\s+/g, "-")}-${report.id.slice(0, 8)}`)}
+                          title={`Export as ${format.toUpperCase()}`}
+                        >
+                          {getFormatIcon(format)}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Chart Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance Chart Preview</CardTitle>
-          <CardDescription>Sample visualization available in reports</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LineChart
-            data={performanceData}
-            lines={[
-              { dataKey: "value", name: "Actual", color: "#3B82F6" },
-              { dataKey: "target", name: "Target", color: "#22C55E" },
-            ]}
-            title="Performance vs Targets"
-            description="Progress tracking against project targets"
-            height={300}
-          />
-        </CardContent>
-      </Card>
+      {/* Report content for viewing and PDF export — header + all visualizations */}
+      {generatedReport && includeCharts === "yes" && (
+        <div
+          ref={reportContentRef}
+          className="report-pdf-content space-y-6 bg-white p-4 rounded-lg border"
+          data-report-pdf
+        >
+          <Card className="print:shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xl">
+                {generatedReport.templateName ?? "Report"}
+              </CardTitle>
+              <CardDescription>
+                Period: {(generatedReport.parameters as any)?.timeRange ?? "—"}
+                {generatedReport.dateRange?.start && generatedReport.dateRange?.end && (
+                  <> · {String(generatedReport.dateRange.start).slice(0, 10)} – {String(generatedReport.dateRange.end).slice(0, 10)}</>
+                )}
+                {" · "}
+                Generated: {generatedReport.generatedAt ? new Date(generatedReport.generatedAt).toLocaleString() : "—"}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <ReportMetricVisualizations report={generatedReport} includeCharts={true} />
+        </div>
+      )}
+
+      {/* Chart preview when no report yet — single revenue line from initial trends or after generate */}
+      {includeCharts === "yes" && !generatedReport && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance Chart Preview</CardTitle>
+            <CardDescription>Revenue trend — generate a report to see full metric visualizations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LineChart
+              data={performanceData}
+              lines={[{ dataKey: "value", name: "Revenue", color: "#3B82F6" }]}
+              title="Revenue (last 30 days or after report)"
+              height={300}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

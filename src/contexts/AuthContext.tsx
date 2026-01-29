@@ -11,6 +11,8 @@ export type UserRole =
   | "farmer"
   | "buyer"
   | "officer"
+  | "extension_officer"
+  | "county_officer"  // Backend EXTENSION_OFFICER; used by user API and staff UI
   | "staff"
   | "aggregation_manager"
   | "input_provider"

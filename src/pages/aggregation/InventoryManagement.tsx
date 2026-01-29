@@ -1,10 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   IconPackage,
   IconTrendingUp,
@@ -37,6 +44,35 @@ export function InventoryManagement() {
     batchId: string;
     days: Array<{ day: number; status: "fresh" | "aging" | "critical" }>;
   }>>([]);
+
+  const [selectedBatch, setSelectedBatch] = useState<InventoryItem | null>(null);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+
+  const getBatchNumber = (item: InventoryItem) => item.batchId || item.id;
+
+  const getStockInDate = (item: InventoryItem) =>
+    item.createdAt || item.stockInDate || undefined;
+
+  const getAgeDays = (item: InventoryItem) => {
+    const raw = getStockInDate(item);
+    if (!raw) return item.storageDuration || 0;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return item.storageDuration || 0;
+    const diffMs = Date.now() - d.getTime();
+    return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  };
+
+  const getAgeStatus = (ageDays: number): "fresh" | "aging" | "critical" => {
+    if (ageDays < 5) return "fresh";
+    if (ageDays <= 7) return "aging";
+    return "critical";
+  };
+
+  const centerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    centers.forEach((c) => map.set(c.id, c.name));
+    return map;
+  }, [centers]);
 
   // Fetch inventory on mount
   useEffect(() => {
@@ -73,8 +109,9 @@ export function InventoryManagement() {
     // Prepare aging heatmap data
     const heatmap = inventory.map((item) => {
       const days: Array<{ day: number; status: "fresh" | "aging" | "critical" }> = [];
+      const ageDays = getAgeDays(item);
       for (let day = 1; day <= 7; day++) {
-        if (item.storageDuration >= day) {
+        if (ageDays >= day) {
           let status: "fresh" | "aging" | "critical";
           if (day <= 3) {
             status = "fresh";
@@ -87,7 +124,7 @@ export function InventoryManagement() {
         }
       }
       return {
-        batchId: item.id,
+        batchId: getBatchNumber(item),
         days,
       };
     });
@@ -103,7 +140,8 @@ export function InventoryManagement() {
         (item) =>
           item.variety.toLowerCase().includes(searchTerm.toLowerCase()) ||
           item.farmerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.id.toLowerCase().includes(searchTerm.toLowerCase())
+          item.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (item.batchId || "").toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -121,15 +159,25 @@ export function InventoryManagement() {
 
     // Apply card filter
     if (cardFilter !== "all") {
-      filtered = filtered.filter((item) => item.status === cardFilter);
+      filtered = filtered.filter((item) => getAgeStatus(getAgeDays(item)) === cardFilter);
     }
+
+    // Sort by age (oldest first) to prioritize action on older batches
+    filtered.sort((a, b) => getAgeDays(b) - getAgeDays(a));
 
     setFilteredInventory(filtered);
   }, [inventory, searchTerm, varietyFilter, gradeFilter, statusFilter, cardFilter]);
 
   const totalStock = inventory.reduce((sum, item) => sum + item.quantity, 0);
-  const agingStock = inventory.filter((item) => item.status === "aging" || item.status === "critical");
-  const criticalStock = inventory.filter((item) => item.status === "critical");
+  const freshStockKg = inventory
+    .filter((i) => getAgeStatus(getAgeDays(i)) === "fresh")
+    .reduce((sum, i) => sum + i.quantity, 0);
+  const agingStockKg = inventory
+    .filter((i) => getAgeStatus(getAgeDays(i)) === "aging")
+    .reduce((sum, i) => sum + i.quantity, 0);
+  const criticalStockKg = inventory
+    .filter((i) => getAgeStatus(getAgeDays(i)) === "critical")
+    .reduce((sum, i) => sum + i.quantity, 0);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -214,7 +262,7 @@ export function InventoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {inventory.filter((i) => i.status === "fresh").reduce((sum, i) => sum + i.quantity, 0)} kg
+              {freshStockKg.toLocaleString()} kg
             </div>
             <p className="text-xs text-muted-foreground mt-1">&lt; 5 days old</p>
           </CardContent>
@@ -234,7 +282,7 @@ export function InventoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">
-              {agingStock.reduce((sum, i) => sum + i.quantity, 0)} kg
+              {agingStockKg.toLocaleString()} kg
             </div>
             <p className="text-xs text-muted-foreground mt-1">5-7 days old</p>
           </CardContent>
@@ -254,7 +302,7 @@ export function InventoryManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {criticalStock.reduce((sum, i) => sum + i.quantity, 0)} kg
+              {criticalStockKg.toLocaleString()} kg
             </div>
             <p className="text-xs text-muted-foreground mt-1">&gt; 7 days old</p>
           </CardContent>
@@ -270,7 +318,7 @@ export function InventoryManagement() {
             <div className="relative flex-1">
               <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search by variety, farmer, or ID..."
+                placeholder="Search by variety, farmer, batch #, or ID..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -333,7 +381,7 @@ export function InventoryManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    <TableHead>Batch #</TableHead>
                     <TableHead>Variety</TableHead>
                     <TableHead>Grade</TableHead>
                     <TableHead>Qty</TableHead>
@@ -344,24 +392,28 @@ export function InventoryManagement() {
                 </TableHeader>
                 <TableBody>
                   {filteredInventory.map((item) => {
-                    const statusEmoji =
-                      item.status === "fresh"
-                        ? "🟢"
-                        : item.status === "aging"
-                        ? "🟡"
-                        : "🔴";
-                    const ageDisplay = `${item.storageDuration}d`;
+                    const ageDays = getAgeDays(item);
+                    const status = getAgeStatus(ageDays);
+                    const statusEmoji = status === "fresh" ? "🟢" : status === "aging" ? "🟡" : "🔴";
+                    const ageDisplay = `${ageDays}d`;
 
                     return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.id}</TableCell>
+                      <TableRow
+                        key={item.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => {
+                          setSelectedBatch(item);
+                          setBatchModalOpen(true);
+                        }}
+                      >
+                        <TableCell className="font-medium">{getBatchNumber(item)}</TableCell>
                         <TableCell>{item.variety}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={getGradeColor(item.qualityGrade)}>
                             {item.qualityGrade}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-semibold">{item.quantity}kg</TableCell>
+                        <TableCell className="font-semibold">{item.quantity.toLocaleString()} kg</TableCell>
                         <TableCell>{ageDisplay}</TableCell>
                         <TableCell>
                           <span className="text-lg">{statusEmoji}</span>
@@ -384,6 +436,86 @@ export function InventoryManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Batch details modal */}
+      <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>Batch Details</DialogTitle>
+            <DialogDescription>
+              Full details for Batch #{selectedBatch ? getBatchNumber(selectedBatch) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedBatch && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Batch #</p>
+                <p className="font-medium">{getBatchNumber(selectedBatch)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Inventory ID</p>
+                <p className="font-medium">{selectedBatch.id}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Center</p>
+                <p className="font-medium">
+                  {centerNameById.get(selectedBatch.centerId) || selectedBatch.centerId}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Farmer</p>
+                <p className="font-medium">{selectedBatch.farmerName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Variety</p>
+                <p className="font-medium">{selectedBatch.variety}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Grade</p>
+                <p className="font-medium">Grade {selectedBatch.qualityGrade}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Quantity</p>
+                <p className="font-medium">{selectedBatch.quantity.toLocaleString()} kg</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Age</p>
+                <p className="font-medium">
+                  {getAgeDays(selectedBatch)} days ({getAgeStatus(getAgeDays(selectedBatch))})
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Stock-in date</p>
+                <p className="font-medium">
+                  {getStockInDate(selectedBatch)
+                    ? new Date(getStockInDate(selectedBatch) as string).toLocaleString()
+                    : "N/A"}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Storage duration (backend)</p>
+                <p className="font-medium">{selectedBatch.storageDuration ?? 0} days</p>
+              </div>
+              {selectedBatch.location && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Location</p>
+                  <p className="font-medium">{selectedBatch.location}</p>
+                </div>
+              )}
+              {(selectedBatch.temperature !== undefined || selectedBatch.humidity !== undefined) && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Storage conditions</p>
+                  <p className="font-medium">
+                    {selectedBatch.temperature !== undefined ? `${selectedBatch.temperature}°C` : "—"}
+                    {" • "}
+                    {selectedBatch.humidity !== undefined ? `${selectedBatch.humidity}% RH` : "—"}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -279,9 +279,15 @@ function transformMarketplaceOrder(order: any): MarketplaceOrder {
     });
   }
   
+  // Calculate canRate: buyer can rate if order is completed/delivered
+  // Note: Actual rating check (whether already rated) should be done in components
+  // by comparing with existing ratings
+  const mappedStatus = mapOrderStatus(order.status);
+  const canRate = mappedStatus === "completed" || mappedStatus === "delivered";
+  
   return {
     ...order,
-    status: mapOrderStatus(order.status),
+    status: mappedStatus,
     paymentStatus: mapPaymentStatus(paymentStatus),
     variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
     aggregationCenter,
@@ -291,6 +297,7 @@ function transformMarketplaceOrder(order: any): MarketplaceOrder {
     buyerPhone,
     farmerPhone,
     deliveryLocation: order.deliveryAddress || order.deliveryLocation,
+    canRate, // Set based on status (component will refine based on existing ratings)
   };
 }
 

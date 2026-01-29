@@ -151,7 +151,16 @@ export function AggregationProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const fetchQualityChecks = useCallback(async (filters?: { centerId?: string; transactionId?: string }) => {
+  const fetchQualityChecks = useCallback(async (filters?: { 
+    centerId?: string; 
+    transactionId?: string;
+    orderId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    county?: string;
+    subCounty?: string;
+    centerType?: string;
+  }) => {
     setIsLoading(true);
     setError(null);
     try {

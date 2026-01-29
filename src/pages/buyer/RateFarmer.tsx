@@ -67,17 +67,22 @@ export function RateFarmer({
 
     setIsSubmitting(true);
     try {
-      const ratingData: Partial<Rating> = {
-        farmerId,
+      // Backend only accepts a single rating value, not multiple dimensions
+      // Use overallRating as the main rating, and include review text
+      const ratingData: Partial<Rating> & { ratedUserId: string } = {
+        ratedUserId: farmerId, // Use ratedUserId instead of farmerId
         orderId,
-        overallRating: rating.overallRating,
-        qualityRating: rating.qualityRating,
-        deliveryRating: rating.deliveryRating,
-        communicationRating: rating.communicationRating,
-        review: rating.review,
+        overallRating: rating.overallRating, // This will be mapped to 'rating' by toCreateRatingDto
+        review: rating.review || undefined, // Optional review text
+        // Note: Backend doesn't support qualityRating, deliveryRating, communicationRating
+        // These are stored in the review text if provided
       };
       
-      await submitRating(ratingData);
+      const result = await submitRating(ratingData);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
       
       if (onRatingSubmitted) {
         onRatingSubmitted(rating);
@@ -86,7 +91,7 @@ export function RateFarmer({
       setSubmitted(true);
     } catch (error) {
       console.error("Failed to submit rating:", error);
-      alert("Failed to submit rating. Please try again.");
+      alert(error instanceof Error ? error.message : "Failed to submit rating. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -178,7 +183,7 @@ export function RateFarmer({
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Quantity:</span>
-            <span className="font-medium">{quantity} kg</span>
+            <span className="font-medium">{quantity.toLocaleString()} kg</span>
           </div>
         </CardContent>
       </Card>
@@ -200,26 +205,31 @@ export function RateFarmer({
             icon={IconStar}
           />
 
-          {/* Detailed Ratings */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t">
-            <StarRating
-              value={rating.qualityRating}
-              onChange={(value) => handleStarClick("qualityRating", value)}
-              label="Product Quality"
-              icon={IconPackage}
-            />
-            <StarRating
-              value={rating.deliveryRating}
-              onChange={(value) => handleStarClick("deliveryRating", value)}
-              label="Delivery Service"
-              icon={IconTruck}
-            />
-            <StarRating
-              value={rating.communicationRating}
-              onChange={(value) => handleStarClick("communicationRating", value)}
-              label="Communication"
-              icon={IconMessageCircle}
-            />
+          {/* Detailed Ratings - Optional, for reference only */}
+          <div className="pt-4 border-t">
+            <p className="text-xs text-muted-foreground mb-4">
+              Optional detailed ratings (currently only overall rating is saved)
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <StarRating
+                value={rating.qualityRating}
+                onChange={(value) => handleStarClick("qualityRating", value)}
+                label="Product Quality"
+                icon={IconPackage}
+              />
+              <StarRating
+                value={rating.deliveryRating}
+                onChange={(value) => handleStarClick("deliveryRating", value)}
+                label="Delivery Service"
+                icon={IconTruck}
+              />
+              <StarRating
+                value={rating.communicationRating}
+                onChange={(value) => handleStarClick("communicationRating", value)}
+                label="Communication"
+                icon={IconMessageCircle}
+              />
+            </div>
           </div>
 
           {/* Written Review */}

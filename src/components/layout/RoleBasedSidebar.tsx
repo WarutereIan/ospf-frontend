@@ -23,6 +23,7 @@ import {
   IconTruckDelivery,
   IconRefresh,
   IconMessageCircle,
+  IconBuilding,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -75,11 +76,13 @@ const officerMenuItems: MenuItem[] = [
 // Staff menu items
 const staffMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/staff", icon: IconChartBar },
-  { name: "Partners", path: "/dashboard/staff/partners", icon: IconUsers },
+  //{ name: "Partners", path: "/dashboard/staff/partners", icon: IconUsers },
   { name: "Users", path: "/dashboard/staff/users", icon: IconUsers },
+  { name: "Farmer Groups", path: "/dashboard/staff/farmer-groups", icon: IconUsers },
+  { name: "Aggregation Centers", path: "/dashboard/staff/aggregation-centers", icon: IconBuilding },
   { name: "Activity Logs", path: "/dashboard/staff/activity-logs", icon: IconFileText },
-  { name: "Data Quality", path: "/dashboard/staff/data-quality", icon: IconClipboardCheck },
-  { name: "Transaction Evidence", path: "/dashboard/staff/transaction-evidence", icon: IconFileText },
+  //{ name: "Data Quality", path: "/dashboard/staff/data-quality", icon: IconClipboardCheck },
+  //{ name: "Transaction Evidence", path: "/dashboard/staff/transaction-evidence", icon: IconFileText },
   { name: "Analytics", path: "/dashboard/staff/analytics", icon: IconChartBar },
   { name: "Reports", path: "/dashboard/staff/reports", icon: IconFileText },
   
@@ -126,6 +129,7 @@ function getMenuItemsForRole(role: UserRole | null): MenuItem[] {
     case "buyer":
       return buyerMenuItems;
     case "officer":
+    case "county_officer":
       return officerMenuItems;
     case "staff":
       return staffMenuItems;

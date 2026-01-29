@@ -55,9 +55,12 @@ interface FarmerActivity {
   name: string;
   subCounty: string;
   totalSales: number;
+  quantity: number; // kg sold
   orderCount: number;
   lastActivity: string;
   status: "active" | "inactive";
+  activity?: string;
+  type?: "order" | "listing";
 }
 
 export function OfficerDashboard() {
@@ -83,9 +86,11 @@ export function OfficerDashboard() {
     advisories,
     trends,
     dashboardStats,
+    countyOfficerAnalytics,
     fetchAdvisories,
     fetchTrends,
     fetchDashboardStats,
+    fetchCountyOfficerAnalytics,
     isLoading: analyticsLoading 
   } = useAnalytics();
 
@@ -99,17 +104,35 @@ export function OfficerDashboard() {
     fetchAdvisories();
     fetchTrends({ timeRange: "year" });
     fetchDashboardStats({ timeRange: "year" });
+    fetchCountyOfficerAnalytics({ timeRange: "year" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isLoading = aggregationLoading || profileLoading || analyticsLoading;
 
-  // Calculate stats from context data
+  // Calculate stats from countyOfficerAnalytics data, fallback to raw data if not available
   const stats = useMemo<OfficerStats>(() => {
+    // Use analytics data if available
+    if (countyOfficerAnalytics?.dashboardMetrics) {
+      const metrics = countyOfficerAnalytics.dashboardMetrics;
+      return {
+        totalFarmers: metrics.totalFarmers || 0,
+        activeFarmers: metrics.activeFarmers || 0,
+        totalOrders: 0, // Not directly available in dashboardMetrics
+        totalRevenue: metrics.totalValue || 0,
+        aggregationCenters: metrics.aggregationCentersCount || 0,
+        pendingAdvisories: metrics.pendingAdvisories || 0,
+        volume: Math.round((metrics.totalProductionVolume || 0) * 1000), // Convert tons to kg
+        quality: Math.round(metrics.qualityScore || 0),
+        value: metrics.totalValue || 0,
+      };
+    }
+
+    // Fallback to raw data calculation
     const farmers = profiles.filter(p => p.role === "farmer");
     const activeFarmers = farmers.filter(f => f.status === "active").length;
     
-    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0) / 1000; // Convert to tons
+    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0); // Keep in kg
     const totalRevenue = transactions
       .filter(t => t.type === "stock_out")
       .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
@@ -131,16 +154,36 @@ export function OfficerDashboard() {
       quality,
       value: totalRevenue,
     };
-  }, [profiles, centers, transactions, inventory, advisories]);
+  }, [countyOfficerAnalytics, profiles, centers, transactions, inventory, advisories]);
 
-  // Recent farmer activity
+  // Recent farmer activity - use analytics data if available
   const recentActivity = useMemo<FarmerActivity[]>(() => {
+    // Use analytics data if available
+    if (countyOfficerAnalytics?.farmerActivity && Array.isArray(countyOfficerAnalytics.farmerActivity)) {
+      return countyOfficerAnalytics.farmerActivity
+        .slice(0, 5)
+        .map((activity: any) => ({
+          id: activity.farmerId || activity.id,
+          name: activity.farmerName || "Unknown",
+          subCounty: activity.subCounty || "Unknown",
+          totalSales: activity.value || 0,
+          quantity: activity.quantity || 0,
+          orderCount: activity.type === "order" ? 1 : 0,
+          lastActivity: activity.date || new Date().toISOString(),
+          status: "active" as const,
+          activity: activity.activity,
+          type: activity.type,
+        }));
+    }
+
+    // Fallback to raw data calculation
     const farmers = profiles.filter(p => p.role === "farmer");
     return farmers
       .slice(0, 5)
       .map(farmer => {
         const farmerOrders = transactions.filter(t => t.farmerId === farmer.id);
         const totalSales = farmerOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        const totalQuantity = farmerOrders.reduce((sum, o) => sum + (o.quantity || 0), 0);
         const lastOrder = farmerOrders.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )[0];
@@ -150,34 +193,69 @@ export function OfficerDashboard() {
           name: farmer.name,
           subCounty: (farmer as any).subCounty || "Unknown",
           totalSales,
+          quantity: totalQuantity,
           orderCount: farmerOrders.length,
           lastActivity: lastOrder?.createdAt || farmer.createdAt,
           status: farmer.status === "active" ? "active" as const : "inactive" as const,
         };
       })
       .sort((a, b) => b.totalSales - a.totalSales);
-  }, [profiles, transactions]);
+  }, [countyOfficerAnalytics, profiles, transactions]);
 
-  // Monthly production from trends
+  // Monthly production from analytics data
   const monthlyProduction = useMemo<MonthlyProduction[]>(() => {
+    // Use analytics data if available
+    if (countyOfficerAnalytics?.productionAnalytics?.monthlyProductionTrend && 
+        Array.isArray(countyOfficerAnalytics.productionAnalytics.monthlyProductionTrend)) {
+      return countyOfficerAnalytics.productionAnalytics.monthlyProductionTrend
+        .slice(-12)
+        .map((item: any) => ({
+          month: new Date(item.month || item.period || item.date).toLocaleDateString("en-US", { month: "short" }),
+          volume: Math.round((item.volume || item.productionVolume || 0) * 1000), // Convert tons to kg
+        }));
+    }
+    
+    // Fallback to trends
     if (trends.length === 0) return [];
     return trends.slice(-12).map(t => ({
       month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
-      volume: Math.round((t.volume || 0) / 1000), // Convert to tons
+      volume: Math.round(t.volume || 0), // Already in kg from trends
     }));
-  }, [trends]);
+  }, [countyOfficerAnalytics, trends]);
 
-  // Farmer growth from trends
+  // Farmer growth from analytics data
   const farmerGrowth = useMemo<FarmerGrowth[]>(() => {
+    // Use analytics data if available
+    if (countyOfficerAnalytics?.farmerGrowth && Array.isArray(countyOfficerAnalytics.farmerGrowth)) {
+      return countyOfficerAnalytics.farmerGrowth
+        .slice(-12)
+        .map((item: any) => ({
+          month: new Date(item.period || item.date).toLocaleDateString("en-US", { month: "short" }),
+          farmers: item.cumulativeCount || item.farmers || 0,
+        }));
+    }
+    
+    // Fallback to trends
     if (trends.length === 0) return [];
     return trends.slice(-12).map(t => ({
       month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
       farmers: t.farmers || 0,
     }));
-  }, [trends]);
+  }, [countyOfficerAnalytics, trends]);
 
-  // Centre performance from centers
+  // Centre performance from analytics data
   const centrePerformance = useMemo<CentrePerformance[]>(() => {
+    // Use analytics data if available
+    if (countyOfficerAnalytics?.centerPerformance?.topPerformingCenters && 
+        Array.isArray(countyOfficerAnalytics.centerPerformance.topPerformingCenters)) {
+      return countyOfficerAnalytics.centerPerformance.topPerformingCenters
+        .map((center: any) => ({
+          name: center.name || "Unknown",
+          utilization: Math.round(center.utilizationRate || 0),
+        }));
+    }
+    
+    // Fallback to raw data calculation
     return centers
       .slice(0, 5)
       .map(center => {
@@ -192,7 +270,7 @@ export function OfficerDashboard() {
         };
       })
       .sort((a, b) => b.utilization - a.utilization);
-  }, [centers, inventory]);
+  }, [countyOfficerAnalytics, centers, inventory]);
 
   return (
     <div className="space-y-6">
@@ -223,13 +301,13 @@ export function OfficerDashboard() {
         <StatCard
           label="Farmers"
           value={stats.totalFarmers.toString()}
-          description={`+${stats.totalFarmers - 1200} new`}
+          description={`${stats.activeFarmers} active`}
           icon={<IconUsers className="h-5 w-5 text-primary" />}
           isLoading={isLoading}
         />
         <StatCard
           label="Volume"
-          value={`${stats.volume} tons`}
+          value={`${stats.volume.toLocaleString()} kg`}
           description="Total production"
           trend={{ value: 15, direction: "up" }}
           icon={<IconTrendingUp className="h-5 w-5 text-primary" />}
@@ -272,7 +350,7 @@ export function OfficerDashboard() {
             },
           ]}
           title="Production Trend (12 months)"
-          description="Monthly production volume in tons"
+          description="Monthly production volume in kilograms"
           height={300}
         />
         <LineChart
@@ -321,25 +399,37 @@ export function OfficerDashboard() {
               <div className="text-sm text-muted-foreground mb-1">Total Active Farmers</div>
               <div className="text-2xl font-bold">{stats.activeFarmers}</div>
               <div className="text-xs text-muted-foreground mt-1">
-                {stats.totalFarmers > 0 ? ((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1) : 0}% of total
+                {countyOfficerAnalytics?.farmerParticipation?.participationRate !== undefined
+                  ? `${countyOfficerAnalytics.farmerParticipation.participationRate.toFixed(1)}% participation`
+                  : stats.totalFarmers > 0 
+                    ? `${((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1)}% of total`
+                    : '0% of total'}
               </div>
             </div>
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">Total Production</div>
-              <div className="text-2xl font-bold">{stats.volume} tons</div>
+              <div className="text-2xl font-bold">{stats.volume.toLocaleString()} kg</div>
               <div className="text-xs text-muted-foreground mt-1">This period</div>
             </div>
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">Avg per Farmer</div>
               <div className="text-2xl font-bold">
-                {stats.activeFarmers > 0 ? ((stats.volume * 1000) / stats.activeFarmers).toFixed(0) : 0} kg
+                {countyOfficerAnalytics?.productionAnalytics?.averageProductionPerFarmer 
+                  ? `${Math.round(countyOfficerAnalytics.productionAnalytics.averageProductionPerFarmer * 1000).toLocaleString()} kg`
+                  : stats.activeFarmers > 0 
+                    ? `${Math.round(stats.volume / stats.activeFarmers).toLocaleString()} kg`
+                    : '0 kg'}
               </div>
               <div className="text-xs text-muted-foreground mt-1">Average production</div>
             </div>
             <div className="p-4 bg-muted rounded-lg">
               <div className="text-sm text-muted-foreground mb-1">Participation Rate</div>
               <div className="text-2xl font-bold">
-                {stats.totalFarmers > 0 ? ((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1) : 0}%
+                {countyOfficerAnalytics?.farmerParticipation?.participationRate !== undefined
+                  ? `${countyOfficerAnalytics.farmerParticipation.participationRate.toFixed(1)}%`
+                  : stats.totalFarmers > 0 
+                    ? `${((stats.activeFarmers / stats.totalFarmers) * 100).toFixed(1)}%`
+                    : '0%'}
               </div>
               <div className="text-xs text-muted-foreground mt-1">Active participation</div>
             </div>
@@ -349,8 +439,12 @@ export function OfficerDashboard() {
               <strong>Farmer Participation:</strong> {stats.activeFarmers} out of {stats.totalFarmers} registered farmers are actively participating in the marketplace.
             </p>
             <p className="mt-2">
-              <strong>Production Volumes:</strong> Total production of {stats.volume} tons across all sub-counties, with an average of{" "}
-              {stats.activeFarmers > 0 ? ((stats.volume * 1000) / stats.activeFarmers).toFixed(0) : 0} kg per active farmer.
+              <strong>Production Volumes:</strong> Total production of {stats.volume.toLocaleString()} kg across all sub-counties, with an average of{" "}
+              {countyOfficerAnalytics?.productionAnalytics?.averageProductionPerFarmer 
+                ? `${Math.round(countyOfficerAnalytics.productionAnalytics.averageProductionPerFarmer * 1000).toLocaleString()}`
+                : stats.activeFarmers > 0 
+                  ? `${Math.round(stats.volume / stats.activeFarmers).toLocaleString()}`
+                  : '0'} kg per active farmer.
             </p>
           </div>
         </CardContent>
@@ -385,8 +479,13 @@ export function OfficerDashboard() {
                       <div>
                         <p className="font-medium">{farmer.name}</p>
                         <p className="text-sm text-muted-foreground">
-                          {farmer.subCounty} • {farmer.totalSales} kg sold • {farmer.orderCount} orders
+                          {farmer.subCounty} • {farmer.quantity > 0 ? `${farmer.quantity.toLocaleString()} kg` : `KES ${farmer.totalSales.toLocaleString()}`} • {farmer.orderCount} {farmer.orderCount === 1 ? 'order' : 'orders'}
                         </p>
+                        {farmer.activity && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {farmer.activity}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground mt-1">
                           Last active: {new Date(farmer.lastActivity).toLocaleDateString()}
                         </p>

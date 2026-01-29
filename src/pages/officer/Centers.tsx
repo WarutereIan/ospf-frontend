@@ -88,16 +88,25 @@ const createSatelliteCenterIcon = () => {
 };
 
 
+// Helper to validate coordinates
+function isValidCoordinate(coords: [number, number] | undefined | null): coords is [number, number] {
+  if (!coords || !Array.isArray(coords) || coords.length < 2) return false;
+  const [lat, lng] = coords;
+  return typeof lat === 'number' && typeof lng === 'number' && 
+         !isNaN(lat) && !isNaN(lng) &&
+         lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
 // Component to set map bounds
 function MapBounds({ centers }: { centers: AggregationCenter[] }) {
   const map = useMap();
   
   useEffect(() => {
-    const centersWithCoords = centers.filter(c => c.coordinates);
+    const centersWithCoords = centers.filter(c => isValidCoordinate(c.coordinates));
     if (centersWithCoords.length === 0) return;
     
     const bounds = L.latLngBounds(
-      centersWithCoords.map(c => c.coordinates! as L.LatLngExpression)
+      centersWithCoords.map(c => c.coordinates as L.LatLngExpression)
     );
     map.fitBounds(bounds, { padding: [50, 50] });
   }, [map, centers]);
@@ -218,7 +227,11 @@ export function Centers() {
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm text-muted-foreground">Capacity Used</p>
                 <p className="text-xl sm:text-2xl xl:text-2xl font-bold">
-                  {Math.round((totalStats.totalStock / totalStats.totalCapacity) * 100)}%
+                  {totalStats.totalCapacity > 0
+                    ? `${Math.round((totalStats.totalStock / totalStats.totalCapacity) * 100)}%`
+                    : totalStats.totalStock > 0
+                    ? "N/A"
+                    : "0%"}
                 </p>
               </div>
               <IconPackage className="h-6 w-6 sm:h-8 sm:w-8 xl:h-8 xl:w-8 text-purple-600 flex-shrink-0 ml-2" />
@@ -286,7 +299,18 @@ export function Centers() {
                 </TableHeader>
                 <TableBody>
                   {filteredCenters.map((center) => {
-                    const utilizationPercent = (center.currentStock / center.capacity) * 100;
+                    const currentStock = center.currentStock ?? 0;
+                    const capacity = center.capacity ?? 0;
+                    const stockInToday = center.stockInToday ?? 0;
+                    const stockOutToday = center.stockOutToday ?? 0;
+                    // Calculate utilization: if capacity is 0 but stock exists, show "N/A" indicator
+                    // Otherwise calculate percentage, capped at 100%
+                    const utilizationPercent =
+                      capacity > 0
+                        ? Math.min((currentStock / capacity) * 100, 100)
+                        : currentStock > 0
+                        ? null // null indicates "N/A" - capacity not set but stock exists
+                        : 0;
                     return (
                       <TableRow key={center.id}>
                         <TableCell className="font-medium">{center.name}</TableCell>
@@ -311,30 +335,36 @@ export function Centers() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{center.currentStock.toLocaleString()} kg</TableCell>
-                        <TableCell>{center.capacity.toLocaleString()} kg</TableCell>
+                        <TableCell>{currentStock.toLocaleString()} kg</TableCell>
+                        <TableCell>{capacity.toLocaleString()} kg</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-16 bg-muted rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full ${
-                                  utilizationPercent > 80
-                                    ? "bg-red-500"
-                                    : utilizationPercent > 50
-                                    ? "bg-yellow-500"
-                                    : "bg-green-500"
-                                }`}
-                                style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm whitespace-nowrap">{utilizationPercent.toFixed(0)}%</span>
+                            {utilizationPercent !== null ? (
+                              <>
+                                <div className="w-16 bg-muted rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full ${
+                                      utilizationPercent > 80
+                                        ? "bg-red-500"
+                                        : utilizationPercent > 50
+                                        ? "bg-yellow-500"
+                                        : "bg-green-500"
+                                    }`}
+                                    style={{ width: `${utilizationPercent}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm whitespace-nowrap">{utilizationPercent.toFixed(0)}%</span>
+                              </>
+                            ) : (
+                              <span className="text-sm text-muted-foreground whitespace-nowrap">N/A</span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="text-green-600 whitespace-nowrap">
-                          +{center.stockInToday.toLocaleString()} kg
+                          +{stockInToday.toLocaleString()} kg
                         </TableCell>
                         <TableCell className="text-orange-600 whitespace-nowrap">
-                          -{center.stockOutToday.toLocaleString()} kg
+                          -{stockOutToday.toLocaleString()} kg
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -394,9 +424,18 @@ export function Centers() {
                 <MapBounds centers={filteredCenters} />
                 
                 {filteredCenters
-                  .filter(center => center.coordinates)
+                  .filter(center => isValidCoordinate(center.coordinates))
                   .map((center) => {
-                    const utilizationPercent = (center.currentStock / center.capacity) * 100;
+                    const currentStock = center.currentStock ?? 0;
+                    const capacity = center.capacity ?? 0;
+                    // Calculate utilization: if capacity is 0 but stock exists, show "N/A" indicator
+                    // Otherwise calculate percentage, capped at 100%
+                    const utilizationPercent =
+                      capacity > 0
+                        ? Math.min((currentStock / capacity) * 100, 100)
+                        : currentStock > 0
+                        ? null // null indicates "N/A" - capacity not set but stock exists
+                        : 0;
                     return (
                       <Marker
                         key={center.id}
@@ -448,27 +487,33 @@ export function Centers() {
                                   <div className="flex justify-between items-center">
                                     <span className="text-xs">Current Stock:</span>
                                     <span className="font-medium text-xs">
-                                      {center.currentStock.toLocaleString()} / {center.capacity.toLocaleString()} kg
+                                      {(center.currentStock ?? 0).toLocaleString()} / {(center.capacity ?? 0).toLocaleString()} kg
                                     </span>
                                   </div>
-                                  <div className="w-full bg-muted rounded-full h-1.5">
-                                    <div
-                                      className={`h-1.5 rounded-full ${
-                                        utilizationPercent > 80
-                                          ? "bg-red-500"
-                                          : utilizationPercent > 50
-                                          ? "bg-yellow-500"
-                                          : "bg-green-500"
-                                      }`}
-                                      style={{ width: `${Math.min(utilizationPercent, 100)}%` }}
-                                    />
-                                  </div>
+                                  {utilizationPercent !== null ? (
+                                    <div className="w-full bg-muted rounded-full h-1.5">
+                                      <div
+                                        className={`h-1.5 rounded-full ${
+                                          utilizationPercent > 80
+                                            ? "bg-red-500"
+                                            : utilizationPercent > 50
+                                            ? "bg-yellow-500"
+                                            : "bg-green-500"
+                                        }`}
+                                        style={{ width: `${utilizationPercent}%` }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-full bg-muted rounded-full h-1.5 flex items-center justify-center">
+                                      <span className="text-xs text-muted-foreground">N/A</span>
+                                    </div>
+                                  )}
                                   <div className="flex justify-between items-center text-xs">
                                     <span className="text-green-600">
-                                      +{center.stockInToday.toLocaleString()} kg in
+                                      +{(center.stockInToday ?? 0).toLocaleString()} kg in
                                     </span>
                                     <span className="text-orange-600">
-                                      -{center.stockOutToday.toLocaleString()} kg out
+                                      -{(center.stockOutToday ?? 0).toLocaleString()} kg out
                                     </span>
                                   </div>
                                 </div>

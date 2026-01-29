@@ -265,7 +265,12 @@ async function apiRequest<T>(
   // Check if session is invalidated - don't make request if so
   // EXCEPT for auth endpoints which need to verify/refresh the session
   const isAuthEndpoint = endpoint.startsWith('/auth/');
-  if (sessionInvalidated && !isAuthEndpoint) {
+  // Also allow certain public endpoints even when session is invalidated
+  // (e.g. push notifications need to fetch the VAPID public key on login screen).
+  const isPublicAllowedWhenInvalidated =
+    endpoint === '/notifications/push/public-key';
+
+  if (sessionInvalidated && !isAuthEndpoint && !isPublicAllowedWhenInvalidated) {
     const error: ApiError = {
       message: 'Session expired',
       statusCode: 401,
@@ -292,13 +297,19 @@ async function apiRequest<T>(
     throw error;
   }
 
+  const isFormData = fetchOptions.body instanceof FormData;
   const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...fetchOptions.headers,
   };
+  const body = fetchOptions.body === undefined
+    ? undefined
+    : (isFormData ? fetchOptions.body : JSON.stringify(fetchOptions.body));
 
   let response = await fetch(url, {
     ...fetchOptions,
+    method: fetchOptions.method ?? 'GET',
+    body,
     headers,
     credentials: 'include', // Send HttpOnly cookies with request
   });
@@ -327,6 +338,8 @@ async function apiRequest<T>(
       // Retry the original request with new cookies
       response = await fetch(url, {
         ...fetchOptions,
+        method: fetchOptions.method ?? 'GET',
+        body,
         headers,
         credentials: 'include',
       });
@@ -502,11 +515,29 @@ export async function apiPost<T>(
 ): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'POST',
-    body: body ? JSON.stringify(body) : undefined,
+    body: body,
     apiOptions: options,
   });
 
   return response.data;
+}
+
+/**
+ * POST request with FormData (e.g. file upload). Do not set Content-Type; browser sets multipart boundary.
+ * Returns the full response body (backend may not wrap in { data }).
+ */
+export async function apiPostFormData<T>(
+  endpoint: string,
+  formData: FormData,
+  options?: ApiRequestOptions
+): Promise<T> {
+  const response = await apiRequest<T>(endpoint, {
+    method: 'POST',
+    body: formData,
+    apiOptions: options,
+  });
+
+  return (response as unknown) as T;
 }
 
 /**
@@ -519,7 +550,7 @@ export async function apiPut<T>(
 ): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'PUT',
-    body: body ? JSON.stringify(body) : undefined,
+    body: body,
     apiOptions: options,
   });
 
@@ -536,7 +567,7 @@ export async function apiPatch<T>(
 ): Promise<T> {
   const response = await apiRequest<T>(endpoint, {
     method: 'PATCH',
-    body: body ? JSON.stringify(body) : undefined,
+    body: body,
     apiOptions: options,
   });
 

@@ -146,9 +146,6 @@ export function PaymentDialog({
     }, 2000);
   };
 
-  const platformFee = amount * 0.02; // 2% platform fee
-  const totalAmount = amount + platformFee;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -166,13 +163,9 @@ export function PaymentDialog({
               <span className="text-sm text-muted-foreground">Order Amount</span>
               <span className="font-semibold">KES {amount.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-muted-foreground">Platform Fee (2%)</span>
-              <span className="font-semibold">KES {platformFee.toLocaleString()}</span>
-            </div>
             <div className="flex justify-between items-center pt-2 border-t">
               <span className="font-semibold">Total Amount</span>
-              <span className="text-xl font-bold">KES {totalAmount.toLocaleString()}</span>
+              <span className="text-xl font-bold">KES {amount.toLocaleString()}</span>
             </div>
           </div>
 

@@ -1,0 +1,6 @@
+name,phone,password,email,farmer_group_code,county,subcounty,ward
+John Kamau,0712345678,SecurePass123,john.kamau@example.com,,Machakos,Kangundo,Kangundo Central
+Mary Wanjiku,0723456789,MyPass4567,mary.w@example.com,,Machakos,Kathiani,Ilima
+Peter Mwangi,0734567890,Farmer2024!,peter.mwangi@test.com,,Machakos,Masinga,Masinga Central
+Jane Njeri,0745678901,Welcome99,jane.njeri@example.com,,Machakos,Yatta,Kithimani
+James Ochieng,0756789012,TestPass12,james.o@example.com,,Machakos,Kangundo,Tala

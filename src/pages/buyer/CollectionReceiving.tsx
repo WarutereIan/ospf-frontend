@@ -6,11 +6,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function CollectionReceiving() {
-  const { orders, fetchOrders } = useMarketplace();
+  const { orders, fetchOrders, markOrderAsCollected } = useMarketplace();
   const { centers, fetchCenters } = useAggregation();
   const { user } = useAuth();
-
-  const { markOrderAsCollected } = useMarketplace();
 
   // Fetch buyer's orders that are ready for collection
   useEffect(() => {

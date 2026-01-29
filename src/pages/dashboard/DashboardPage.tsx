@@ -11,6 +11,7 @@ export function DashboardPage() {
     case "buyer":
       return <Navigate to="/dashboard/buyer" replace />;
     case "officer":
+    case "county_officer":
       return <Navigate to="/dashboard/county-officer" replace />;
     case "staff":
       return <Navigate to="/dashboard/staff" replace />;

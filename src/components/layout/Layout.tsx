@@ -4,6 +4,8 @@ import { RoleBasedSidebar } from "./RoleBasedSidebar";
 import { ProSidebarProvider } from "react-pro-sidebar";
 import { useProSidebar } from "react-pro-sidebar";
 import { useAuth } from "@/contexts/AuthContext";
+import { ProfileProvider } from "@/contexts/ProfileContext";
+import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import { getAllowedRolesForPath } from "@/lib/route-config";
 import { useEffect, useState } from "react";
@@ -64,14 +66,18 @@ export function Layout() {
   }
 
   return (
-    <ProSidebarProvider>
-      <SidebarProvider>
-        <div className="min-h-screen bg-background flex">
-          <RoleBasedSidebar />
-          <MainContent />
-        </div>
-      </SidebarProvider>
-    </ProSidebarProvider>
+    <ProfileProvider>
+      <AnalyticsProvider>
+        <ProSidebarProvider>
+          <SidebarProvider>
+            <div className="min-h-screen bg-background flex">
+              <RoleBasedSidebar />
+              <MainContent />
+            </div>
+          </SidebarProvider>
+        </ProSidebarProvider>
+      </AnalyticsProvider>
+    </ProfileProvider>
   );
 }
 

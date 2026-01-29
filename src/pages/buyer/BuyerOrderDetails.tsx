@@ -445,7 +445,7 @@ export function BuyerOrderDetails() {
           farmerName={order.farmerName}
           orderId={order.id}
           variety={order.variety}
-          quantity={order.quantity}
+          quantity={order.totalQuantity || order.quantity || 0}
           onRatingSubmitted={() => setRatingDialogOpen(false)}
         />
       )}

@@ -28,7 +28,6 @@ export function Settings() {
     delayThreshold: 24, // hours
 
     // System Settings
-    platformFee: 2.0,
     autoReleasePayment: true,
     autoReleaseHours: 24,
     smsNotifications: true,
@@ -200,27 +199,6 @@ export function Settings() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label>Platform Transaction Fee</Label>
-                <p className="text-sm text-muted-foreground">
-                  Percentage fee deducted from each transaction
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <Input
-                  type="number"
-                  step="0.1"
-                  className="w-24"
-                  value={getSettingValue("platformFee", 2.0) as number}
-                  onChange={(e) =>
-                    handleSettingChange("platformFee", parseFloat(e.target.value))
-                  }
-                />
-                <span className="text-sm">%</span>
-              </div>
-            </div>
-
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Auto-Release Payment</Label>

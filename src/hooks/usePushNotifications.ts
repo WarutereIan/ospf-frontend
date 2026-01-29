@@ -155,7 +155,10 @@ export function usePushNotifications(): UsePushNotificationsReturn {
       throw new Error('Service worker not registered');
     }
 
-    if (permission !== 'granted') {
+    // Don't rely on React state here: permission state can lag behind
+    // the user's response to Notification.requestPermission().
+    const currentPermission = getNotificationPermission();
+    if (currentPermission !== 'granted') {
       throw new Error('Notification permission not granted');
     }
 

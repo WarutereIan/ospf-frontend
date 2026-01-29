@@ -87,7 +87,7 @@ interface AnalyticsContextType {
   fetchTrends: (filters?: AnalyticsFilters) => Promise<void>;
   fetchPerformanceMetrics: (filters?: AnalyticsFilters) => Promise<void>;
   fetchReportTemplates: () => Promise<void>;
-  generateReportAction: (templateId: string, parameters: Record<string, unknown>) => Promise<void>;
+  generateReportAction: (templateId: string, parameters: Record<string, unknown>) => Promise<any>;
   fetchReports: () => Promise<void>;
   fetchReportById: (id: string) => Promise<void>;
   downloadReportAction: (id: string) => Promise<string>;
@@ -217,14 +217,16 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const generateReportAction = useCallback(async (templateId: string, parameters: Record<string, unknown>) => {
+  const generateReportAction = useCallback(async (templateId: string, parameters: Record<string, unknown>): Promise<any> => {
     setIsLoading(true);
     setError(null);
     try {
-      await generateReport(templateId, parameters);
+      const result = await generateReport(templateId, parameters);
       await fetchReports();
+      return result?.data ?? result;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate report");
+      throw err;
     } finally {
       setIsLoading(false);
     }

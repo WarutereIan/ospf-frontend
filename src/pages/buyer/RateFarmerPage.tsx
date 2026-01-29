@@ -28,7 +28,7 @@ export function RateFarmerPage() {
       farmerName={selectedOrder.farmerName}
       farmerId={selectedOrder.farmerId}
       variety={selectedOrder.variety}
-      quantity={selectedOrder.quantity}
+      quantity={selectedOrder.totalQuantity || selectedOrder.quantity || 0}
     />
   );
 }

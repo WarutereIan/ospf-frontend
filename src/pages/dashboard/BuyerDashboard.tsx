@@ -14,6 +14,7 @@ import {
   IconBell,
   IconCalendar,
   IconUser,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { LineChart, PieChart } from "@/components/visualizations";
 import { Progress } from "@/components/ui/progress";
@@ -24,8 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTransport } from "@/contexts/TransportContext";
 
 interface ProcurementStats {
-  volumeSourced: number; // in tons
-  volumeTarget: number; // quarterly target in tons
+  volumeSourced: number; // in kg
   volumeTrend: number; // percentage change
   avgPricePerKg: number; // KES
   priceTrend: number; // percentage change
@@ -50,7 +50,7 @@ interface SourcingMixData {
 
 interface SourcingRegion {
   name: string;
-  volume: number; // in tons
+  volume: number; // in kg
   percentage: number;
 }
 
@@ -85,7 +85,8 @@ export function BuyerDashboard() {
     fetchTrends,
     fetchDashboardStats,
     fetchBuyerAnalytics,
-    isLoading: analyticsLoading 
+    isLoading: analyticsLoading,
+    error: analyticsError
   } = useAnalytics();
 
   const {
@@ -118,91 +119,118 @@ export function BuyerDashboard() {
     return orders.filter(order => order.buyerId === user?.id);
   }, [orders, user?.id]);
 
-  // Calculate stats from context data
+  // Calculate stats from analytics data (preferred) or context data (fallback)
   const stats = useMemo<ProcurementStats>(() => {
-    const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
-    const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || o.quantity || 0), 0) / 1000; // Convert to tons
-    const totalValue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const avgPricePerKg = totalVolume > 0 && totalValue > 0 ? totalValue / (totalVolume * 1000) : 0;
-    
-    // Get market average from trends or dashboard stats
-    const marketAvgPrice = dashboardStats?.averagePrice || trends?.[trends.length - 1]?.averagePrice || 80;
-    
-    // Calculate quality acceptance (percentage of Grade A items across all orders)
-    let totalGradeAItems = 0;
-    let totalItems = 0;
-    completedOrders.forEach(order => {
-      if (order.items && order.items.length > 0) {
-        order.items.forEach(item => {
-          totalItems += item.quantity || 0;
-          if (item.grade === "A") {
-            totalGradeAItems += item.quantity || 0;
+    // Use buyerAnalytics data when available, fallback to calculated values
+    // Note: buyerAnalytics.volumeSourced is in tons, convert to kg
+    const volumeSourced = buyerAnalytics?.volumeSourced !== undefined
+      ? buyerAnalytics.volumeSourced * 1000 // Convert tons to kg
+      : (() => {
+          const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+          const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || o.quantity || 0), 0);
+          return totalVolume;
+        })();
+
+    const volumeTrend = buyerAnalytics?.volumeGrowthRate !== undefined
+      ? buyerAnalytics.volumeGrowthRate
+      : (() => {
+          if (trends.length > 1) {
+            const currentVolume = trends[trends.length - 1]?.volume || 0;
+            const previousVolume = trends[0]?.volume || 0;
+            if (previousVolume > 0) {
+              return ((currentVolume - previousVolume) / previousVolume) * 100;
+            } else if (currentVolume > 0) {
+              return Math.min(100, (currentVolume / 0.1) * 100);
+            }
           }
-        });
-      } else if (order.qualityGrade === "A") {
-        // Single item order with Grade A
-        totalItems += order.quantity || order.totalQuantity || 0;
-        totalGradeAItems += order.quantity || order.totalQuantity || 0;
-      } else {
-        // Single item order without grade A
-        totalItems += order.quantity || order.totalQuantity || 0;
-      }
-    });
-    const qualityAcceptance = totalItems > 0 ? (totalGradeAItems / totalItems) * 100 : 0;
-    
-    // Get unique suppliers from completed orders
-    const uniqueSuppliers = new Set(completedOrders.map(o => o.sellerId || o.farmerId).filter(Boolean));
-    
-    // Deliveries this week (from transport requests)
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    const deliveriesThisWeekRequests = requests.filter(
-      req => req.type === "order_delivery" && 
-      req.requesterId === user?.id &&
-      new Date(req.createdAt) >= weekAgo &&
-      (req.status === "in_transit" || req.status === "delivered" || req.status === "accepted" || req.status === "completed")
-    );
-    const deliveriesThisWeek = deliveriesThisWeekRequests.length;
+          return 0;
+        })();
 
-    // Calculate trends with proper zero handling
-    let volumeTrend = 0;
-    if (trends.length > 1) {
-      const currentVolume = trends[trends.length - 1]?.volume || 0;
-      const previousVolume = trends[0]?.volume || 0;
-      if (previousVolume > 0) {
-        volumeTrend = ((currentVolume - previousVolume) / previousVolume) * 100;
-      } else if (currentVolume > 0) {
-        // If previous was 0 and current > 0, show positive trend but cap at reasonable value
-        volumeTrend = Math.min(100, (currentVolume / 0.1) * 100); // Cap at 100% if starting from near-zero
-      }
-    }
+    const avgPricePerKg = buyerAnalytics?.averagePrice !== undefined
+      ? buyerAnalytics.averagePrice
+      : (() => {
+          const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+          const totalVolume = completedOrders.reduce((sum, o) => sum + (o.totalQuantity || o.quantity || 0), 0);
+          const totalValue = completedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+          return totalVolume > 0 && totalValue > 0 ? Math.round(totalValue / totalVolume) : 0;
+        })();
 
-    let priceTrend = 0;
-    if (trends.length > 1) {
-      const currentPrice = trends[trends.length - 1]?.averagePrice || 0;
-      const previousPrice = trends[0]?.averagePrice || 0;
-      if (previousPrice > 0) {
-        priceTrend = ((currentPrice - previousPrice) / previousPrice) * 100;
-      } else if (currentPrice > 0 && previousPrice === 0) {
-        // Price went from 0 to something - show as positive
-        priceTrend = 100;
-      }
-    }
+    const marketAvgPrice = buyerAnalytics?.marketAveragePrice !== undefined
+      ? buyerAnalytics.marketAveragePrice
+      : dashboardStats?.averagePrice || trends?.[trends.length - 1]?.averagePrice || 80;
+
+    const priceTrend = buyerAnalytics?.priceTrendPercentChange !== undefined
+      ? buyerAnalytics.priceTrendPercentChange
+      : (() => {
+          if (trends.length > 1) {
+            const currentPrice = trends[trends.length - 1]?.averagePrice || 0;
+            const previousPrice = trends[0]?.averagePrice || 0;
+            if (previousPrice > 0) {
+              return ((currentPrice - previousPrice) / previousPrice) * 100;
+            } else if (currentPrice > 0 && previousPrice === 0) {
+              return 100;
+            }
+          }
+          return 0;
+        })();
+
+    const qualityAcceptance = buyerAnalytics?.qualityAcceptanceRate !== undefined
+      ? buyerAnalytics.qualityAcceptanceRate
+      : (() => {
+          const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+          let totalGradeAItems = 0;
+          let totalItems = 0;
+          completedOrders.forEach(order => {
+            if (order.items && order.items.length > 0) {
+              order.items.forEach(item => {
+                totalItems += item.quantity || 0;
+                if (item.grade === "A") {
+                  totalGradeAItems += item.quantity || 0;
+                }
+              });
+            } else if (order.qualityGrade === "A") {
+              totalItems += order.quantity || order.totalQuantity || 0;
+              totalGradeAItems += order.quantity || order.totalQuantity || 0;
+            } else {
+              totalItems += order.quantity || order.totalQuantity || 0;
+            }
+          });
+          return totalItems > 0 ? (totalGradeAItems / totalItems) * 100 : 0;
+        })();
+
+    const activeSuppliers = buyerAnalytics?.activeSuppliers !== undefined
+      ? buyerAnalytics.activeSuppliers
+      : (() => {
+          const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+          return new Set(completedOrders.map(o => o.sellerId || o.farmerId).filter(Boolean)).size;
+        })();
+
+    const deliveriesThisWeek = buyerAnalytics?.deliveriesThisWeek !== undefined
+      ? buyerAnalytics.deliveriesThisWeek
+      : (() => {
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          return requests.filter(
+            req => req.type === "order_delivery" && 
+            req.requesterId === user?.id &&
+            new Date(req.createdAt) >= weekAgo &&
+            (req.status === "in_transit" || req.status === "delivered" || req.status === "accepted" || req.status === "completed")
+          ).length;
+        })();
 
     return {
-      volumeSourced: Math.round(totalVolume * 10) / 10,
-      volumeTarget: 37.5, // TODO: Get from settings or config
+      volumeSourced: Math.round(volumeSourced),
       volumeTrend: Math.round(volumeTrend * 10) / 10,
       avgPricePerKg: Math.round(avgPricePerKg),
       priceTrend: Math.round(priceTrend * 10) / 10,
       marketAvgPrice: Math.round(marketAvgPrice),
       qualityAcceptance: Math.round(qualityAcceptance * 10) / 10,
-      activeSuppliers: uniqueSuppliers.size,
+      activeSuppliers,
       deliveriesThisWeek,
     };
-  }, [buyerOrders, trends, dashboardStats, requests, user?.id]);
+  }, [buyerOrders, trends, dashboardStats, requests, user?.id, buyerAnalytics]);
 
-  // Price trend data from trends
+  // Price trend data from trends (use buyerAnalytics for your price when available)
   const priceTrendData = useMemo<PriceTrendData[]>(() => {
     if (trends.length === 0) {
       // If no trends, show current stats for the current month
@@ -215,23 +243,60 @@ export function BuyerDashboard() {
     }
     return trends.slice(-5).map(t => ({
       month: new Date(t.date).toLocaleDateString("en-US", { month: "short" }),
-      yourPrice: t.averagePrice && t.averagePrice > 0 ? t.averagePrice : (stats.avgPricePerKg > 0 ? stats.avgPricePerKg : null),
-      marketAvg: dashboardStats?.averagePrice || stats.marketAvgPrice,
+      // Use buyerAnalytics averagePrice for current period, trends for historical
+      yourPrice: t.averagePrice && t.averagePrice > 0 
+        ? t.averagePrice 
+        : (buyerAnalytics?.averagePrice && trends.indexOf(t) === trends.length - 1 
+          ? buyerAnalytics.averagePrice 
+          : (stats.avgPricePerKg > 0 ? stats.avgPricePerKg : null)),
+      marketAvg: buyerAnalytics?.marketAveragePrice || dashboardStats?.averagePrice || stats.marketAvgPrice,
     }));
-  }, [trends, dashboardStats, stats]);
+  }, [trends, dashboardStats, stats, buyerAnalytics]);
 
-  // Sourcing mix from orders
+  // Sourcing mix from orders - handle both items array and order-level variety/grade
+  // Use completed/delivered orders to match volume sourced calculation
   const sourcingMix = useMemo<SourcingMixData[]>(() => {
     const mixMap = new Map<string, number>();
-    buyerOrders.forEach(order => {
-      order.items?.forEach(item => {
-        const category = `${item.variety} (Grade ${item.grade})`;
-        const current = mixMap.get(category) || 0;
-        mixMap.set(category, current + (item.quantity || 0));
-      });
+    
+    // Filter to completed/delivered orders (same as volume sourced)
+    const completedOrders = buyerOrders.filter(o => o.status === "completed" || o.status === "delivered");
+    
+    completedOrders.forEach(order => {
+      // Handle orders with items array
+      if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+        order.items.forEach(item => {
+          if (item.variety && item.grade && (item.quantity || 0) > 0) {
+            const category = `${item.variety} (Grade ${item.grade})`;
+            const current = mixMap.get(category) || 0;
+            mixMap.set(category, current + (item.quantity || 0));
+          }
+        });
+      } else {
+        // Handle orders without items array - use order-level variety and grade
+        const orderQuantity = order.totalQuantity || order.quantity || 0;
+        const variety = order.variety;
+        const qualityGrade = order.qualityGrade;
+        
+        // Only add if we have all required fields and quantity > 0
+        if (orderQuantity > 0 && variety && qualityGrade) {
+          const category = `${variety} (Grade ${qualityGrade})`;
+          const current = mixMap.get(category) || 0;
+          mixMap.set(category, current + orderQuantity);
+        } else if (orderQuantity > 0 && variety) {
+          // Fallback: if we have variety but no grade, use "Unknown Grade"
+          const category = `${variety} (Grade Unknown)`;
+          const current = mixMap.get(category) || 0;
+          mixMap.set(category, current + orderQuantity);
+        } else if (orderQuantity > 0) {
+          // Last resort: if we only have quantity, use "Unknown Variety"
+          const category = `Unknown Variety (Grade Unknown)`;
+          const current = mixMap.get(category) || 0;
+          mixMap.set(category, current + orderQuantity);
+        }
+      }
     });
     
-    const total = Array.from(mixMap.values()).reduce((sum, v) => sum + v, 0) / 1000; // Convert to tons
+    const total = Array.from(mixMap.values()).reduce((sum, v) => sum + v, 0); // Keep in kg
     if (total === 0) return [];
     
     const colors = ["#FF8C00", "#475569", "#94A3B8", "#F59E0B", "#10B981"];
@@ -240,15 +305,29 @@ export function BuyerDashboard() {
     return Array.from(mixMap.entries())
       .map(([name, value]) => ({
         name,
-        value: value / 1000, // Convert to tons
-        percentage: Math.round((value / 1000 / total) * 100),
+        value: value, // Keep in kg
+        percentage: Math.round((value / total) * 100),
         color: colors[colorIndex++ % colors.length],
       }))
       .sort((a, b) => b.value - a.value);
   }, [buyerOrders]);
 
-  // Top regions from orders
+  // Top regions from buyerAnalytics (preferred) or orders (fallback)
   const topRegions = useMemo<SourcingRegion[]>(() => {
+    // Use buyerAnalytics sourcingByRegion if available
+    // Note: backend returns totalQuantity in kg, but we need to check if it's actually in tons
+    if (buyerAnalytics?.sourcingByRegion && buyerAnalytics.sourcingByRegion.length > 0) {
+      return buyerAnalytics.sourcingByRegion
+        .slice(0, 4)
+        .map(region => ({
+          name: region.region,
+          // Backend returns totalQuantity in kg, so use directly
+          volume: Math.round(region.totalQuantity),
+          percentage: Math.round(region.percentageOfTotal),
+        }));
+    }
+    
+    // Fallback to calculated from orders
     const regionMap = new Map<string, number>();
     buyerOrders.forEach(order => {
       const region = order.origin || order.location || "Unknown";
@@ -256,18 +335,18 @@ export function BuyerDashboard() {
       regionMap.set(region, current + (order.totalQuantity || 0));
     });
     
-    const total = Array.from(regionMap.values()).reduce((sum, v) => sum + v, 0) / 1000; // Convert to tons
+    const total = Array.from(regionMap.values()).reduce((sum, v) => sum + v, 0); // Keep in kg
     if (total === 0) return [];
     
     return Array.from(regionMap.entries())
       .map(([name, volume]) => ({
         name,
-        volume: Math.round((volume / 1000) * 10) / 10,
-        percentage: Math.round((volume / 1000 / total) * 100),
+        volume: Math.round(volume),
+        percentage: Math.round((volume / total) * 100),
       }))
       .sort((a, b) => b.volume - a.volume)
       .slice(0, 4);
-  }, [buyerOrders]);
+  }, [buyerOrders, buyerAnalytics]);
 
   // Recent deliveries from transport requests (ORDER_DELIVERY type)
   const recentDeliveries = useMemo<RecentDelivery[]>(() => {
@@ -367,7 +446,6 @@ export function BuyerDashboard() {
     }
   };
 
-  const volumeProgress = stats.volumeTarget > 0 ? (stats.volumeSourced / stats.volumeTarget) * 100 : 0;
   const priceDifference = stats.marketAvgPrice - stats.avgPricePerKg;
 
   return (
@@ -379,6 +457,25 @@ export function BuyerDashboard() {
           <p className="text-stone-500 mt-1">Track your OFSP sourcing volume, quality, and market prices.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-stone-200 hover:border-orange-500 hover:text-orange-500"
+            onClick={() => {
+              if (user?.id) {
+                fetchOrders({ buyerId: user.id });
+                fetchPaymentHistory({ userId: user.id });
+                fetchTrends({ timeRange: "quarter" });
+                fetchDashboardStats({ timeRange: "quarter" });
+                fetchBuyerAnalytics({ timeRange: "quarter" });
+                fetchRequests();
+              }
+            }}
+            disabled={isLoading}
+          >
+            <IconRefresh className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -398,6 +495,15 @@ export function BuyerDashboard() {
         </div>
       </div>
 
+      {/* Error State */}
+      {analyticsError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <p className="text-sm text-red-800">{analyticsError}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Volume Sourced */}
@@ -406,7 +512,7 @@ export function BuyerDashboard() {
             <div className="space-y-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Volume Sourced</div>
               <div className="text-2xl font-bold text-stone-900">
-                {stats.volumeSourced > 0 ? `${stats.volumeSourced} tons` : '0 tons'}
+                {stats.volumeSourced > 0 ? `${stats.volumeSourced.toLocaleString()} kg` : '0 kg'}
               </div>
               {stats.volumeSourced > 0 && (
                 <div className="flex items-center gap-2">
@@ -422,12 +528,6 @@ export function BuyerDashboard() {
                   )}
                 </div>
               )}
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-stone-500">
-                  <span>{Math.round(volumeProgress)}% of quarterly target achieved</span>
-                </div>
-                <Progress value={volumeProgress} className="h-2" />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -562,39 +662,57 @@ export function BuyerDashboard() {
             <CardTitle className="text-stone-900">Volume distribution by product type</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="relative flex items-center justify-center h-[280px]">
-              <PieChart
-                data={sourcingMix.map((item) => ({ name: item.name, value: item.value }))}
-                height={280}
-                innerRadius={60}
-                showLegend={false}
-                showLabels={false}
-                colors={sourcingMix.map((item) => item.color)}
-                formatter={(value) => `${value.toFixed(1)}t`}
-      />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-stone-900">
-                    {sourcingMix.reduce((sum, item) => sum + item.value, 0).toFixed(0)}t
-                  </div>
-                  <div className="text-xs text-stone-500">Total</div>
-                </div>
+            {isLoading ? (
+              <div className="h-[280px] flex items-center justify-center">
+                <div className="text-stone-500">Loading...</div>
               </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              {sourcingMix.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span className="text-stone-700">{item.name}</span>
+            ) : sourcingMix.length === 0 ? (
+              <div className="h-[280px] flex flex-col items-center justify-center space-y-2">
+                <div className="text-2xl font-bold text-stone-900">0 kg</div>
+                <div className="text-xs text-stone-500">No product type data available</div>
+                {buyerOrders.length > 0 && (
+                  <div className="text-xs text-stone-400 mt-2">
+                    {buyerOrders.length} order{buyerOrders.length !== 1 ? 's' : ''} found, but variety/grade information may be missing
                   </div>
-                  <span className="font-semibold text-stone-900">{item.percentage}%</span>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="relative flex items-center justify-center h-[280px]">
+                  <PieChart
+                    data={sourcingMix.map((item) => ({ name: item.name, value: item.value }))}
+                    height={280}
+                    innerRadius={60}
+                    showLegend={false}
+                    showLabels={false}
+                    colors={sourcingMix.map((item) => item.color)}
+                    formatter={(value) => `${value.toLocaleString()} kg`}
+          />
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-stone-900">
+                        {sourcingMix.reduce((sum, item) => sum + item.value, 0).toLocaleString()} kg
+                      </div>
+                      <div className="text-xs text-stone-500">Total</div>
+                    </div>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="mt-4 space-y-2">
+                  {sourcingMix.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-stone-700">{item.name}</span>
+                      </div>
+                      <span className="font-semibold text-stone-900">{item.percentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -612,7 +730,7 @@ export function BuyerDashboard() {
                 <div key={region.name} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium text-stone-900">{region.name}</span>
-                    <span className="text-stone-600">{region.volume} tons</span>
+                    <span className="text-stone-600">{region.volume.toLocaleString()} kg</span>
                   </div>
                   <Progress value={region.percentage} className="h-2" />
                 </div>
@@ -656,7 +774,7 @@ export function BuyerDashboard() {
                       <TableCell className="text-stone-700">{delivery.supplier}</TableCell>
                       <TableCell className="text-stone-600">{delivery.origin}</TableCell>
                       <TableCell className="text-stone-700">
-                        {delivery.weight > 0 ? `${(delivery.weight / 1000).toFixed(1)}t` : 'N/A'}
+                        {delivery.weight > 0 ? `${delivery.weight.toLocaleString()} kg` : 'N/A'}
                       </TableCell>
                       <TableCell className="text-stone-700">{delivery.grading}</TableCell>
                           <TableCell>

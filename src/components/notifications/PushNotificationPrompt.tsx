@@ -11,10 +11,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { IconBell, IconX } from '@tabler/icons-react';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 const PROMPT_DISMISSED_KEY = 'push_notification_prompt_dismissed';
 
 export function PushNotificationPrompt() {
+  const { user } = useAuth();
   const {
     isSupported,
     permission,
@@ -71,11 +73,13 @@ export function PushNotificationPrompt() {
   };
 
   // Don't show if:
+  // - User not authenticated (subscription requires user association)
   // - Not supported
   // - Already dismissed
   // - Already subscribed
   // - Permission denied
   if (
+    !user ||
     !isSupported ||
     isDismissed ||
     isSubscribed ||

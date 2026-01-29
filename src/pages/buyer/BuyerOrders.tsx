@@ -403,7 +403,7 @@ export function BuyerOrders() {
               farmerName={selectedOrder.farmerName}
               farmerId={selectedOrder.farmerId}
               variety={selectedOrder.variety}
-              quantity={selectedOrder.quantity}
+              quantity={selectedOrder.totalQuantity || selectedOrder.quantity || 0}
               onRatingSubmitted={() => {
                 setRatingDialogOpen(false);
                 // Refresh orders to get updated canRate status

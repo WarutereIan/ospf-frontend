@@ -63,6 +63,9 @@ export interface AggregationCenter {
   capacity: number; // kg
   activeFarmers: number;
   status: CenterStatus;
+  // Backend has a separate isActive flag on aggregation_centers;
+  // we expose it here so UI can filter active centers explicitly.
+  isActive?: boolean;
   stockInToday: number; // kg
   stockOutToday: number; // kg
   alerts: string[];

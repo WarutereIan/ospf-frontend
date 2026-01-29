@@ -34,12 +34,12 @@ import type {
   StaffStats,
 } from "@/types/staff";
 import type { ApiResponse } from "@/types/inputCustomer";
+import { apiGet } from "@/lib/api-client";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 const MOCK_DELAY = 1000;
 
 const MOCK_PARTNERS: Partner[] = [];
-const MOCK_ACTIVITY_LOGS: ActivityLog[] = [];
 const MOCK_DATA_QUALITY: DataQualityIssue[] = [];
 const MOCK_EVIDENCE: TransactionEvidence[] = [];
 
@@ -68,8 +68,31 @@ export async function deletePartner(id: string): Promise<void> {
 }
 
 export async function getActivityLogs(filters?: ActivityLogFilters): Promise<ActivityLog[]> {
-  await new Promise(resolve => setTimeout(resolve, MOCK_DELAY));
-  return MOCK_ACTIVITY_LOGS;
+  try {
+    const params: Record<string, any> = {};
+    if (filters?.userId) params.userId = filters.userId;
+    if (filters?.action) params.action = filters.action;
+    if (filters?.entityType) params.entityType = filters.entityType;
+    if (filters?.entityId) params.entityId = filters.entityId;
+    if (filters?.dateRange?.start) params.startDate = filters.dateRange.start;
+    if (filters?.dateRange?.end) params.endDate = filters.dateRange.end;
+    if (filters?.limit) params.limit = filters.limit;
+    if (filters?.searchQuery) params.searchQuery = filters.searchQuery;
+    
+    // Backend returns { data: ActivityLog[], total: number, count: number }
+    const response = await apiGet<{ data: ActivityLog[]; total: number; count: number }>('/staff/activity-logs', params);
+    
+    // Return the data array, or empty array if response is invalid
+    if (response && Array.isArray(response.data)) {
+      return response.data;
+    }
+    // Fallback for old format (direct array) or invalid response
+    return Array.isArray(response) ? response : [];
+  } catch (error) {
+    console.error('Error fetching activity logs:', error);
+    // Return empty array if endpoint doesn't exist yet
+    return [];
+  }
 }
 
 export async function getDataQualityIssues(filters?: DataQualityFilters): Promise<DataQualityIssue[]> {

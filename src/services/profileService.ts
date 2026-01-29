@@ -168,6 +168,12 @@ interface UpdateProfileDto {
   businessRegistrationNumber?: string;
   bio?: string;
   profilePicture?: string;
+  // Assignment fields
+  farmerGroupId?: string;
+  aggregationCenterId?: string;
+  assignedCounty?: string;
+  assignedSubCounty?: string;
+  hasAllAccess?: boolean;
 }
 
 /**
@@ -186,6 +192,11 @@ function toUpdateProfileDto(updates: Partial<Profile>): UpdateProfileDto {
   if ((updates as any).businessRegistrationNumber !== undefined) dto.businessRegistrationNumber = (updates as any).businessRegistrationNumber;
   if ((updates as any).bio !== undefined) dto.bio = (updates as any).bio;
   if ((updates as any).profilePicture !== undefined) dto.profilePicture = (updates as any).profilePicture;
+  if (updates.farmerGroupId !== undefined) dto.farmerGroupId = updates.farmerGroupId;
+  if (updates.aggregationCenterId !== undefined) dto.aggregationCenterId = updates.aggregationCenterId;
+  if (updates.assignedCounty !== undefined) dto.assignedCounty = updates.assignedCounty;
+  if (updates.assignedSubCounty !== undefined) dto.assignedSubCounty = updates.assignedSubCounty;
+  if (updates.hasAllAccess !== undefined) dto.hasAllAccess = updates.hasAllAccess;
   return dto;
 }
 

@@ -18,7 +18,7 @@ const ROUTE_ROLE_RULES: RouteRoleRule[] = [
   { pattern: "/register", roles: [] },
 
   { pattern: "/dashboard/staff", roles: ["staff"] },
-  { pattern: "/dashboard/county-officer", roles: ["officer"] },
+  { pattern: "/dashboard/county-officer", roles: ["officer", "county_officer"] },
   { pattern: "/dashboard/aggregation", roles: ["aggregation_manager"] },
   { pattern: "/dashboard/input-provider", roles: ["input_provider"] },
   { pattern: "/dashboard/transport-provider", roles: ["transport_provider"] },
@@ -48,7 +48,7 @@ const ROUTE_ROLE_RULES: RouteRoleRule[] = [
   { pattern: "/dashboard/payments", roles: ["farmer", "buyer", "input_provider", "transport_provider"] },
 
   { pattern: "/marketplace", roles: ["farmer", "buyer"] },
-  { pattern: "/", roles: ["farmer", "buyer", "officer", "staff", "aggregation_manager", "input_provider", "transport_provider"] },
+  { pattern: "/", roles: ["farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"] },
 ];
 
 function pathMatches(pattern: string, pathname: string): boolean {
@@ -67,7 +67,7 @@ export function getAllowedRolesForPath(pathname: string): UserRole[] {
     const p = pattern.replace(/\/$/, "") || "/";
     if (pathMatches(p, norm)) return roles;
   }
-  return ["farmer", "buyer", "officer", "staff", "aggregation_manager", "input_provider", "transport_provider"];
+  return ["farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"];
 }
 
 /**

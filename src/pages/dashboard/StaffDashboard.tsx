@@ -14,13 +14,14 @@ import {
   IconCheck,
   IconAlertTriangle,
   IconReceipt,
+  IconShoppingCart,
+  IconCurrency,
 } from "@tabler/icons-react";
 import {
   StatCard,
   ProgressBar,
   LineChart,
-  Sparkline,
-  SlopeChart,
+  StackedBarChart,
   SankeyChart,
   GeographicMap,
 } from "@/components/visualizations";
@@ -28,6 +29,7 @@ import { useStaff } from "@/contexts/StaffContext";
 import { useAnalytics } from "@/contexts/AnalyticsContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import { useAggregation } from "@/contexts/AggregationContext";
+import { useMarketplace } from "@/contexts/MarketplaceContext";
 import type { TrendData } from "@/types/analytics";
 
 interface ProgramIndicator {
@@ -42,11 +44,13 @@ interface BeneficiaryGrowth {
   farmers: number;
 }
 
-interface SparklineData {
+interface TrendData {
   label: string;
   value: number;
-  data: Array<{ name: string; value: number }>;
+  data: Array<{ name: string; [key: string]: string | number }>;
+  dataKey: string;
   color?: string;
+  formatter?: (value: number) => string;
 }
 
 interface OutcomeData {
@@ -57,12 +61,10 @@ interface OutcomeData {
 
 export function StaffDashboard() {
   const { 
-    partners, 
     activityLogs, 
     dataQualityIssues, 
     transactionEvidence, 
     stats: staffStats,
-    fetchPartners, 
     fetchActivityLogs, 
     fetchDataQualityIssues, 
     fetchTransactionEvidence,
@@ -84,14 +86,15 @@ export function StaffDashboard() {
   
   const { profiles, fetchProfiles } = useProfile();
   const { centers, inventory, transactions, fetchCenters, fetchInventory, fetchTransactions } = useAggregation();
+  const { orders, fetchOrders, isLoading: marketplaceLoading } = useMarketplace();
 
   // Fetch all data on mount
   useEffect(() => {
-    fetchPartners();
     fetchActivityLogs();
     fetchDataQualityIssues();
     fetchTransactionEvidence();
     fetchStats();
+    fetchOrders(); // Fetch all marketplace orders for orders/revenue metrics
     fetchDashboardStats({ timeRange: "month" });
     fetchTrends({ timeRange: "month" });
     fetchPerformanceMetrics({ timeRange: "month" });
@@ -103,43 +106,157 @@ export function StaffDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isLoading = staffLoading || analyticsLoading;
+  const isLoading = staffLoading || analyticsLoading || marketplaceLoading;
 
   // Calculate quick access stats
   const quickStats = useMemo(() => {
     const today = new Date().toISOString().split("T")[0];
     const todayLogs = activityLogs.filter(log => log.createdAt.startsWith(today));
     
-    // Calculate data quality score
-    const totalIssues = dataQualityIssues.length;
-    const resolvedIssues = dataQualityIssues.filter(issue => issue.resolvedAt).length;
-    const qualityScore = totalIssues > 0 ? Math.round((resolvedIssues / totalIssues) * 100) : 100;
+    // Calculate data quality score from real data sources
+    // Check completeness and consistency across profiles, orders, inventory, and transactions
+    let totalRecords = 0;
+    let validRecords = 0;
+    
+    // 1. Profile completeness (30% weight)
+    const profileCompleteness = profiles.length > 0 ? profiles.map(profile => {
+      // Check for name (could be firstName/lastName or just name)
+      const hasName = (profile as any).name || ((profile as any).firstName && (profile as any).lastName);
+      const requiredFields = [
+        hasName,
+        (profile as any).phone || (profile as any).alternatePhone,
+        (profile as any).location || (profile as any).county,
+        (profile as any).subCounty,
+      ];
+      const optionalButImportant = [
+        (profile as any).address,
+        (profile as any).coordinates,
+        (profile as any).email,
+      ];
+      const requiredCount = requiredFields.filter(f => f && (typeof f === 'string' ? f.trim() !== '' : f !== null && f !== undefined)).length;
+      const optionalCount = optionalButImportant.filter(f => f && (typeof f === 'string' ? f.trim() !== '' : f !== null && f !== undefined)).length;
+      return {
+        required: requiredCount / requiredFields.length,
+        optional: optionalCount / optionalButImportant.length,
+      };
+    }) : [];
+    
+    const avgProfileCompleteness = profileCompleteness.length > 0
+      ? profileCompleteness.reduce((sum, p) => sum + (p.required * 0.7 + p.optional * 0.3), 0) / profileCompleteness.length
+      : 1;
+    totalRecords += profiles.length;
+    validRecords += profiles.length * avgProfileCompleteness;
+    
+    // 2. Order completeness (25% weight)
+    const orderCompleteness = orders.length > 0 ? orders.map(order => {
+      const requiredFields = [
+        order.quantity,
+        order.totalAmount,
+        order.status,
+        order.farmerId || order.farmer?.id,
+        order.buyerId || order.buyer?.id,
+      ];
+      const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
+      return validFields / requiredFields.length;
+    }) : [];
+    
+    const avgOrderCompleteness = orderCompleteness.length > 0
+      ? orderCompleteness.reduce((sum, o) => sum + o, 0) / orderCompleteness.length
+      : 1;
+    totalRecords += orders.length;
+    validRecords += orders.length * avgOrderCompleteness;
+    
+    // 3. Inventory completeness (25% weight)
+    const inventoryCompleteness = inventory.length > 0 ? inventory.map(item => {
+      const requiredFields = [
+        item.variety,
+        item.quantity,
+        item.qualityGrade || item.grade,
+        item.batchId,
+        item.centerId || item.center?.id,
+      ];
+      const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
+      return validFields / requiredFields.length;
+    }) : [];
+    
+    const avgInventoryCompleteness = inventoryCompleteness.length > 0
+      ? inventoryCompleteness.reduce((sum, i) => sum + i, 0) / inventoryCompleteness.length
+      : 1;
+    totalRecords += inventory.length;
+    validRecords += inventory.length * avgInventoryCompleteness;
+    
+    // 4. Transaction completeness (20% weight)
+    const transactionCompleteness = transactions.length > 0 ? transactions.map(transaction => {
+      const requiredFields = [
+        transaction.type,
+        transaction.quantity,
+        transaction.centerId || transaction.center?.id,
+        transaction.createdAt,
+      ];
+      const validFields = requiredFields.filter(f => f !== null && f !== undefined && f !== '').length;
+      return validFields / requiredFields.length;
+    }) : [];
+    
+    const avgTransactionCompleteness = transactionCompleteness.length > 0
+      ? transactionCompleteness.reduce((sum, t) => sum + t, 0) / transactionCompleteness.length
+      : 1;
+    totalRecords += transactions.length;
+    validRecords += transactions.length * avgTransactionCompleteness;
+    
+    // Calculate overall data quality score
+    // Weighted average: Profiles 30%, Orders 25%, Inventory 25%, Transactions 20%
+    const qualityScore = totalRecords > 0
+      ? Math.round(
+          (profiles.length > 0 ? avgProfileCompleteness * 0.3 : 0) +
+          (orders.length > 0 ? avgOrderCompleteness * 0.25 : 0) +
+          (inventory.length > 0 ? avgInventoryCompleteness * 0.25 : 0) +
+          (transactions.length > 0 ? avgTransactionCompleteness * 0.2 : 0)
+        ) * 100
+      : 100;
+
+    // Calculate orders and revenue from marketplace orders
+    // Only count completed/delivered orders for accurate metrics
+    const completedOrders = orders.filter(order => {
+      const completedStatuses = ["completed", "delivered", "collected"];
+      return completedStatuses.includes(order.status.toLowerCase());
+    });
+    const totalOrders = completedOrders.length;
+    const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
     return {
-      partners: partners.length,
+      orders: totalOrders,
+      revenue: totalRevenue,
       activityLogs: todayLogs.length,
       dataQuality: qualityScore,
       transactions: transactionEvidence.length,
     };
-  }, [partners, activityLogs, dataQualityIssues, transactionEvidence]);
+  }, [orders, activityLogs, profiles, inventory, transactions, transactionEvidence]);
 
   // Calculate program indicators from context data
   const programIndicators = useMemo<ProgramIndicator[]>(() => {
     const farmers = profiles.filter(p => p.role === "farmer").length;
-    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0) / 1000; // Convert to tonnes
+    const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0); // Keep in kgs
     const gradeAItems = inventory.filter(item => (item.grade || item.qualityGrade) === "A").length;
     const qualityPercentage = inventory.length > 0 ? Math.round((gradeAItems / inventory.length) * 100) : 0;
     
-    // Calculate income increase from performance metrics or trends
-    const incomeIncrease = performanceMetrics.find(m => m.metric === "income_increase")?.value || 0;
+    // Calculate revenue from completed orders
+    const completedOrders = orders.filter(order => {
+      const completedStatuses = ["completed", "delivered", "collected"];
+      return completedStatuses.includes(order.status.toLowerCase());
+    });
+    const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    // Revenue target: 5,000,000 KES (5M)
+    const revenueTarget = 5000000;
+    // Volume target: 100,000 kg (100 tonnes)
+    const volumeTarget = 100000;
 
     return [
       { name: "Beneficiaries", current: farmers, target: 2000, unit: "farmers" },
-      { name: "Volume (tonnes)", current: Math.round(totalVolume), target: 100, unit: "tons" },
+      { name: "Volume", current: Math.round(totalVolume), target: volumeTarget, unit: "kg" },
       { name: "Quality (Gr A)", current: qualityPercentage, target: 80, unit: "%" },
-      { name: "Income increase", current: Math.round(incomeIncrease), target: 50, unit: "%" },
+      { name: "Revenue", current: Math.round(totalRevenue), target: revenueTarget, unit: "KES" },
     ];
-  }, [profiles, inventory, performanceMetrics]);
+  }, [profiles, inventory, orders]);
 
   // Transform trends data for beneficiary growth chart
   const beneficiaryGrowth = useMemo<BeneficiaryGrowth[]>(() => {
@@ -150,77 +267,287 @@ export function StaffDashboard() {
     }));
   }, [trends]);
 
-  // Calculate sparkline data from trends
-  const sparklineData = useMemo<SparklineData[]>(() => {
-    if (trends.length === 0) return [];
+  // Calculate trendline data from trends and real data sources
+  const trendlineData = useMemo<TrendData[]>(() => {
+    // Farmers data from trends (real backend data)
+    const farmersData = trends.length > 0 
+      ? trends.map((t) => {
+          const date = new Date(t.date);
+          const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+          return { name: monthLabel, farmers: t.farmers || 0 };
+        })
+      : [];
     
-    const farmersData = trends.map((t, i) => ({ name: String(i + 1), value: t.farmers || 0 }));
-    const qualityData = trends.map((t, i) => ({ name: String(i + 1), value: t.qualityScore || 0 }));
-    const centersData = trends.map((t, i) => ({ name: String(i + 1), value: t.centers || 0 }));
-    const volumeData = trends.map((t, i) => ({ name: String(i + 1), value: t.volume || 0 }));
-    const incomeData = trends.map((t, i) => ({ name: String(i + 1), value: t.incomeIncrease || 0 }));
-    const transactionsData = trends.map((t, i) => ({ name: String(i + 1), value: t.transactions || 0 }));
+    // Revenue data from orders grouped by month (real data)
+    const completedOrders = orders.filter(order => {
+      const completedStatuses = ["completed", "delivered", "collected"];
+      return completedStatuses.includes(order.status.toLowerCase());
+    });
+    
+    // Group orders by month for revenue sparkline
+    const revenueByMonth = new Map<string, number>();
+    completedOrders.forEach(order => {
+      const date = new Date(order.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = revenueByMonth.get(monthKey) || 0;
+      revenueByMonth.set(monthKey, current + (order.totalAmount || 0));
+    });
+    
+    // Volume data from completed orders grouped by month (in kgs)
+    const volumeByMonth = new Map<string, number>();
+    completedOrders.forEach(order => {
+      const date = new Date(order.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = volumeByMonth.get(monthKey) || 0;
+      // Sum quantity in kgs (assuming order.quantity is already in kgs)
+      volumeByMonth.set(monthKey, current + (order.quantity || 0));
+    });
+    
+    const volumeData = Array.from(volumeByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, value]) => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+        return { name: monthLabel, volume: Math.round(value) };
+      });
+    
+    // Convert to array format matching trends structure
+    const revenueData = Array.from(revenueByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, value]) => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+        return { name: monthLabel, revenue: Math.round(value / 1000) }; // Convert to K (thousands)
+      });
 
+    // Quality data from inventory grouped by month (real data)
+    // Calculate quality score (Grade A percentage) per month
+    const qualityByMonth = new Map<string, { total: number; gradeA: number }>();
+    inventory.forEach(item => {
+      const date = new Date(item.stockInDate || item.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = qualityByMonth.get(monthKey) || { total: 0, gradeA: 0 };
+      current.total += 1;
+      if ((item.qualityGrade || item.grade) === "A") {
+        current.gradeA += 1;
+      }
+      qualityByMonth.set(monthKey, current);
+    });
+    
+    const qualityData = Array.from(qualityByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, stats]) => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+        return {
+          name: monthLabel,
+          quality: stats.total > 0 ? Math.round((stats.gradeA / stats.total) * 100) : 0
+        };
+      });
+
+    // Centers data - count active centers over time (real data)
+    // Group centers by creation month
+    const centersByMonth = new Map<string, number>();
+    centers.forEach(center => {
+      const date = new Date(center.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = centersByMonth.get(monthKey) || 0;
+      centersByMonth.set(monthKey, current + 1);
+    });
+    
+    // Calculate cumulative centers count
+    const centersDataArray = Array.from(centersByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b));
+    
+    let cumulativeCenters = 0;
+    const centersData = centersDataArray.map(([monthKey, count]) => {
+      cumulativeCenters += count;
+      const [year, month] = monthKey.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1);
+      const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+      return { name: monthLabel, centers: cumulativeCenters };
+    });
+
+    // Transactions data grouped by month (real data)
+    const transactionsByMonth = new Map<string, number>();
+    transactions.forEach(transaction => {
+      const date = new Date(transaction.createdAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = transactionsByMonth.get(monthKey) || 0;
+      transactionsByMonth.set(monthKey, current + 1);
+    });
+    
+    const transactionsData = Array.from(transactionsByMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, count]) => {
+        const [year, month] = monthKey.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const monthLabel = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+        return { name: monthLabel, transactions: count };
+      });
+
+    // Get latest values
     const latest = (trends[trends.length - 1] || {}) as TrendData;
+    const currentRevenue = completedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    
+    // Calculate current volume from completed orders (in kgs)
+    const currentVolume = completedOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
+    
+    // Calculate current quality score from inventory
+    const gradeAItems = inventory.filter(item => (item.grade || item.qualityGrade) === "A").length;
+    const currentQuality = inventory.length > 0 ? Math.round((gradeAItems / inventory.length) * 100) : 0;
     
     return [
       {
         label: "Farmers",
-        value: latest.farmers || 0,
-        data: farmersData,
+        value: latest.farmers || profiles.filter(p => p.role === "farmer").length,
+        data: farmersData.length > 0 ? farmersData : [{ name: "No Data", farmers: profiles.filter(p => p.role === "farmer").length }],
+        dataKey: "farmers",
         color: "#3B82F6",
       },
       {
         label: "Quality",
-        value: latest.qualityScore || 0,
-        data: qualityData,
+        value: currentQuality,
+        data: qualityData.length > 0 ? qualityData : [{ name: "No Data", quality: currentQuality }],
+        dataKey: "quality",
         color: "#22C55E",
+        formatter: (value: number) => `${value}%`,
       },
       {
         label: "Centres",
-        value: latest.centers || centers.length,
-        data: centersData,
+        value: centers.length,
+        data: centersData.length > 0 ? centersData : [{ name: "No Data", centers: centers.length }],
+        dataKey: "centers",
         color: "#8B5CF6",
       },
       {
         label: "Volume",
-        value: latest.volume || 0,
-        data: volumeData,
+        value: Math.round(currentVolume),
+        data: volumeData.length > 0 ? volumeData : [{ name: "No Data", volume: 0 }],
+        dataKey: "volume",
         color: "#F59E0B",
+        formatter: (value: number) => `${value.toLocaleString()} kg`,
       },
       {
-        label: "Income",
-        value: latest.incomeIncrease || 0,
-        data: incomeData,
+        label: "Revenue",
+        value: Math.round(currentRevenue / 1000), // Display in thousands (K)
+        data: revenueData.length > 0 ? revenueData : [{ name: "No Data", revenue: 0 }],
+        dataKey: "revenue",
         color: "#10B981",
+        formatter: (value: number) => `KES ${value}K`,
       },
       {
         label: "Trans.",
-        value: latest.transactions || transactions.length,
-        data: transactionsData,
+        value: transactions.length,
+        data: transactionsData.length > 0 ? transactionsData : [{ name: "No Data", transactions: transactions.length }],
+        dataKey: "transactions",
         color: "#EF4444",
       },
     ];
-  }, [trends, centers, transactions]);
+  }, [trends, centers, transactions, orders, inventory, profiles]);
 
-  // Calculate outcome data from performance metrics
-  const outcomeData = useMemo<OutcomeData[]>(() => {
-    const incomeMetric = performanceMetrics.find(m => m.metric === "income_increase");
-    const qualityMetric = performanceMetrics.find(m => m.metric === "quality_score");
-    
-    return [
-      { 
-        category: "Income", 
-        before: incomeMetric?.baseline || 45, 
-        after: incomeMetric?.value || 65 
-      },
-      { 
-        category: "Quality", 
-        before: qualityMetric?.baseline || 32, 
-        after: qualityMetric?.value || 82 
-      },
-    ];
-  }, [performanceMetrics]);
+  // Calculate volume comparison data by center (orders and revenue segmented by completion status)
+  const centerVolumeData = useMemo(() => {
+    // Get all orders except cancelled
+    const activeOrders = orders.filter(order => {
+      const cancelledStatuses = ["cancelled", "rejected"];
+      return !cancelledStatuses.includes(order.status.toLowerCase());
+    });
+
+    // Define completed order statuses
+    const completedStatuses = ["completed", "delivered", "collected"];
+
+    // Group orders by center
+    const centerStats = new Map<string, { 
+      name: string; 
+      orders: number; 
+      revenueCompleted: number;
+      revenuePending: number;
+    }>();
+
+    activeOrders.forEach(order => {
+      // Try to get center from stockTransactions or aggregationCenter field
+      let centerName = "Unknown";
+      
+      // Check if order has stockTransactions with center info
+      if ((order as any).stockTransactions && Array.isArray((order as any).stockTransactions) && (order as any).stockTransactions.length > 0) {
+        const stockTx = (order as any).stockTransactions[0];
+        if (stockTx?.center?.name) {
+          centerName = stockTx.center.name;
+        } else if (stockTx?.centerId) {
+          // Find center by ID
+          const center = centers.find(c => c.id === stockTx.centerId);
+          centerName = center?.name || "Unknown";
+        }
+      }
+      
+      // Fallback to aggregationCenter field if available
+      if (centerName === "Unknown" && order.aggregationCenter) {
+        centerName = order.aggregationCenter;
+      }
+      
+      // If still unknown, try to match by location or use a default
+      if (centerName === "Unknown" && order.location) {
+        // Try to find center by matching location
+        const matchingCenter = centers.find(c => 
+          c.location?.toLowerCase().includes(order.location?.toLowerCase() || '') ||
+          c.subCounty?.toLowerCase().includes(order.location?.toLowerCase() || '')
+        );
+        if (matchingCenter) {
+          centerName = matchingCenter.name;
+        }
+      }
+
+      // Initialize center stats if not exists
+      if (!centerStats.has(centerName)) {
+        centerStats.set(centerName, { 
+          name: centerName, 
+          orders: 0, 
+          revenueCompleted: 0,
+          revenuePending: 0,
+        });
+      }
+
+      const stats = centerStats.get(centerName)!;
+      stats.orders += 1;
+      
+      const orderAmount = order.totalAmount || 0;
+      const isCompleted = completedStatuses.includes(order.status.toLowerCase());
+      
+      if (isCompleted) {
+        stats.revenueCompleted += orderAmount;
+      } else {
+        stats.revenuePending += orderAmount;
+      }
+    });
+
+    // Also include centers with no orders (for completeness)
+    centers.forEach(center => {
+      if (!centerStats.has(center.name)) {
+        centerStats.set(center.name, { 
+          name: center.name, 
+          orders: 0, 
+          revenueCompleted: 0,
+          revenuePending: 0,
+        });
+      }
+    });
+
+    // Convert to array and sort by total revenue (descending)
+    return Array.from(centerStats.values())
+      .map(stat => ({
+        name: stat.name,
+        orders: stat.orders,
+        revenueCompleted: Math.round(stat.revenueCompleted / 1000), // Convert to thousands
+        revenuePending: Math.round(stat.revenuePending / 1000), // Convert to thousands
+        revenueTotal: stat.revenueCompleted + stat.revenuePending, // Keep raw total for sorting
+      }))
+      .sort((a, b) => b.revenueTotal - a.revenueTotal)
+      .slice(0, 10); // Limit to top 10 centers for readability
+  }, [orders, centers]);
 
   return (
     <div className="space-y-6">
@@ -229,16 +556,10 @@ export function StaffDashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold">Project Staff Dashboard (M&E)</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Coordinate partners, monitor performance against targets, ensure data quality and accountability
+            Monitor performance against targets, track orders and revenue, ensure data quality and accountability
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/dashboard/staff/partners">
-            <Button size="sm" variant="outline">
-              <IconUsers className="mr-2 h-4 w-4" />
-              Partners
-            </Button>
-          </Link>
           <Link to="/dashboard/staff/reports">
             <Button size="sm" variant="outline">
               <IconFileText className="mr-2 h-4 w-4" />
@@ -256,20 +577,30 @@ export function StaffDashboard() {
 
       {/* Quick Access Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link to="/dashboard/staff/partners">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Partners</p>
-                  <p className="text-2xl font-bold">{quickStats.partners}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Active stakeholders</p>
-                </div>
-                <IconBuilding className="h-8 w-8 text-blue-600" />
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Orders</p>
+                <p className="text-2xl font-bold">{quickStats.orders.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Completed orders</p>
               </div>
-            </CardContent>
-          </Card>
-        </Link>
+              <IconShoppingCart className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-2xl font-bold">KES {quickStats.revenue.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">From completed orders</p>
+              </div>
+              <IconCurrency className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
         <Link to="/dashboard/staff/activity-logs">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
             <CardContent className="pt-6">
@@ -294,20 +625,6 @@ export function StaffDashboard() {
                   <p className="text-xs text-muted-foreground mt-1">Overall score</p>
                 </div>
                 <IconCheck className="h-8 w-8 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link to="/dashboard/staff/transaction-evidence">
-          <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Transactions</p>
-                  <p className="text-2xl font-bold">{quickStats.transactions.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">With evidence</p>
-                </div>
-                <IconReceipt className="h-8 w-8 text-purple-600" />
               </div>
             </CardContent>
           </Card>
@@ -404,74 +721,105 @@ export function StaffDashboard() {
         />
       </div>
 
-      {/* Indicator Sparklines */}
+      {/* Indicator Trendlines */}
       <Card>
         <CardHeader>
-          <CardTitle>Indicator Sparklines</CardTitle>
-          <CardDescription>All KPIs at a glance</CardDescription>
+          <CardTitle>Indicator Trendlines</CardTitle>
+          <CardDescription>All KPIs at a glance with trend analysis</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-20 bg-muted animate-pulse rounded" />
+                <div key={i} className="h-48 bg-muted animate-pulse rounded" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {sparklineData.map((sparkline, index) => (
-                <div
-                  key={index}
-                  className="p-4 border rounded-lg space-y-2 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {sparkline.label}
-                    </span>
-                    <span className="text-lg font-bold">
-                      {sparkline.value.toLocaleString()}
-                      {sparkline.label === "Quality" || sparkline.label === "Income"
-                        ? "%"
-                        : sparkline.label === "Volume"
-                        ? "t"
-                        : ""}
-                    </span>
-                  </div>
-                  <div className="h-12">
-                    <Sparkline data={sparkline.data} color={sparkline.color} height={48} />
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {trendlineData.map((trend, index) => (
+                <Card key={index} className="border">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">
+                        {trend.label}
+                      </CardTitle>
+                      <span className="text-lg font-bold">
+                        {trend.formatter 
+                          ? trend.formatter(trend.value)
+                          : `${trend.value.toLocaleString()}${trend.label === "Quality" ? "%" : trend.label === "Volume" ? " kg" : trend.label === "Revenue" ? "K" : ""}`}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <LineChart
+                      data={trend.data}
+                      lines={[
+                        {
+                          dataKey: trend.dataKey,
+                          name: trend.label,
+                          color: trend.color,
+                          strokeWidth: 2,
+                        },
+                      ]}
+                      height={150}
+                      showGrid={true}
+                      showLegend={false}
+                      formatter={trend.formatter}
+                    />
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Outcome Comparison & Value Chain Flow */}
+      {/* Volume Comparison by Center & Value Chain Flow */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SlopeChart
-          data={outcomeData}
-          title="Outcome Comparison"
-          description="Before and after program implementation"
-          height={300}
-          beforeLabel="Before"
-          afterLabel="After"
-          formatter={(value) => `${value}%`}
+        <StackedBarChart
+          data={centerVolumeData}
+          bars={[
+            {
+              dataKey: "orders",
+              name: "Orders (count)",
+              color: "#3B82F6",
+            },
+            {
+              dataKey: "revenueCompleted",
+              name: "Revenue - Completed (KES K)",
+              color: "#22C55E",
+            },
+            {
+              dataKey: "revenuePending",
+              name: "Revenue - Pending (KES K)",
+              color: "#F59E0B",
+            },
+          ]}
+          title="Volume Comparison by Center"
+          description="Orders and revenue (completed vs pending) across aggregation centers (revenue in thousands)"
+          height={400}
+          layout="vertical"
+          formatter={(value: number) => {
+            // Value is already normalized (revenue in thousands, orders as count)
+            return value.toLocaleString();
+          }}
         />
 
         <SankeyChart
           nodes={[
-            { name: "Farmers", value: 1500, color: "#3B82F6" },
-            { name: "Centres", value: 45, color: "#22C55E" },
-            { name: "Buyers", value: 25, color: "#F59E0B" },
+            { name: "Farmers", value: (profiles || []).filter(p => p.role === "farmer").length || 0, color: "#3B82F6" },
+            { name: "Centres", value: (centers || []).length || 0, color: "#22C55E" },
+            { name: "Buyers", value: new Set((orders || []).map(o => o.buyerId || o.buyer?.id).filter(Boolean)).size || 0, color: "#F59E0B" },
+            { name: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0, color: "#8B5CF6" },
           ]}
           links={[
-            { source: "Farmers", target: "Centres", value: 45 },
-            { source: "Centres", target: "Buyers", value: 25 },
+            { source: "Farmers", target: "Centres", value: (profiles || []).filter(p => p.role === "farmer").length || 0 },
+            { source: "Centres", target: "Buyers", value: new Set((orders || []).map(o => o.buyerId || o.buyer?.id).filter(Boolean)).size || 0 },
+            { source: "Buyers", target: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0 },
           ]}
           title="Value Chain Flow"
-          description="Flow of produce from farmers through centers to buyers"
-          height={300}
+          description="Flow of produce from farmers through centers to buyers and orders"
+          height={400}
         />
       </div>
     </div>

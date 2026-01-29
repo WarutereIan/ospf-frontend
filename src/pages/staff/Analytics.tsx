@@ -25,7 +25,6 @@ interface AnalyticsData {
   totalOrders: number;
   totalRevenue: number;
   averageOrderValue: number;
-  platformFee: number;
   growthRate: {
     users: number;
     orders: number;
@@ -61,7 +60,6 @@ export function Analytics() {
     totalOrders: dashboardStats.totalOrders || 0,
     totalRevenue: dashboardStats.totalRevenue || 0,
     averageOrderValue: dashboardStats.totalOrders > 0 ? (dashboardStats.totalRevenue / dashboardStats.totalOrders) : 0,
-    platformFee: dashboardStats.totalRevenue * 0.02, // 2% platform fee
     growthRate: {
       users: dashboardStats.userGrowthRate || 0,
       orders: dashboardStats.orderGrowthRate || 0,
@@ -184,18 +182,6 @@ export function Analytics() {
                 </div>
               </div>
               <IconCurrency className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Platform Fee</p>
-                <p className="text-2xl font-bold">KES {data?.platformFee.toLocaleString() || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">2% transaction fee</p>
-              </div>
-              <IconChartBar className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>

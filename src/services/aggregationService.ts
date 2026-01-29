@@ -82,11 +82,15 @@ function mapStockTransactionType(backendType: string): StockTransactionType {
 }
 
 /**
- * Transform aggregation center from backend format to frontend format
+ * Transform aggregation center from backend format to frontend format.
+ * Backend uses totalCapacity; frontend type uses capacity — map so edit/display work.
  */
 function transformAggregationCenter(center: any): AggregationCenter {
+  const capacity = center.totalCapacity ?? center.capacity;
+  const capacityNum = typeof capacity === "number" && !Number.isNaN(capacity) ? capacity : 0;
   return {
     ...center,
+    capacity: capacityNum,
     centerType: center.centerType ? mapCenterType(center.centerType) : center.centerType,
     status: center.status ? mapCenterStatus(center.status) : center.status,
   };
@@ -166,6 +170,12 @@ function toCreateAggregationCenterDto(center: Partial<AggregationCenter>): Creat
     ? (center.centerType === 'main' ? 'MAIN' : 'SATELLITE')
     : 'MAIN';
   
+  // Capacity: ensure number >= 0 (form may send number or string from input)
+  const totalCapacity =
+    typeof center.totalCapacity === "number" && !Number.isNaN(center.totalCapacity)
+      ? Math.max(0, center.totalCapacity)
+      : Math.max(0, Number(center.totalCapacity) || 0);
+
   return {
     name: center.name || '',
     location: center.location || '',
@@ -174,8 +184,8 @@ function toCreateAggregationCenterDto(center: Partial<AggregationCenter>): Creat
     ward: center.ward,
     coordinates: center.coordinates || '',
     centerType: centerType as CreateAggregationCenterDto['centerType'],
-    mainCenterId: center.mainCenterId,
-    totalCapacity: typeof center.totalCapacity === 'number' ? center.totalCapacity : 0,
+    mainCenterId: center.centerType === "main" || !center.mainCenterId?.trim() ? undefined : center.mainCenterId?.trim(),
+    totalCapacity,
     managerId: center.managerId || '',
     managerName: center.managerName,
     managerPhone: center.managerPhone,
@@ -201,12 +211,45 @@ export async function createAggregationCenter(center: Partial<AggregationCenter>
 }
 
 /**
+ * Map frontend update payload to backend format (centerType and status UPPER_CASE; mainCenterId null for main).
+ */
+function toUpdateAggregationCenterPayload(updates: Partial<AggregationCenter>): Record<string, unknown> {
+  const payload: Record<string, unknown> = { ...updates };
+  if (updates.centerType !== undefined) {
+    payload.centerType = updates.centerType === "main" ? "MAIN" : "SATELLITE";
+  }
+  if (updates.status !== undefined) {
+    payload.status =
+      updates.status === "operational"
+        ? "OPERATIONAL"
+        : updates.status === "maintenance"
+          ? "MAINTENANCE"
+          : "CLOSED";
+  }
+  // Capacity: ensure number >= 0 (backend @Min(0))
+  if (updates.totalCapacity !== undefined) {
+    const num = Number(updates.totalCapacity);
+    payload.totalCapacity = Number.isNaN(num) ? 0 : Math.max(0, num);
+  }
+  // Main centers must have mainCenterId null; avoid sending empty string (FK violation)
+  if (updates.centerType === "main") {
+    payload.mainCenterId = null;
+  } else if (updates.mainCenterId !== undefined && typeof updates.mainCenterId === "string" && updates.mainCenterId.trim()) {
+    payload.mainCenterId = updates.mainCenterId.trim();
+  } else if (updates.mainCenterId === "" || (updates.mainCenterId !== undefined && !String(updates.mainCenterId).trim())) {
+    payload.mainCenterId = null;
+  }
+  return payload;
+}
+
+/**
  * Update aggregation center
  * Backend: PUT /api/v1/aggregation/centers/:id
  */
 export async function updateAggregationCenter(id: string, updates: Partial<AggregationCenter>): Promise<ApiResponse<AggregationCenter>> {
   try {
-    const updated = await apiPut<any>(`/aggregation/centers/${id}`, updates);
+    const payload = toUpdateAggregationCenterPayload(updates);
+    const updated = await apiPut<any>(`/aggregation/centers/${id}`, payload);
     return { data: transformAggregationCenter(updated), message: "Aggregation center updated successfully" };
   } catch (error: any) {
     return { data: null as any, error: error.message || "Failed to update aggregation center" };
@@ -337,6 +380,12 @@ interface CreateStockTransactionDto {
   notes?: string;
   sourceCenterId?: string;
   transferTransactionId?: string;
+  // Grading Matrix Criteria
+  weightRange?: string;
+  colorIntensity?: number;
+  physicalCondition?: string;
+  freshness?: string;
+  daysSinceHarvest?: number;
 }
 
 /**
@@ -361,6 +410,12 @@ function toCreateStockTransactionDto(transaction: Partial<StockTransaction>): Cr
     notes: transaction.notes,
     sourceCenterId: transaction.sourceCenterId,
     transferTransactionId: transaction.transferTransactionId,
+    // Grading Matrix Criteria
+    weightRange: transaction.weightRange,
+    colorIntensity: transaction.colorIntensity,
+    physicalCondition: transaction.physicalCondition,
+    freshness: transaction.freshness,
+    daysSinceHarvest: transaction.daysSinceHarvest,
   };
 }
 
@@ -415,15 +470,61 @@ export async function getInventory(filters?: {
 }
 
 /**
+ * Get inventory batches with stock transaction details for compliance checking
+ * Backend: GET /api/v1/aggregation/inventory/batches
+ */
+export async function getInventoryBatches(filters?: {
+  centerId?: string;
+  farmerId?: string;
+  qualityGrade?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  county?: string;
+  subCounty?: string;
+  centerType?: string;
+}): Promise<(InventoryItem & { stockTransaction: any })[]> {
+  try {
+    const params: Record<string, any> = {};
+    if (filters?.centerId) params.centerId = filters.centerId;
+    if (filters?.farmerId) params.farmerId = filters.farmerId;
+    if (filters?.qualityGrade) params.qualityGrade = filters.qualityGrade;
+    if (filters?.dateFrom) params.dateFrom = filters.dateFrom;
+    if (filters?.dateTo) params.dateTo = filters.dateTo;
+    if (filters?.county) params.county = filters.county;
+    if (filters?.subCounty) params.subCounty = filters.subCounty;
+    if (filters?.centerType) params.centerType = filters.centerType;
+
+    return await apiGet<(InventoryItem & { stockTransaction: any })[]>('/aggregation/inventory/batches', params);
+  } catch (error) {
+    console.error('Error fetching inventory batches:', error);
+    return [];
+  }
+}
+
+/**
  * Get quality checks
  * Backend: GET /api/v1/aggregation/quality-checks
  */
-export async function getQualityChecks(filters?: { centerId?: string; transactionId?: string; orderId?: string }): Promise<QualityCheck[]> {
+export async function getQualityChecks(filters?: { 
+  centerId?: string; 
+  transactionId?: string; 
+  orderId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  county?: string;
+  subCounty?: string;
+  centerType?: string;
+}): Promise<QualityCheck[]> {
   try {
     const params: Record<string, any> = {};
     if (filters?.centerId) params.centerId = filters.centerId;
     if (filters?.transactionId) params.transactionId = filters.transactionId;
     if (filters?.orderId) params.orderId = filters.orderId;
+    if (filters?.dateFrom) params.dateFrom = filters.dateFrom;
+    if (filters?.dateTo) params.dateTo = filters.dateTo;
+    if (filters?.county) params.county = filters.county;
+    if (filters?.subCounty) params.subCounty = filters.subCounty;
+    if (filters?.centerType) params.centerType = filters.centerType;
 
     return await apiGet<QualityCheck[]>('/aggregation/quality-checks', params);
   } catch (error) {
