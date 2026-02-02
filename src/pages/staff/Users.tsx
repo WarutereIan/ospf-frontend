@@ -82,6 +82,7 @@ export function Users() {
     name: "",
     email: "",
     phone: "",
+    password: "",
     role: "farmer" as UserRole,
     farmerGroupId: "",
     aggregationCenterId: "",
@@ -224,19 +225,21 @@ export function Users() {
         return;
       }
 
+      if (!formData.password || formData.password.length < 8) {
+        showError("Password is required and must be at least 8 characters");
+        return;
+      }
+
       // Validate aggregation center assignment for aggregation managers
       if (formData.role === "aggregation_manager" && !formData.aggregationCenterId) {
         showError("Aggregation center assignment is mandatory for aggregation managers");
         return;
       }
 
-      // Generate a temporary password (user should change it)
-      const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`;
-
       await createUser({
         email: formData.email,
         phone: formData.phone,
-        password: tempPassword,
+        password: formData.password,
         role: formData.role,
         profile: {
           firstName,
@@ -255,6 +258,7 @@ export function Users() {
         name: "", 
         email: "", 
         phone: "", 
+        password: "",
         role: "farmer",
         farmerGroupId: "",
         aggregationCenterId: "",
@@ -799,6 +803,17 @@ export function Users() {
               />
             </div>
             <div className="space-y-2">
+              <label className="text-sm font-medium">Password <span className="text-red-500">*</span></label>
+              <Input
+                type="password"
+                placeholder="Min 8 characters"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">Minimum 8 characters. User can change it after first login.</p>
+            </div>
+            <div className="space-y-2">
               <label className="text-sm font-medium">Role</label>
               <Select
                 value={formData.role}
@@ -957,6 +972,8 @@ export function Users() {
                 !formData.name || 
                 !formData.phone || 
                 !formData.email ||
+                !formData.password ||
+                formData.password.length < 8 ||
                 (formData.role === "aggregation_manager" && !formData.aggregationCenterId)
               }
             >
