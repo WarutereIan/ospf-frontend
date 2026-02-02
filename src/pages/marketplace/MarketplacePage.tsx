@@ -146,9 +146,12 @@ export function MarketplacePage() {
     }
   };
 
-  // Apply client-side sorting (filters are handled by context)
+  // Apply client-side filtering and sorting (filters are handled by context)
   useEffect(() => {
-    let filtered = [...listings];
+    // Exclude listings with 0 kg remaining quantity
+    let filtered = listings.filter(
+      (l) => l.availableQuantity != null && Number(l.availableQuantity) > 0
+    );
 
     // Sort
     filtered.sort((a, b) => {
@@ -498,7 +501,10 @@ export function MarketplacePage() {
       <div className="flex items-center justify-between">
         <p className="text-sm text-stone-500 font-medium">
           Showing <span className="text-stone-900 font-bold">{filteredListings.length}</span> of{" "}
-          <span className="text-stone-900">{listings.length}</span> listings
+          <span className="text-stone-900">
+            {listings.filter((l) => l.availableQuantity != null && Number(l.availableQuantity) > 0).length}
+          </span>{" "}
+          listings
         </p>
         <div className="flex gap-1">
           <button

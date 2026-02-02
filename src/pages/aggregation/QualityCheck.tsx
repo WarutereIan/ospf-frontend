@@ -36,6 +36,7 @@ import {
 } from "@/data/gradingMatrix";
 import type { QualityCheck } from "@/types/aggregation";
 import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
+import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 
 interface QualityCheckForm {
   stockId: string;
@@ -118,20 +119,28 @@ export function QualityCheck() {
     }
   }, [id, isNew, qualityChecks, fetchQualityChecks]);
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files?.length) return;
 
     setUploadingPhotos(true);
-    // TODO: Replace with actual file upload API
-    setTimeout(() => {
-      const newPhotos = Array.from(files).map((file) => URL.createObjectURL(file));
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { url } = await uploadImage(files[i]);
+        urls.push(url);
+      }
       setFormData((prev) => ({
         ...prev,
-        photos: [...prev.photos, ...newPhotos],
+        photos: [...prev.photos, ...urls],
       }));
+    } catch (err: unknown) {
+      console.error("Failed to upload photos:", err);
+      alert(err instanceof Error ? err.message : "Failed to upload photos");
+    } finally {
       setUploadingPhotos(false);
-    }, 1000);
+      event.target.value = "";
+    }
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -553,7 +562,7 @@ export function QualityCheck() {
                   {formData.photos.map((photo, index) => (
                     <div key={index} className="relative group">
                       <img
-                        src={photo}
+                        src={getImageFullUrl(photo)}
                         alt={`Photo ${index + 1}`}
                         className="w-full aspect-square object-cover rounded-lg border"
                       />
