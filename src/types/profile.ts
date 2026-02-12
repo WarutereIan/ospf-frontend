@@ -11,6 +11,7 @@
  */
 export type UserRole = 
   | "farmer" 
+  | "lead_farmer"
   | "buyer" 
   | "input_provider" 
   | "transport_provider" 
@@ -56,6 +57,29 @@ export interface BaseProfile {
  * Farmer Profile
  * Used when viewing farmer information from any context
  */
+/**
+ * Lead Farmer Profile
+ * Same shape as farmer for display/counts; distinguished by role
+ */
+export interface LeadFarmerProfile extends BaseProfile {
+  role: "lead_farmer";
+  subCounty?: string;
+  ward?: string;
+  rating?: number;
+  totalRatings?: number;
+  totalSales?: number;
+  totalRevenue?: number;
+  qualityAverage?: number;
+  responseTime?: number;
+  verified?: boolean;
+  certifications?: string[];
+  farmSize?: number;
+  varieties?: string[];
+  orderCount?: number;
+  registrationDate?: string;
+  lastActivity?: string;
+}
+
 export interface FarmerProfile extends BaseProfile {
   role: "farmer";
   subCounty?: string;
@@ -124,6 +148,7 @@ export interface TransportProviderProfile extends BaseProfile {
  */
 export type Profile = 
   | FarmerProfile 
+  | LeadFarmerProfile
   | BuyerProfile 
   | InputProviderProfile 
   | TransportProviderProfile;

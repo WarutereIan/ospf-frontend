@@ -689,7 +689,7 @@ export function StockInForm() {
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select farmer (optional)" />
+                      <SelectValue>{formData.farmerId && formData.farmerId !== "none" ? undefined : "Select farmer (optional)"}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None / Not direct delivery</SelectItem>

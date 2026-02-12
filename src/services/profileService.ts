@@ -41,6 +41,7 @@ import { apiGet, apiPut, apiPost } from "@/lib/api-client";
 function mapUserRole(backendRole: string): UserRole {
   const roleMap: Record<string, UserRole> = {
     FARMER: 'farmer',
+    LEAD_FARMER: 'lead_farmer',
     BUYER: 'buyer',
     INPUT_PROVIDER: 'input_provider',
     TRANSPORT_PROVIDER: 'transport_provider',
@@ -320,6 +321,7 @@ export async function getProfileStats(): Promise<ProfileStats> {
     verified: 0,
     byRole: {
       farmer: 0,
+      lead_farmer: 0,
       buyer: 0,
       input_provider: 0,
       transport_provider: 0,
