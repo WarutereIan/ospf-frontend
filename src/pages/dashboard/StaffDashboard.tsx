@@ -235,7 +235,7 @@ export function StaffDashboard() {
 
   // Calculate program indicators from context data
   const programIndicators = useMemo<ProgramIndicator[]>(() => {
-    const farmers = profiles.filter(p => p.role === "farmer").length;
+    const farmers = profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer").length;
     const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0); // Keep in kgs
     const gradeAItems = inventory.filter(item => (item.grade || item.qualityGrade) === "A").length;
     const qualityPercentage = inventory.length > 0 ? Math.round((gradeAItems / inventory.length) * 100) : 0;
@@ -404,8 +404,8 @@ export function StaffDashboard() {
     return [
       {
         label: "Farmers",
-        value: (latest as { farmers?: number }).farmers ?? profiles.filter(p => p.role === "farmer").length,
-        data: farmersData.length > 0 ? farmersData : [{ name: "No Data", farmers: profiles.filter(p => p.role === "farmer").length }],
+        value: (latest as { farmers?: number }).farmers ?? profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer").length,
+        data: farmersData.length > 0 ? farmersData : [{ name: "No Data", farmers: profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer").length }],
         dataKey: "farmers",
         color: "#3B82F6",
       },
@@ -808,13 +808,13 @@ export function StaffDashboard() {
 
         <SankeyChart
           nodes={[
-            { name: "Farmers", value: (profiles || []).filter(p => p.role === "farmer").length || 0, color: "#3B82F6" },
+            { name: "Farmers", value: (profiles || []).filter(p => p.role === "farmer" || p.role === "lead_farmer").length || 0, color: "#3B82F6" },
             { name: "Centres", value: (centers || []).length || 0, color: "#22C55E" },
             { name: "Buyers", value: new Set((orders || []).map(o => o.buyerId).filter(Boolean)).size || 0, color: "#F59E0B" },
             { name: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0, color: "#8B5CF6" },
           ]}
           links={[
-            { source: "Farmers", target: "Centres", value: (profiles || []).filter(p => p.role === "farmer").length || 0 },
+            { source: "Farmers", target: "Centres", value: (profiles || []).filter(p => p.role === "farmer" || p.role === "lead_farmer").length || 0 },
             { source: "Centres", target: "Buyers", value: new Set((orders || []).map(o => o.buyerId).filter(Boolean)).size || 0 },
             { source: "Buyers", target: "Orders", value: (orders || []).filter(o => o?.status && !["cancelled", "rejected"].includes(o.status.toLowerCase())).length || 0 },
           ]}

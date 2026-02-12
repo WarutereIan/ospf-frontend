@@ -41,8 +41,10 @@ import { IconInfoCircle } from "@tabler/icons-react";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransport } from "@/contexts/TransportContext";
+import { useAggregation } from "@/contexts/AggregationContext";
 import { BatchTraceabilityDialog, type BatchTraceabilityInfo } from "@/components/buyer/BatchTraceabilityDialog";
 import { getFarmerPickupBookings } from "@/services/transportService";
+import { getProfileById } from "@/services/profileService";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { ProduceListing } from "@/types/marketplace";
@@ -60,6 +62,10 @@ const qualityGrades = [
   { label: "Grade A - Premium", value: "A", color: "bg-green-100 text-green-800" },
   { label: "Grade B - Standard", value: "B", color: "bg-yellow-100 text-yellow-800" },
   { label: "Grade C - Processing", value: "C", color: "bg-orange-100 text-orange-800" },
+];
+
+const quantityUnits = [
+  { label: "Kilograms (kg)", value: "kg" },
 ];
 
 // Sub-counties in Machakos
@@ -94,11 +100,27 @@ interface UnifiedProduce {
   lifecycleStage?: string;
 }
 
+const initialNewListing = {
+  variety: "",
+  quantity: "",
+  quantityUnit: "kg",
+  qualityGrade: "",
+  pricePerKg: "",
+  expectedReadyAt: "",
+  village: "",
+  ward: "",
+  location: "",
+  aggregationCenterId: "",
+  description: "",
+  photoUrls: "",
+};
+
 export function ProduceManagement() {
   const { listings, fetchListings, createListing, updateListing, deleteListing, isLoading, listingFilters, setListingFilters } = useMarketplace();
   const { user } = useAuth();
   const { fetchFarmerBookings } = useTransport();
-  
+  const { centers: aggregationCenters, fetchCenters } = useAggregation();
+
   const [activeTab, setActiveTab] = useState<ProduceType>("all");
   const [pickedUpProduce, setPickedUpProduce] = useState<PickupSlotBooking[]>([]);
   const [isLoadingPickedUp, setIsLoadingPickedUp] = useState(false);
@@ -108,14 +130,7 @@ export function ProduceManagement() {
   const [newListingOpen, setNewListingOpen] = useState(false);
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const [newListing, setNewListing] = useState({
-    variety: "",
-    quantity: "",
-    qualityGrade: "",
-    pricePerKg: "",
-    location: "",
-    description: "",
-  });
+  const [newListing, setNewListing] = useState(initialNewListing);
 
   // Fetch farmer's listings on mount and when filters change
   useEffect(() => {
@@ -130,6 +145,19 @@ export function ProduceManagement() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterVariety, user?.id]);
+
+  // When post-produce dialog opens: fetch aggregation centers and auto-link assigned centre from farmer profile
+  useEffect(() => {
+    if (!newListingOpen) return;
+    fetchCenters();
+    if (user?.id) {
+      getProfileById(user.id).then((profile) => {
+        if (profile?.aggregationCenterId) {
+          setNewListing((prev) => ({ ...prev, aggregationCenterId: profile.aggregationCenterId || prev.aggregationCenterId }));
+        }
+      });
+    }
+  }, [newListingOpen, user?.id, fetchCenters]);
 
   // Fetch picked up produce from pickup bookings
   useEffect(() => {
@@ -291,48 +319,52 @@ export function ProduceManagement() {
   };
 
   const handleAddListing = async () => {
-    if (
+    const hasRequired =
       newListing.variety &&
       newListing.quantity &&
       newListing.qualityGrade &&
       newListing.pricePerKg &&
-      newListing.location
-    ) {
-      try {
-        const listing: Partial<ProduceListing> = {
-          variety: newListing.variety as any,
-          quantity: parseInt(newListing.quantity),
-          availableQuantity: parseInt(newListing.quantity),
-          qualityGrade: newListing.qualityGrade as any,
-          pricePerKg: parseFloat(newListing.pricePerKg),
-          location: newListing.location,
-          subCounty: newListing.location,
-          description: newListing.description,
-          status: "active",
-        };
+      newListing.expectedReadyAt &&
+      newListing.village?.trim() &&
+      newListing.ward?.trim() &&
+      newListing.location &&
+      newListing.aggregationCenterId;
+    if (!hasRequired) return;
+    try {
+      const photos = newListing.photoUrls
+        ? newListing.photoUrls.split(/[\n,]+/).map((u) => u.trim()).filter(Boolean)
+        : undefined;
+      const listing: Partial<ProduceListing> = {
+        variety: newListing.variety as any,
+        quantity: parseInt(newListing.quantity),
+        availableQuantity: parseInt(newListing.quantity),
+        quantityUnit: newListing.quantityUnit,
+        qualityGrade: newListing.qualityGrade as any,
+        pricePerKg: parseFloat(newListing.pricePerKg),
+        expectedReadyAt: new Date(newListing.expectedReadyAt).toISOString(),
+        village: newListing.village.trim(),
+        ward: newListing.ward.trim(),
+        location: newListing.location,
+        subCounty: newListing.location,
+        county: "Machakos",
+        aggregationCenterId: newListing.aggregationCenterId || undefined,
+        description: newListing.description || undefined,
+        photos: photos?.length ? photos : undefined,
+      };
 
-        await createListing(listing);
-        showSuccess(
-          "Listing created successfully",
-          `Your ${newListing.variety} listing has been added to the marketplace`
-        );
-        setNewListing({
-          variety: "",
-          quantity: "",
-          qualityGrade: "",
-          pricePerKg: "",
-          location: "",
-          description: "",
-        });
-        setNewListingOpen(false);
-        // Refresh listings
-        if (user?.id) {
-          await fetchListings({ farmerId: user.id });
-        }
-      } catch (error) {
-        console.error("Failed to create listing:", error);
-        showError("Failed to create listing", formatApiError(error));
+      await createListing(listing);
+      showSuccess(
+        "Listing submitted for approval",
+        `Your ${newListing.variety} listing has been submitted. A lead farmer will review it before it appears on the marketplace.`
+      );
+      setNewListing(initialNewListing);
+      setNewListingOpen(false);
+      if (user?.id) {
+        await fetchListings({ farmerId: user.id });
       }
+    } catch (error) {
+      console.error("Failed to create listing:", error);
+      showError("Failed to create listing", formatApiError(error));
     }
   };
 
@@ -358,8 +390,29 @@ export function ProduceManagement() {
         return "bg-blue-100 text-blue-800";
       case "inactive":
         return "bg-gray-100 text-gray-800";
+      case "PENDING_LEAD_APPROVAL":
+        return "bg-amber-100 text-amber-800";
+      case "REVISION_REQUESTED":
+        return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "PENDING_LEAD_APPROVAL":
+        return "Pending approval";
+      case "REVISION_REQUESTED":
+        return "Revision requested";
+      case "active":
+        return "Active";
+      case "sold":
+        return "Sold";
+      case "inactive":
+        return "Inactive";
+      default:
+        return status;
     }
   };
 
@@ -397,6 +450,19 @@ export function ProduceManagement() {
     sold: listings.filter((l) => l.status === "sold").length,
   };
 
+  // Missing required fields for post-produce form (for submit-disabled indicator)
+  const newListingMissing: string[] = [];
+  if (!newListing.variety) newListingMissing.push("Variety");
+  if (!newListing.quantity) newListingMissing.push("Quantity");
+  if (!newListing.qualityGrade) newListingMissing.push("Grade / quality");
+  if (!newListing.pricePerKg) newListingMissing.push("Price per kg");
+  if (!newListing.expectedReadyAt) newListingMissing.push("Expected ready date & time");
+  if (!newListing.village?.trim()) newListingMissing.push("Village");
+  if (!newListing.ward?.trim()) newListingMissing.push("Ward");
+  if (!newListing.location) newListingMissing.push("Sub-county");
+  if (!newListing.aggregationCenterId) newListingMissing.push("Aggregation centre");
+  const isNewListingSubmitDisabled = newListingMissing.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -413,7 +479,220 @@ export function ProduceManagement() {
             View and manage all your produce - listings and picked up batches with full traceability
           </p>
         </div>
-     
+        <Dialog
+          open={newListingOpen}
+          onOpenChange={(open) => {
+            setNewListingOpen(open);
+            if (!open) setNewListing(initialNewListing);
+          }}
+        >
+          <DialogTrigger
+            render={
+              <Button className="shrink-0">
+                <IconPlus className="mr-2 h-4 w-4" />
+                Post produce
+              </Button>
+            }
+          />
+          <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogHeader className="shrink-0">
+              <DialogTitle>Post produce</DialogTitle>
+              <DialogDescription>
+                Add a new listing. It will be submitted for lead farmer approval before appearing on the marketplace.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4 min-h-0 overflow-y-auto">
+              {/* Core Commodity Details */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-stone-700">Core commodity details</p>
+                <p className="text-xs text-muted-foreground">Commodity type: OFSP</p>
+                <FieldGroup>
+                  <FieldLabel>Variety</FieldLabel>
+                  <Select
+                    value={newListing.variety}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, variety: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>{newListing.variety ? undefined : "Select variety"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ofspVarieties.map((v) => (
+                        <SelectItem key={v.value} value={v.value}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldGroup>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FieldGroup>
+                    <FieldLabel>Quantity</FieldLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="e.g. 100"
+                      value={newListing.quantity}
+                      onChange={(e) => setNewListing((prev) => ({ ...prev, quantity: e.target.value }))}
+                    />
+                  </FieldGroup>
+                  <FieldGroup>
+                    <FieldLabel>Unit of measure</FieldLabel>
+                    <Select
+                      value={newListing.quantityUnit}
+                      onValueChange={(v) => setNewListing((prev) => ({ ...prev, quantityUnit: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {quantityUnits.map((u) => (
+                          <SelectItem key={u.value} value={u.value}>
+                            {u.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FieldGroup>
+                </div>
+                <FieldGroup>
+                  <FieldLabel>Grade / quality classification</FieldLabel>
+                  <Select
+                    value={newListing.qualityGrade}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, qualityGrade: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>{newListing.qualityGrade ? undefined : "Select grade"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {qualityGrades.map((g) => (
+                        <SelectItem key={g.value} value={g.value}>
+                          {g.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Expected date and time ready at aggregation centre</FieldLabel>
+                  <Input
+                    type="datetime-local"
+                    value={newListing.expectedReadyAt}
+                    onChange={(e) => setNewListing((prev) => ({ ...prev, expectedReadyAt: e.target.value }))}
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Price per kg (KES)</FieldLabel>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="e.g. 45"
+                    value={newListing.pricePerKg}
+                    onChange={(e) => setNewListing((prev) => ({ ...prev, pricePerKg: e.target.value }))}
+                  />
+                </FieldGroup>
+              </div>
+
+              {/* Location information */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-stone-700">Location information</p>
+                <FieldGroup>
+                  <FieldLabel>Village</FieldLabel>
+                  <Input
+                    placeholder="e.g. Masinga Central"
+                    value={newListing.village}
+                    onChange={(e) => setNewListing((prev) => ({ ...prev, village: e.target.value }))}
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Ward</FieldLabel>
+                  <Input
+                    placeholder="e.g. Masinga Ward"
+                    value={newListing.ward}
+                    onChange={(e) => setNewListing((prev) => ({ ...prev, ward: e.target.value }))}
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Sub-county</FieldLabel>
+                  <Select
+                    value={newListing.location}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, location: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>{newListing.location ? undefined : "Select sub-county"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subCounties.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Assigned aggregation centre</FieldLabel>
+                  <Select
+                    value={newListing.aggregationCenterId}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, aggregationCenterId: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>{newListing.aggregationCenterId ? undefined : "Select centre (auto-linked if assigned)"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {aggregationCenters.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FieldGroup>
+              </div>
+
+              {/* Visual evidence - optional */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-stone-700">Visual evidence (optional)</p>
+                <FieldGroup>
+                  <FieldLabel>Images of the produce</FieldLabel>
+                  <Textarea
+                    placeholder="Add image URLs, one per line or comma-separated"
+                    value={newListing.photoUrls}
+                    onChange={(e) => setNewListing((prev) => ({ ...prev, photoUrls: e.target.value }))}
+                    rows={2}
+                  />
+                </FieldGroup>
+              </div>
+
+              <FieldGroup>
+                <FieldLabel>Description (optional)</FieldLabel>
+                <Textarea
+                  placeholder="Notes about this batch..."
+                  value={newListing.description}
+                  onChange={(e) => setNewListing((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={2}
+                />
+              </FieldGroup>
+            </div>
+            <DialogFooter className="shrink-0 flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setNewListingOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddListing}
+                disabled={isNewListingSubmitDisabled}
+              >
+                Submit for approval
+              </Button>
+              {isNewListingSubmitDisabled && (
+                <span className="w-full text-xs text-amber-700 flex items-center gap-1.5 py-1 order-first">
+                  <IconAlertTriangle className="h-4 w-4 shrink-0" />
+                  Missing: {newListingMissing.join(", ")}
+                </span>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Tab Navigation */}
@@ -621,7 +900,7 @@ export function ProduceManagement() {
                       <TableCell>{getSubCountyName(produce.location)}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={getStatusColor(produce.status)}>
-                          {produce.lifecycleStage || produce.status}
+                          {produce.type === "listing" ? getStatusLabel(produce.status) : (produce.lifecycleStage || produce.status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -650,10 +929,15 @@ export function ProduceManagement() {
                           No produce found
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {activeTab === "listings" && "Try adjusting your search or filters, or post a new listing"}
+                          {activeTab === "listings" && "Try adjusting your search or filters, or "}
                           {activeTab === "picked_up" && "No picked up produce found. Book a pickup schedule to get started."}
                           {activeTab === "all" && "Try adjusting your search or filters"}
                         </p>
+                        {activeTab === "listings" && (
+                          <Button variant="link" className="mt-2" onClick={() => setNewListingOpen(true)}>
+                            Post a new listing
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

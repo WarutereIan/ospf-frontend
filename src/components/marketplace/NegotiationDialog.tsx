@@ -83,7 +83,7 @@ export function NegotiationDialog({
 
   const negotiation = selectedNegotiation;
   const isBuyer = role === "buyer";
-  const isFarmer = role === "farmer";
+  const isFarmer = role === "farmer" || role === "lead_farmer";
   const canInteract = negotiation && 
     (negotiation.status === "pending" || negotiation.status === "counter_offer") &&
     !negotiation.expiresAt || 

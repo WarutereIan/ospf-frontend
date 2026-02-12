@@ -220,8 +220,8 @@ export function Users() {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      if (!firstName || !formData.phone || !formData.email) {
-        showError("Please fill in all required fields");
+      if (!firstName || !formData.phone) {
+        showError("Please fill in name and phone");
         return;
       }
 
@@ -237,7 +237,7 @@ export function Users() {
       }
 
       await createUser({
-        email: formData.email,
+        email: formData.email?.trim() ?? "",
         phone: formData.phone,
         password: formData.password,
         role: formData.role,
@@ -455,7 +455,7 @@ export function Users() {
         firstName,
         lastName,
         // Persist farmer group assignment when applicable
-        ...(manageForm.role === "farmer" && {
+        ...((manageForm.role === "farmer" || manageForm.role === "lead_farmer") && {
           farmerGroupId: manageForm.farmerGroupId || undefined,
         }),
         // Persist county staff assignments when applicable
@@ -597,6 +597,7 @@ export function Users() {
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="farmer">Farmer</SelectItem>
+                <SelectItem value="lead_farmer">Lead Farmer</SelectItem>
                 <SelectItem value="buyer">Buyer</SelectItem>
                 <SelectItem value="input_provider">Input Provider</SelectItem>
                 <SelectItem value="transport_provider">Transport Provider</SelectItem>
@@ -833,6 +834,7 @@ export function Users() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="farmer">Farmer</SelectItem>
+                  <SelectItem value="lead_farmer">Lead Farmer</SelectItem>
                   <SelectItem value="buyer">Buyer</SelectItem>
                   <SelectItem value="input_provider">Input Provider</SelectItem>
                   <SelectItem value="transport_provider">Transport Provider</SelectItem>
@@ -844,7 +846,7 @@ export function Users() {
             </div>
 
             {/* Farmer Group Assignment (for farmers) */}
-            {formData.role === "farmer" && (
+            {(formData.role === "farmer" || formData.role === "lead_farmer") && (
               <div className="space-y-2">
                 <label className="text-sm font-medium">Farmer Group (Optional)</label>
                 <Select
@@ -962,23 +964,36 @@ export function Users() {
               </>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleCreateUser} 
-              disabled={
-                !formData.name || 
-                !formData.phone || 
-                !formData.email ||
-                !formData.password ||
-                formData.password.length < 8 ||
-                (formData.role === "aggregation_manager" && !formData.aggregationCenterId)
-              }
-            >
-              Create User
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center">
+            {(() => {
+              const missing: string[] = [];
+              if (!formData.name?.trim()) missing.push("Name");
+              if (!formData.phone?.trim()) missing.push("Phone");
+              if (!formData.password) missing.push("Password");
+              else if (formData.password.length < 8) missing.push("Password (min 8 characters)");
+              if (formData.role === "aggregation_manager" && !formData.aggregationCenterId) missing.push("Aggregation center");
+              const isDisabled = missing.length > 0;
+              return (
+                <>
+                  {isDisabled && (
+                    <p className="text-sm text-muted-foreground w-full sm:w-auto sm:mr-auto">
+                      Provide the missing info: {missing.join(", ")}
+                    </p>
+                  )}
+                  <div className="flex gap-2 w-full sm:w-auto justify-end">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleCreateUser} 
+                      disabled={isDisabled}
+                    >
+                      Create User
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1202,6 +1217,7 @@ export function Users() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="farmer">Farmer</SelectItem>
+                      <SelectItem value="lead_farmer">Lead Farmer</SelectItem>
                       <SelectItem value="buyer">Buyer</SelectItem>
                       <SelectItem value="input_provider">Input Provider</SelectItem>
                       <SelectItem value="transport_provider">Transport Provider</SelectItem>
@@ -1237,7 +1253,7 @@ export function Users() {
 
               {/* Assignments (read-only for now, based on role) */}
               <div className="space-y-4">
-                {manageForm.role === "farmer" && (
+                {(manageForm.role === "farmer" || manageForm.role === "lead_farmer") && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Farmer Group</label>
                     <Select

@@ -68,6 +68,7 @@ export interface User {
 function mapRoleToBackend(role: UserRole): string {
   const roleMap: Record<UserRole, string> = {
     farmer: 'FARMER',
+    lead_farmer: 'LEAD_FARMER',
     buyer: 'BUYER',
     input_provider: 'INPUT_PROVIDER',
     transport_provider: 'TRANSPORT_PROVIDER',
@@ -86,11 +87,12 @@ function mapRoleToBackend(role: UserRole): string {
 function mapRoleFromBackend(role: string): UserRole {
   const roleMap: Record<string, UserRole> = {
     FARMER: 'farmer',
+    LEAD_FARMER: 'lead_farmer',
     BUYER: 'buyer',
     INPUT_PROVIDER: 'input_provider',
     TRANSPORT_PROVIDER: 'transport_provider',
     AGGREGATION_MANAGER: 'aggregation_manager',
-    EXTENSION_OFFICER: 'county_officer', // Backend uses EXTENSION_OFFICER
+    EXTENSION_OFFICER: 'county_officer',
     STAFF: 'staff',
     ADMIN: 'staff',
   };

@@ -23,16 +23,17 @@ const ROUTE_ROLE_RULES: RouteRoleRule[] = [
   { pattern: "/dashboard/input-provider", roles: ["input_provider"] },
   { pattern: "/dashboard/transport-provider", roles: ["transport_provider"] },
 
-  { pattern: "/dashboard/farmer", roles: ["farmer"] },
-  { pattern: "/farmer/marketplace", roles: ["farmer"] },
+  { pattern: "/dashboard/lead-farmer", roles: ["lead_farmer", "staff"] },
+  { pattern: "/dashboard/farmer", roles: ["farmer", "lead_farmer"] },
+  { pattern: "/farmer/marketplace", roles: ["farmer", "lead_farmer"] },
 
   { pattern: "/dashboard/buyer", roles: ["buyer"] },
   { pattern: "/dashboard/buyer/marketplace", roles: ["buyer"] },
 
-  { pattern: "/dashboard/produce", roles: ["farmer"] },
-  { pattern: "/dashboard/orders", roles: ["farmer"] },
+  { pattern: "/dashboard/produce", roles: ["farmer", "lead_farmer"] },
+  { pattern: "/dashboard/orders", roles: ["farmer", "lead_farmer"] },
 
-  { pattern: "/marketplace/inputs", roles: ["farmer"] },
+  { pattern: "/marketplace/inputs", roles: ["farmer", "lead_farmer"] },
 
   { pattern: "/dashboard/inputs", roles: ["input_provider"] },
   { pattern: "/dashboard/input-inventory", roles: ["input_provider"] },
@@ -47,8 +48,8 @@ const ROUTE_ROLE_RULES: RouteRoleRule[] = [
 
   { pattern: "/dashboard/payments", roles: ["farmer", "buyer", "input_provider", "transport_provider"] },
 
-  { pattern: "/marketplace", roles: ["farmer", "buyer"] },
-  { pattern: "/", roles: ["farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"] },
+  { pattern: "/marketplace", roles: ["farmer", "lead_farmer", "buyer"] },
+  { pattern: "/", roles: ["farmer", "lead_farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"] },
 ];
 
 function pathMatches(pattern: string, pathname: string): boolean {
@@ -67,7 +68,7 @@ export function getAllowedRolesForPath(pathname: string): UserRole[] {
     const p = pattern.replace(/\/$/, "") || "/";
     if (pathMatches(p, norm)) return roles;
   }
-  return ["farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"];
+  return ["farmer", "lead_farmer", "buyer", "officer", "county_officer", "staff", "aggregation_manager", "input_provider", "transport_provider"];
 }
 
 /**

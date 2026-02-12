@@ -72,7 +72,7 @@ export function Farmers() {
 
   // Enrich farmers with calculated fields from orders
   const farmers = useMemo(() => {
-    const farmerProfiles = profiles.filter(p => p.role === "farmer") as FarmerProfile[];
+    const farmerProfiles = profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer") as FarmerProfile[];
     
     return farmerProfiles.map(farmer => {
       // Get orders for this farmer

@@ -36,7 +36,7 @@ export interface RegisterRequest {
   email: string;
   phone: string;
   password: string;
-  role: 'FARMER' | 'BUYER' | 'TRANSPORT_PROVIDER' | 'AGGREGATION_MANAGER' | 'INPUT_PROVIDER' | 'EXTENSION_OFFICER';
+  role: 'FARMER' | 'LEAD_FARMER' | 'BUYER' | 'TRANSPORT_PROVIDER' | 'AGGREGATION_MANAGER' | 'INPUT_PROVIDER' | 'EXTENSION_OFFICER';
   profile: {
     firstName: string;
     lastName: string;
@@ -72,6 +72,7 @@ export interface AuthResponse {
 export function mapUserRole(backendRole: string): UserRole {
   const roleMap: Record<string, UserRole> = {
     FARMER: 'farmer',
+    LEAD_FARMER: 'lead_farmer',
     BUYER: 'buyer',
     EXTENSION_OFFICER: 'officer',
     STAFF: 'staff',

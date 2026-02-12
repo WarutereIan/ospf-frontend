@@ -91,10 +91,12 @@ function mapListingStatus(backendStatus: string): ListingStatus {
     ACTIVE: 'active',
     SOLD: 'sold',
     INACTIVE: 'inactive',
-    EXPIRED: 'pending', // Backend has EXPIRED, frontend uses pending
+    EXPIRED: 'pending',
     PENDING: 'pending',
+    PENDING_LEAD_APPROVAL: 'PENDING_LEAD_APPROVAL',
+    REVISION_REQUESTED: 'REVISION_REQUESTED',
   };
-  return statusMap[backendStatus] || 'inactive';
+  return statusMap[backendStatus] || (backendStatus as ListingStatus) || 'inactive';
 }
 
 /**
@@ -522,11 +524,15 @@ interface CreateListingDto {
   county: string;
   subcounty?: string;
   ward?: string;
+  village?: string;
   location?: string;
   description?: string;
   photos?: string[];
   batchId?: string;
   harvestDate?: string;
+  expectedReadyAt?: string;
+  aggregationCenterId?: string;
+  quantityUnit?: string;
 }
 
 /**
@@ -545,12 +551,16 @@ function toCreateListingDto(listing: Partial<ProduceListing>): CreateListingDto 
     pricePerKg: typeof listing.pricePerKg === 'number' ? listing.pricePerKg : 0,
     county: (L.county as string) || (listing.location || ''),
     subcounty: (L.subcounty as string) ?? listing.subCounty,
-    ward: L.ward as string | undefined,
+    ward: (L.ward as string) ?? listing.ward,
+    village: (L.village as string) ?? listing.village,
     location: listing.location,
     description: listing.description,
     photos: listing.photos,
     batchId: listing.batchId,
     harvestDate: L.harvestDate as string | undefined,
+    expectedReadyAt: (L.expectedReadyAt as string) ?? listing.expectedReadyAt,
+    aggregationCenterId: (L.aggregationCenterId as string) ?? listing.aggregationCenterId,
+    quantityUnit: (L.quantityUnit as string) ?? listing.quantityUnit ?? 'kg',
   };
 }
 
@@ -580,10 +590,14 @@ interface UpdateListingDto {
   county?: string;
   subcounty?: string;
   ward?: string;
+  village?: string;
   location?: string;
   description?: string;
   photos?: string[];
   status?: string;
+  expectedReadyAt?: string;
+  aggregationCenterId?: string;
+  quantityUnit?: string;
 }
 
 /**
@@ -605,10 +619,14 @@ function toUpdateListingDto(listing: Partial<ProduceListing>): UpdateListingDto 
   if (ext.county) dto.county = ext.county as string;
   if (ext.subcounty) dto.subcounty = ext.subcounty as string;
   if (ext.ward) dto.ward = ext.ward as string;
+  if (listing.village) dto.village = listing.village;
   if (listing.location) dto.location = listing.location;
   if (listing.description) dto.description = listing.description;
   if (listing.photos) dto.photos = listing.photos;
   if (listing.status) dto.status = listing.status;
+  if (listing.expectedReadyAt) dto.expectedReadyAt = listing.expectedReadyAt;
+  if (listing.aggregationCenterId !== undefined) dto.aggregationCenterId = listing.aggregationCenterId;
+  if (listing.quantityUnit) dto.quantityUnit = listing.quantityUnit;
   return dto;
 }
 
@@ -636,6 +654,49 @@ export async function deleteListing(id: string): Promise<void> {
   } catch (error) {
     console.error('Error deleting listing:', error);
     throw error;
+  }
+}
+
+/**
+ * Listings pending lead farmer approval (lead farmer / staff only)
+ * Backend: GET /api/v1/marketplace/listings/pending-approval
+ */
+export async function getListingsPendingApproval(filters?: {
+  county?: string;
+  ward?: string;
+  aggregationCenterId?: string;
+}): Promise<ProduceListing[]> {
+  const params: Record<string, string> = {};
+  if (filters?.county) params.county = filters.county;
+  if (filters?.ward) params.ward = filters.ward;
+  if (filters?.aggregationCenterId) params.aggregationCenterId = filters.aggregationCenterId;
+  const list = await apiGet<any[]>('/marketplace/listings/pending-approval', Object.keys(params).length ? params : undefined);
+  return (list || []).map(transformProduceListing);
+}
+
+/**
+ * Approve a listing (lead farmer / staff only)
+ * Backend: POST /api/v1/marketplace/listings/:id/approve
+ */
+export async function approveListing(id: string): Promise<ApiResponse<ProduceListing>> {
+  try {
+    const updated = await apiPost<any>(`/marketplace/listings/${id}/approve`, {});
+    return { data: transformProduceListing(updated), message: "Listing approved" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to approve listing" };
+  }
+}
+
+/**
+ * Reject / return listing for correction (lead farmer / staff only)
+ * Backend: POST /api/v1/marketplace/listings/:id/reject
+ */
+export async function rejectListing(id: string, reason?: string): Promise<ApiResponse<ProduceListing>> {
+  try {
+    const updated = await apiPost<any>(`/marketplace/listings/${id}/reject`, { reason });
+    return { data: transformProduceListing(updated), message: "Listing returned for revision" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to reject listing" };
   }
 }
 

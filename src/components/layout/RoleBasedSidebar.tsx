@@ -73,19 +73,22 @@ const officerMenuItems: MenuItem[] = [
   { name: "Advisory", path: "/dashboard/county-officer/advisory", icon: IconInfoCircle },
 ];
 
+// Lead Farmer: same as farmer dashboard + extra tab for commodity approvals
+const leadFarmerMenuItems: MenuItem[] = [
+  ...farmerMenuItems,
+  { name: "Approvals", path: "/dashboard/lead-farmer", icon: IconClipboardCheck },
+];
+
 // Staff menu items
 const staffMenuItems: MenuItem[] = [
   { name: "My Dashboard", path: "/dashboard/staff", icon: IconChartBar },
-  //{ name: "Partners", path: "/dashboard/staff/partners", icon: IconUsers },
   { name: "Users", path: "/dashboard/staff/users", icon: IconUsers },
+  { name: "Commodity approval", path: "/dashboard/lead-farmer", icon: IconClipboardCheck },
   { name: "Farmer Groups", path: "/dashboard/staff/farmer-groups", icon: IconUsers },
   { name: "Aggregation Centers", path: "/dashboard/staff/aggregation-centers", icon: IconBuilding },
   { name: "Activity Logs", path: "/dashboard/staff/activity-logs", icon: IconFileText },
-  //{ name: "Data Quality", path: "/dashboard/staff/data-quality", icon: IconClipboardCheck },
-  //{ name: "Transaction Evidence", path: "/dashboard/staff/transaction-evidence", icon: IconFileText },
   { name: "Analytics", path: "/dashboard/staff/analytics", icon: IconChartBar },
   { name: "Reports", path: "/dashboard/staff/reports", icon: IconFileText },
-  
 ];
 
 // Aggregation Manager menu items
@@ -131,6 +134,8 @@ function getMenuItemsForRole(role: UserRole | null): MenuItem[] {
     case "officer":
     case "county_officer":
       return officerMenuItems;
+    case "lead_farmer":
+      return leadFarmerMenuItems;
     case "staff":
       return staffMenuItems;
     case "aggregation_manager":

@@ -9,6 +9,7 @@ import { getLocalUser, storeLocalUser, clearLocalAuth } from "@/lib/api-client";
 
 export type UserRole =
   | "farmer"
+  | "lead_farmer"
   | "buyer"
   | "officer"
   | "extension_officer"

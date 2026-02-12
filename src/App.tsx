@@ -83,6 +83,7 @@ import { StaffReports } from "@/pages/staff/Reports";
 import { Settings } from "@/pages/staff/Settings";
 import { FarmerGroups } from "@/pages/staff/FarmerGroups";
 import { AggregationCenters } from "@/pages/staff/AggregationCenters";
+import { PendingApprovalPage } from "@/pages/lead-farmer/PendingApprovalPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
 export function App() {
@@ -171,6 +172,10 @@ export function App() {
             <Route path="/dashboard/county-officer/centers" element={<Centers />} />
             <Route path="/dashboard/county-officer/advisory" element={<Advisory />} />
             
+            {/* Lead Farmer: commodity approval queue */}
+            <Route path="/dashboard/lead-farmer" element={<PendingApprovalPage />} />
+            <Route path="/dashboard/lead-farmer/pending-approval" element={<PendingApprovalPage />} />
+
             {/* Staff Routes */}
             <Route path="/dashboard/staff/users" element={<Users />} />
             <Route path="/dashboard/staff/farmer-groups" element={<FarmerGroups />} />

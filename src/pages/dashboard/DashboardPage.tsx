@@ -13,6 +13,8 @@ export function DashboardPage() {
     case "officer":
     case "county_officer":
       return <Navigate to="/dashboard/county-officer" replace />;
+    case "lead_farmer":
+      return <Navigate to="/farmer/marketplace" replace />;
     case "staff":
       return <Navigate to="/dashboard/staff" replace />;
     case "aggregation_manager":

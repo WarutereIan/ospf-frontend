@@ -129,7 +129,7 @@ export function OfficerDashboard() {
     }
 
     // Fallback to raw data calculation
-    const farmers = profiles.filter(p => p.role === "farmer");
+    const farmers = profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer");
     const activeFarmers = farmers.filter(f => f.status === "active").length;
     
     const totalVolume = inventory.reduce((sum, item) => sum + item.quantity, 0); // Keep in kg
@@ -177,7 +177,7 @@ export function OfficerDashboard() {
     }
 
     // Fallback to raw data calculation
-    const farmers = profiles.filter(p => p.role === "farmer");
+    const farmers = profiles.filter(p => p.role === "farmer" || p.role === "lead_farmer");
     return farmers
       .slice(0, 5)
       .map(farmer => {

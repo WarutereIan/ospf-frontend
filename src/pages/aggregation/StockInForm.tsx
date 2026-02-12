@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
 import { GradingMatrixGuide } from "@/components/quality/GradingMatrixGuide";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/contexts/ProfileContext";
 import { searchBatches, confirmStockTransaction, rejectStockTransaction, getStockTransactions } from "@/services/aggregationService";
 import { showSuccess, showError } from "@/lib/toast";
 import { calculateGradeFromMatrix } from "@/data/gradingMatrix";
@@ -37,6 +38,9 @@ import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/qua
 interface StockInEntry {
   batchId?: string;
   orderId?: string;
+  /** For direct delivery: farmer who delivered to centre (optional) */
+  farmerId?: string;
+  farmerName?: string;
   variety: string;
   quantity: number; // kg
   qualityGrade: "A" | "B" | "C";
@@ -65,10 +69,18 @@ const qualityGrades = [
 export function StockInForm() {
   const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
   const { user } = useAuth();
-  
+  const { profiles: allProfiles, fetchProfiles } = useProfile();
+
+  const farmers = useMemo(
+    () => allProfiles.filter((p) => p.role === "farmer" || p.role === "lead_farmer"),
+    [allProfiles]
+  );
+
   const [formData, setFormData] = useState<Partial<StockInEntry>>({
     batchId: "",
     orderId: "",
+    farmerId: "",
+    farmerName: "",
     variety: "",
     quantity: 0,
     qualityGrade: undefined,
@@ -102,11 +114,12 @@ export function StockInForm() {
   const [selectedTransactionForReject, setSelectedTransactionForReject] = useState<StockTransaction | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  // Fetch centers and pending transactions on mount
+  // Fetch centers, farmers, and pending transactions on mount
   useEffect(() => {
     fetchCenters();
+    fetchProfiles({ role: "farmer" });
     fetchPendingTransactions();
-  }, [fetchCenters, selectedCenter]);
+  }, [fetchCenters, fetchProfiles, selectedCenter]);
 
   // Update dropdown position when input position changes
   useEffect(() => {
@@ -270,6 +283,8 @@ export function StockInForm() {
       quantity: batch.quantity || prev.quantity,
       qualityGrade: batch.qualityGrade || prev.qualityGrade,
       orderId: batch.orderId || prev.orderId,
+      farmerId: batch.farmerId || prev.farmerId,
+      farmerName: batch.farmerName || prev.farmerName,
       // Fill grading matrix criteria if available
       weightRange: (batch as any).weightRange || prev.weightRange,
       colorIntensity: (batch as any).colorIntensity || prev.colorIntensity,
@@ -345,9 +360,9 @@ export function StockInForm() {
         centerId: selectedCenter?.id || centers[0]?.id || "",
         centerName: selectedCenter?.name || centers[0]?.name || "",
         type: "stock_in" as const,
-        // Include farmer info from found batch if available
-        farmerId: foundBatch?.farmerId,
-        farmerName: foundBatch?.farmerName,
+        // Farmer: from direct delivery selector or from selected batch
+        farmerId: formData.farmerId || foundBatch?.farmerId,
+        farmerName: formData.farmerName || foundBatch?.farmerName,
         orderId: formData.orderId,
         variety: formData.variety,
         quantity: formData.quantity || 0,
@@ -376,7 +391,7 @@ export function StockInForm() {
         receiptId: `REC-${Date.now()}`,
         type: "stock_in" as const,
         date: new Date().toISOString(),
-        farmerName: foundBatch?.farmerName || "N/A",
+        farmerName: formData.farmerName || foundBatch?.farmerName || "N/A",
         variety: formData.variety,
         quantity: formData.quantity,
         qualityGrade: formData.qualityGrade,
@@ -391,6 +406,8 @@ export function StockInForm() {
       // Reset form after showing receipt
       setFormData({
         batchId: "",
+        farmerId: "",
+        farmerName: "",
         variety: "",
         quantity: 0,
         qualityGrade: undefined,
@@ -643,6 +660,54 @@ export function StockInForm() {
                         Batch not found. A new batch ID will be generated when you submit.
                       </p>
                     </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Direct delivery – Farmer (optional) */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Direct Delivery – Farmer (Optional)</CardTitle>
+                <CardDescription>
+                  When a farmer delivers directly to the centre (no order, no pickup), select the farmer so the system can create a listing and notify them.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Label>Farmer</Label>
+                  <Select
+                    value={formData.farmerId || "none"}
+                    onValueChange={(value) => {
+                      if (value === "none") {
+                        setFormData((prev) => ({ ...prev, farmerId: "", farmerName: "" }));
+                        return;
+                      }
+                      const farmer = farmers.find((f) => ((f as any).userId ?? f.id) === value);
+                      const name = farmer?.name || [farmer?.firstName, farmer?.lastName].filter(Boolean).join(" ") || farmer?.phone || "";
+                      setFormData((prev) => ({ ...prev, farmerId: value, farmerName: name }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select farmer (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None / Not direct delivery</SelectItem>
+                      {farmers.map((f) => {
+                        const uid = (f as any).userId ?? f.id;
+                        const label = f.name || [f.firstName, f.lastName].filter(Boolean).join(" ") || f.phone || uid;
+                        return (
+                          <SelectItem key={uid} value={uid}>
+                            {label} {f.phone ? `(${f.phone})` : ""}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {formData.farmerId && formData.farmerName && (
+                    <p className="text-sm text-muted-foreground">
+                      Direct delivery from: <strong>{formData.farmerName}</strong>. A listing will be created and the farmer notified.
+                    </p>
                   )}
                 </div>
               </CardContent>
@@ -960,10 +1025,10 @@ export function StockInForm() {
                       {formData.batchId || (foundBatch?.batchId) || "Will be generated"}
                     </span>
                   </div>
-                  {foundBatch && foundBatch.farmerName && (
+                  {(formData.farmerName || foundBatch?.farmerName) && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Farmer</span>
-                      <span className="font-medium">{foundBatch.farmerName}</span>
+                      <span className="font-medium">{formData.farmerName || foundBatch?.farmerName}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm">

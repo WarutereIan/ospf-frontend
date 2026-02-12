@@ -22,6 +22,290 @@
 13. [Notification System](#notification-system)
 14. [Data Points & Outputs](#data-points--outputs)
 15. [Improvement Opportunities](#improvement-opportunities)
+16. [Commodity Listing & Lead Farmer Approval Lifecycle](#commodity-listing--lead-farmer-approval-lifecycle)
+
+---
+
+## Commodity Listing & Lead Farmer Approval Lifecycle
+
+### Overview
+
+A **lead farmer** is a farmer with one additional function: they can approve commodity listings so they go live on the marketplace. They use the same dashboard and routes as farmers (post produce, orders, inputs, pickup schedules, analytics) and have an extra **Approvals** tab for the pending-approval queue.
+
+This workflow governs how **farmers** (and lead farmers) post commodity listings and how **lead farmers** verify and approve them before they become visible to buyers. It ensures full traceability (who posted, who approved, when, and from which location/group/center).
+
+Key statuses (backend `ListingStatus` enum):
+- `PENDING_LEAD_APPROVAL`
+- `REVISION_REQUESTED`
+- `ACTIVE` (approved & live)
+
+Key entities:
+- `User` (roles: `FARMER`, `LEAD_FARMER`, `STAFF`)
+- `ProduceListing`
+- `AggregationCenter`
+- `Notification`
+- Activity logs (for audit trail)
+
+---
+
+### 1. Farmer Posts Commodity Listing (Draft / Pending Lead Farmer Approval)
+
+**Trigger:**  
+Registered **Farmer** submits a new listing via `My Produce` (`/dashboard/produce`) or equivalent flow.
+
+**Actors:**
+- **Farmer** (creator / owner of listing)
+- **System** (validates and persists listing, notifies lead farmers)
+
+**Inputs (UI / DTO fields):**
+- **Core commodity details**
+  - Variety / Commodity type (OFSP variety: `KENYA | SPK004 | KAKAMEGA | KABODE | OTHER`)
+  - Quantity (`quantity`), **Unit of measure** (`quantityUnit`, default `kg`)
+  - Grade / Quality classification (`qualityGrade: A | B | C`)
+  - Price per unit (`pricePerKg`)
+- **Timing / readiness**
+  - Expected date & time commodity is ready at aggregation centre (`expectedReadyAt`)
+- **Location**
+  - County (`county`) – derived from farmer profile or form input
+  - Sub-county (`subCounty`)
+  - Ward (`ward`)
+  - Village (`village`)
+  - Free-text location (`location`) – human-readable
+  - Assigned aggregation centre (optional, can be auto-linked) (`aggregationCenterId`)
+- **Visual / metadata**
+  - Photos (`photos[]`) – optional image URLs
+  - Description (`description`) – optional text
+
+**Backend behaviour:**
+- API: **POST** `/api/v1/marketplace/listings`
+- Creates `ProduceListing` with:
+  - `farmerId` = current user
+  - `quantity`, `availableQuantity` = submitted quantity
+  - `quantityUnit` = provided or default `"kg"`
+  - `qualityGrade`, `pricePerKg`
+  - `harvestDate` = submitted or `now()`
+  - `county`, `subCounty`, `ward`, `village`, `location`
+  - `expectedReadyAt`
+  - `aggregationCenterId` (if provided / auto-resolved)
+  - `photos`, `description`
+  - **Status** = `PENDING_LEAD_APPROVAL`
+  - `approvedById`, `approvedAt`, `rejectionReason` = `null`
+
+**Data Points (stored / updated):**
+- `ProduceListing` row with all above fields
+- `createdAt`, `updatedAt`
+- Foreign keys: `farmerId`, optional `aggregationCenterId`
+
+**Notifications:**
+- To **Lead Farmers**:
+  - Type: `LISTING_PENDING_APPROVAL`
+  - Title: “New commodity listing awaiting verification”
+  - Message includes variety, quantity, and location
+  - Links to lead farmer queue (`/dashboard/lead-farmer`)
+
+**Outputs:**
+- New `ProduceListing` in state `PENDING_LEAD_APPROVAL`
+- Notification records for all lead farmers in scope
+- Activity log entry (e.g. `LISTING_CREATED`)
+
+---
+
+### 2. Lead Farmer Reviews Listing (Verification Stage)
+
+**Trigger:**  
+Lead farmer opens **Pending approval** view:
+- UI: `/dashboard/lead-farmer`  
+- API: **GET** `/api/v1/marketplace/listings/pending-approval`
+
+**Actors:**
+- **Lead Farmer** (or designated staff user)
+- **System**
+
+**Inputs (filters / context):**
+- Optional query params for queue:
+  - `county`
+  - `ward`
+  - `aggregationCenterId`
+- Listing details to review:
+  - Variety, quantity + unit, grade
+  - `expectedReadyAt`
+  - Location (village, ward, county, aggregation center)
+  - Photos
+  - Farmer identity / profile
+  - Created timestamp
+
+**Backend behaviour:**
+- `getListingsPendingApproval`:
+  - Filters `ProduceListing` where `status = PENDING_LEAD_APPROVAL`
+  - Applies optional `county`, `ward`, `aggregationCenterId` filters
+  - Includes `farmer.profile` and `aggregationCenter`
+
+**Data Points:**
+- Pending listing attributes used to support decision:
+  - `id`, `farmerId`, farmer name (via profile)
+  - Variety, quantity, quantityUnit, qualityGrade
+  - `expectedReadyAt`, location, aggregation center
+  - Photos, description
+  - `createdAt`
+
+**Outputs:**
+- UI: queue of listings awaiting verification for that lead farmer / staff user
+- No status changes yet; purely read/triage stage
+
+---
+
+### 3. Lead Farmer Decision – Approve or Return for Revision
+
+#### 3.1 Approve (Listing Goes Live)
+
+**Trigger:**  
+Lead farmer clicks “Approve” in pending queue.
+
+**Actors:**
+- **Lead Farmer**
+- **System**
+- **Farmer** (receives notification)
+
+**Backend behaviour:**
+- API: **POST** `/api/v1/marketplace/listings/:id/approve`
+- Preconditions:
+  - Listing exists
+  - `status = PENDING_LEAD_APPROVAL`
+- Updates `ProduceListing`:
+  - `status = ACTIVE`
+  - `approvedById = leadFarmerId`
+  - `approvedAt = now()`
+  - `rejectionReason = null` (clear any previous comments)
+
+**Data Points (updated):**
+- `status` transition: `PENDING_LEAD_APPROVAL → ACTIVE`
+- `approvedById`, `approvedAt`
+- `updatedAt`
+
+**Notifications:**
+- To **Farmer**:
+  - Type: `LISTING_APPROVED`
+  - Title: “Your commodity listing was approved”
+  - Message: includes variety + quantity; indicates listing is now live
+  - Link: listing details page
+
+**Outputs:**
+- Listing now included in:
+  - Buyer-facing marketplace (default `GET /marketplace/listings` with no `status` filter returns only `ACTIVE`)
+- Audit trail contains:
+  - Who approved (lead farmer user)
+  - When approved
+
+---
+
+#### 3.2 Reject / Return for Correction
+
+**Trigger:**  
+Lead farmer chooses “Return for revision” and optionally adds comments.
+
+**Actors:**
+- **Lead Farmer**
+- **Farmer**
+- **System**
+
+**Inputs:**
+- API: **POST** `/api/v1/marketplace/listings/:id/reject`
+- Request body:  
+  - `reason?: string` – free-text feedback on what to correct
+
+**Backend behaviour:**
+- Preconditions:
+  - Listing exists
+  - `status = PENDING_LEAD_APPROVAL`
+- Updates `ProduceListing`:
+  - `status = REVISION_REQUESTED`
+  - `rejectionReason = reason || null`
+  - `approvedById = null`
+  - `approvedAt = null`
+
+**Data Points (updated):**
+- `status` transition: `PENDING_LEAD_APPROVAL → REVISION_REQUESTED`
+- `rejectionReason` set
+- `updatedAt`
+
+**Notifications:**
+- To **Farmer**:
+  - Type: `LISTING_REVISION_REQUESTED`
+  - Title: “Listing needs revision”
+  - Message: includes `reason` if provided
+  - Link: edit page for listing
+
+**Outputs:**
+- Listing remains **not visible** to buyers
+- Farmer sees the listing marked as “Revision requested” in `My Produce`
+- Feedback captured for traceability
+
+---
+
+### 4. Farmer Revision & Resubmission
+
+**Trigger:**  
+Farmer edits a listing that is in `REVISION_REQUESTED` status and chooses to resubmit.
+
+**Actors:**
+- **Farmer**
+- **System**
+- **Lead Farmer** (will see it again in queue)
+
+**Inputs:**
+- API: **PUT** `/api/v1/marketplace/listings/:id`
+- Editable fields:
+  - Quantity / unit, grade, price
+  - `expectedReadyAt`
+  - Location fields (village, ward, county, aggregation center)
+  - Photos, description
+  - `status` (farmer sets to `PENDING_LEAD_APPROVAL` to resubmit)
+
+**Backend behaviour:**
+- Loads listing and enforces:
+  - Only the **owner farmer** can update (`farmerId` check)
+- If current status is `REVISION_REQUESTED` **and** farmer sets status `PENDING_LEAD_APPROVAL`:
+  - `status` updated to `PENDING_LEAD_APPROVAL`
+  - `rejectionReason` cleared
+- Other fields updated as per standard update rules.
+
+**Data Points (updated):**
+- All modified listing attributes
+- `status` transition: `REVISION_REQUESTED → PENDING_LEAD_APPROVAL`
+- `rejectionReason` reset to `null`
+- `updatedAt`
+
+**Notifications:**
+- (Optional enhancement) Notify lead farmer that listing was resubmitted; can be added similarly to initial notification.
+
+**Outputs:**
+- Listing returns to **pending lead farmer approval** queue
+- Full audit trail exists:
+  - Original submission + timestamp + farmer
+  - All revisions with timestamps
+  - Approval or subsequent revision cycles with who/when
+
+---
+
+### 5. Buyer Visibility Rules
+
+**Buyer marketplace behaviour (read-only):**
+- API: **GET** `/api/v1/marketplace/listings`
+  - When **no** `status` is supplied and **no** `farmerId` filter:
+    - Backend enforces `status = ACTIVE`  
+    - Only approved listings appear on the public marketplace.
+- When **`farmerId` is provided and `status` is omitted**:
+  - Backend does **not** add a status filter → farmer sees **all** their listings (active, pending, revision).
+- When `status` is explicitly provided (e.g. `PENDING_LEAD_APPROVAL`, `REVISION_REQUESTED`):
+  - Backend normalizes and filters accordingly.
+
+**Key Outputs for BI / audit:**
+- For each listing:
+  - Who posted (`farmerId`), when (`createdAt`)
+  - Who approved (`approvedById`), when (`approvedAt`)
+  - How many revision cycles (count of transitions to `REVISION_REQUESTED`)
+  - Where it originated (county, ward, village, `aggregationCenterId`, farmer group via profile)
+  - Final outcome (ACTIVE/SOLD/INACTIVE/EXPIRED)
 
 ---
 
@@ -32,6 +316,7 @@
 | Role | Description | Key Responsibilities |
 |------|-------------|---------------------|
 | **Farmer** | OFSP producer | Post produce, manage orders, track sales, coordinate transport |
+| **Lead Farmer** | Farmer with extra approval function | Everything a farmer can do; plus approve or return commodity listings so they go live (or need revision) on the marketplace |
 | **Buyer** | Produce purchaser | Browse marketplace, place orders, track purchases, rate farmers |
 | **Input Provider** | Agricultural input supplier | Manage input catalog, process orders, coordinate delivery |
 | **Transport Provider** | Logistics service provider | Accept transport requests, track deliveries, update status |

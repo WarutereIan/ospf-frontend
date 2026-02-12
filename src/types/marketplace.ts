@@ -10,7 +10,13 @@
 /**
  * Produce listing status
  */
-export type ListingStatus = "active" | "sold" | "inactive" | "pending";
+export type ListingStatus =
+  | "active"
+  | "sold"
+  | "inactive"
+  | "pending"
+  | "PENDING_LEAD_APPROVAL"
+  | "REVISION_REQUESTED";
 
 /**
  * Quality grade
@@ -68,23 +74,34 @@ export type PaymentStatus =
 export interface ProduceListing {
   id: string; // UUID
   farmerId: string; // Reference to farmer profile
-  farmerName: string; // Denormalized for quick display
+  farmerName?: string; // Denormalized for quick display
   farmerRating?: number; // Denormalized farmer rating
   variety: OFSPVariety;
   quantity: number; // Total quantity available (kg)
   availableQuantity: number; // Remaining quantity (kg)
+  quantityUnit?: string; // Unit of measure, default kg
   qualityGrade: QualityGrade;
   pricePerKg: number;
   location: string;
-  subCounty: string;
+  county?: string;
+  subCounty?: string;
+  ward?: string;
+  village?: string;
   description?: string;
   photos?: string[]; // Image URLs
   status: ListingStatus;
+  expectedReadyAt?: string; // ISO 8601 - when ready at aggregation centre
+  aggregationCenterId?: string;
+  aggregationCenter?: { id: string; name: string };
+  approvedById?: string;
+  approvedBy?: { id: string; profile?: { firstName: string; lastName: string } };
+  approvedAt?: string;
+  rejectionReason?: string;
   responseTime?: number; // Farmer response time in minutes
   distance?: number; // Distance from buyer (km)
   createdAt: string; // ISO 8601
   updatedAt: string; // ISO 8601
-  batchId: string; // Batch ID for traceability
+  batchId?: string; // Batch ID for traceability
   qrCode?: string; // QR code for traceability
   coordinates?: [number, number]; // [lat, lng]
 }
