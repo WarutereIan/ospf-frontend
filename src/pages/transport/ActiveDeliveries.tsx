@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { IconTruck, IconMapPin, IconPhoto, IconCheck, IconLocation } from "@tabler/icons-react";
+import { IconTruck, IconMapPin, IconPhoto, IconCheck, IconLocation, IconLoader2 } from "@tabler/icons-react";
 import { DeliveryTrackingMap } from "@/components/transport/DeliveryTrackingMap";
 import { useTransport } from "@/contexts/TransportContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { uploadImage } from "@/services/uploadService";
+import { showSuccess, showError } from "@/lib/toast";
 import type { Delivery } from "@/types/transport";
 
 export default function ActiveDeliveries() {
@@ -34,6 +36,8 @@ export default function ActiveDeliveries() {
   });
   const [isCapturingLocation, setIsCapturingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch active deliveries on mount
   useEffect(() => {
@@ -52,6 +56,29 @@ export default function ActiveDeliveries() {
   const handleUploadPhoto = (delivery: Delivery) => {
     setSelectedDelivery(delivery);
     setPhotoDialogOpen(true);
+  };
+
+  const handleDeliveryPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length || !selectedDelivery) return;
+
+    setUploadingPhoto(true);
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { url } = await uploadImage(files[i]);
+        urls.push(url);
+      }
+      await addTracking(selectedDelivery.id, { photos: urls });
+      showSuccess("Photo added", "Delivery photo uploaded successfully");
+      setPhotoDialogOpen(false);
+      setSelectedDelivery(null);
+    } catch (err) {
+      showError("Upload failed", err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = "";
+    }
   };
 
   const handleUpdateLocation = (delivery: Delivery) => {
@@ -447,21 +474,37 @@ export default function ActiveDeliveries() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
+              className="hidden"
+              onChange={handleDeliveryPhotoChange}
+            />
             <div className="border-2 border-dashed rounded-lg p-8 text-center">
               <IconPhoto className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
               <p className="text-sm text-muted-foreground mb-4">
                 Click to upload or drag and drop
               </p>
-              <Button variant="outline">
-                Choose File
+              <Button
+                variant="outline"
+                disabled={uploadingPhoto}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                {uploadingPhoto ? (
+                  <>
+                    <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  "Choose File"
+                )}
               </Button>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} className="flex-1">
+              <Button variant="outline" onClick={() => setPhotoDialogOpen(false)} className="flex-1" disabled={uploadingPhoto}>
                 Cancel
-              </Button>
-              <Button onClick={() => setPhotoDialogOpen(false)} className="flex-1">
-                Upload
               </Button>
             </div>
           </div>

@@ -223,61 +223,7 @@ export function FarmerOrders() {
         />
       </div>
 
-      {/* Order Pipeline - 8 Stages */}
-      <OrderPipeline
-        stages={[
-          {
-            name: "1. Order Placed",
-            count: orders.filter((o) => o.status === "order_placed").length,
-            icon: <IconShoppingCart className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "2. Order Accepted",
-            count: orders.filter((o) => o.status === "order_accepted").length,
-            icon: <IconCircleCheck className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "3. Payment Secured",
-            count: orders.filter((o) => o.status === "payment_secured").length,
-            icon: <IconCurrency className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "4. In Transit",
-            count: orders.filter((o) => o.status === "in_transit").length,
-            icon: <IconTruck className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "5. At Aggregation Center",
-            count: orders.filter((o) => o.status === "at_aggregation").length,
-            icon: <IconBuilding className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "6. Quality Approved",
-            count: orders.filter((o) => o.status === "quality_approved").length,
-            icon: <IconClipboardCheck className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "7. Out for Delivery",
-            count: orders.filter((o) => o.status === "out_for_delivery").length,
-            icon: <IconTruck className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-          {
-            name: "8. Delivered & Complete",
-            count: orders.filter((o) => o.status === "delivered" || o.status === "completed").length,
-            icon: <IconCircleCheck className="h-4 w-4" />,
-            color: "#3B82F6",
-          },
-        ]}
-        title="Order Pipeline"
-        description="Real-time order journey through 8 stages"
-      />
+     
 
       {/* Filters and Order List */}
       <Card>

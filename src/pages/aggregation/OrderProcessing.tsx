@@ -204,7 +204,7 @@ export function OrderProcessing() {
                 }}
               >
                 <SelectTrigger id="center-select" className="w-full">
-                  <SelectValue>{selectedCenter ? undefined : "Select an aggregation center"}</SelectValue>
+                  <SelectValue>{selectedCenter ? selectedCenter.name : "Select an aggregation center"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {centers.map((center) => (

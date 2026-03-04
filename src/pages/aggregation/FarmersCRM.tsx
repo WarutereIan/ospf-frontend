@@ -253,7 +253,7 @@ export function FarmersCRM() {
                 }}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue>{selectedCenter ? undefined : "Select a centre"}</SelectValue>
+                  <SelectValue>{center ? center.name : "Select a centre"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {centers.map((c) => (

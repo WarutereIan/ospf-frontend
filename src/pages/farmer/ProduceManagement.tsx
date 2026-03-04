@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,6 +31,9 @@ import {
   IconTruck,
   IconQrcode,
   IconEye,
+  IconLoader2,
+  IconX,
+  IconInfoCircle,
 } from "@tabler/icons-react";
 import {
   StackedBarChart,
@@ -37,16 +41,19 @@ import {
   ProgressBar,
 } from "@/components/visualizations";
 import { OnFarmSortingGuide } from "@/components/farmer/OnFarmSortingGuide";
-import { IconInfoCircle } from "@tabler/icons-react";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTransport } from "@/contexts/TransportContext";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { BatchTraceabilityDialog, type BatchTraceabilityInfo } from "@/components/buyer/BatchTraceabilityDialog";
+import { getBatchTraceability } from "@/services/traceabilityService";
 import { getFarmerPickupBookings } from "@/services/transportService";
 import { getProfileById } from "@/services/profileService";
+import { getCounties, getSubCounties, getWards, getVillages } from "@/services/locationsService";
+import type { County, SubCounty, Ward, Village } from "@/types/locations";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 import type { ProduceListing } from "@/types/marketplace";
 import type { PickupSlotBooking } from "@/types/transport";
 
@@ -107,12 +114,13 @@ const initialNewListing = {
   qualityGrade: "",
   pricePerKg: "",
   expectedReadyAt: "",
-  village: "",
-  ward: "",
-  location: "",
+  countyId: "",
+  subCountyId: "",
+  wardId: "",
+  villageId: "",
   aggregationCenterId: "",
   description: "",
-  photoUrls: "",
+  photos: [] as string[],
 };
 
 export function ProduceManagement() {
@@ -131,6 +139,11 @@ export function ProduceManagement() {
   const [traceabilityDialogOpen, setTraceabilityDialogOpen] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [newListing, setNewListing] = useState(initialNewListing);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [locationCounties, setLocationCounties] = useState<County[]>([]);
+  const [locationSubCounties, setLocationSubCounties] = useState<SubCounty[]>([]);
+  const [locationWards, setLocationWards] = useState<Ward[]>([]);
+  const [locationVillages, setLocationVillages] = useState<Village[]>([]);
 
   // Fetch farmer's listings on mount and when filters change
   useEffect(() => {
@@ -146,10 +159,11 @@ export function ProduceManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus, filterVariety, user?.id]);
 
-  // When post-produce dialog opens: fetch aggregation centers and auto-link assigned centre from farmer profile
+  // When post-produce dialog opens: fetch aggregation centers, locations, and auto-link assigned centre from farmer profile
   useEffect(() => {
     if (!newListingOpen) return;
     fetchCenters();
+    getCounties().then(setLocationCounties);
     if (user?.id) {
       getProfileById(user.id).then((profile) => {
         if (profile?.aggregationCenterId) {
@@ -158,6 +172,30 @@ export function ProduceManagement() {
       });
     }
   }, [newListingOpen, user?.id, fetchCenters]);
+
+  useEffect(() => {
+    if (!newListing.countyId) {
+      setLocationSubCounties([]);
+      return;
+    }
+    getSubCounties(newListing.countyId).then(setLocationSubCounties);
+  }, [newListing.countyId]);
+
+  useEffect(() => {
+    if (!newListing.subCountyId) {
+      setLocationWards([]);
+      return;
+    }
+    getWards(newListing.subCountyId).then(setLocationWards);
+  }, [newListing.subCountyId]);
+
+  useEffect(() => {
+    if (!newListing.wardId) {
+      setLocationVillages([]);
+      return;
+    }
+    getVillages(newListing.wardId).then(setLocationVillages);
+  }, [newListing.wardId]);
 
   // Fetch picked up produce from pickup bookings
   useEffect(() => {
@@ -243,79 +281,38 @@ export function ProduceManagement() {
     setTraceabilityDialogOpen(true);
   };
 
+  const handlePostProducePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files?.length) return;
+    setUploadingPhotos(true);
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { url } = await uploadImage(files[i]);
+        urls.push(url);
+      }
+      setNewListing((prev) => ({ ...prev, photos: [...(prev.photos || []), ...urls] }));
+    } catch (err: unknown) {
+      showError("Upload failed", err instanceof Error ? err.message : "Failed to upload photos");
+    } finally {
+      setUploadingPhotos(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleRemovePostProducePhoto = (index: number) => {
+    setNewListing((prev) => ({
+      ...prev,
+      photos: prev.photos?.filter((_, i) => i !== index) ?? [],
+    }));
+  };
+
   const handleBatchLookup = async (batchId: string): Promise<BatchTraceabilityInfo | null> => {
-    // Find the produce item with this batch ID
-    const produce = unifiedProduce.find((p) => p.batchId === batchId);
-    if (!produce) return null;
-
-    // Mock traceability info - in real app, fetch from API
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const steps = [];
-        if (produce.type === "listing") {
-          steps.push({
-            id: "1",
-            stage: "Harvest",
-            location: produce.location,
-            timestamp: produce.createdAt,
-            actor: user?.name || "Farmer",
-            actorRole: "Farmer",
-            status: "completed" as const,
-            notes: "Produce harvested and listed on marketplace",
-          });
-        } else if (produce.booking) {
-          steps.push({
-            id: "1",
-            stage: "Harvest",
-            location: produce.location,
-            timestamp: produce.booking.bookedAt,
-            actor: user?.name || "Farmer",
-            actorRole: "Farmer",
-            status: "completed" as const,
-            notes: "Produce harvested",
-          });
-          if (produce.booking.pickupConfirmedAt) {
-            steps.push({
-              id: "2",
-              stage: "Pickup Confirmed",
-              location: produce.location,
-              timestamp: produce.booking.pickupConfirmedAt,
-              actor: user?.name || "Farmer",
-              actorRole: "Farmer",
-              status: "completed" as const,
-              notes: `Batch ${batchId} created. Quantity: ${produce.quantity} kg`,
-            });
-          }
-          if (produce.status === "completed") {
-            steps.push({
-              id: "3",
-              stage: "Delivered to Aggregation Center",
-              location: "Aggregation Center",
-              timestamp: produce.booking.pickupConfirmedAt || new Date().toISOString(),
-              actor: "Transport Provider",
-              actorRole: "Logistics",
-              status: "completed" as const,
-              notes: "Produce delivered to aggregation center",
-            });
-          }
-        }
-
-        resolve({
-          batchId,
-          qrCode: produce.qrCode,
-          variety: produce.variety,
-          quantity: produce.quantity,
-          qualityGrade: produce.qualityGrade,
-          farmerId: user?.id || "",
-          farmerName: user?.name || "",
-          farmerLocation: produce.location,
-          aggregationCenter: produce.aggregationCenter || "Not yet delivered",
-          steps,
-          currentStatus: produce.lifecycleStage || produce.status,
-          currentLocation: produce.location,
-        });
-      }, 500);
-    });
+    try {
+      return await getBatchTraceability(batchId);
+    } catch {
+      return null;
+    }
   };
 
   const handleAddListing = async () => {
@@ -325,15 +322,18 @@ export function ProduceManagement() {
       newListing.qualityGrade &&
       newListing.pricePerKg &&
       newListing.expectedReadyAt &&
-      newListing.village?.trim() &&
-      newListing.ward?.trim() &&
-      newListing.location &&
+      newListing.countyId &&
+      newListing.subCountyId &&
+      newListing.wardId &&
+      newListing.villageId &&
       newListing.aggregationCenterId;
     if (!hasRequired) return;
+    const countyName = locationCounties.find((c) => c.id === newListing.countyId)?.name ?? "";
+    const subCountyName = locationSubCounties.find((s) => s.id === newListing.subCountyId)?.name ?? "";
+    const wardName = locationWards.find((w) => w.id === newListing.wardId)?.name ?? "";
+    const villageName = locationVillages.find((v) => v.id === newListing.villageId)?.name ?? "";
     try {
-      const photos = newListing.photoUrls
-        ? newListing.photoUrls.split(/[\n,]+/).map((u) => u.trim()).filter(Boolean)
-        : undefined;
+      const photos = newListing.photos?.length ? newListing.photos : undefined;
       const listing: Partial<ProduceListing> = {
         variety: newListing.variety as any,
         quantity: parseInt(newListing.quantity),
@@ -342,14 +342,14 @@ export function ProduceManagement() {
         qualityGrade: newListing.qualityGrade as any,
         pricePerKg: parseFloat(newListing.pricePerKg),
         expectedReadyAt: new Date(newListing.expectedReadyAt).toISOString(),
-        village: newListing.village.trim(),
-        ward: newListing.ward.trim(),
-        location: newListing.location,
-        subCounty: newListing.location,
-        county: "Machakos",
+        village: villageName,
+        ward: wardName,
+        location: subCountyName,
+        subCounty: subCountyName,
+        county: countyName,
         aggregationCenterId: newListing.aggregationCenterId || undefined,
         description: newListing.description || undefined,
-        photos: photos?.length ? photos : undefined,
+        photos,
       };
 
       await createListing(listing);
@@ -457,9 +457,10 @@ export function ProduceManagement() {
   if (!newListing.qualityGrade) newListingMissing.push("Grade / quality");
   if (!newListing.pricePerKg) newListingMissing.push("Price per kg");
   if (!newListing.expectedReadyAt) newListingMissing.push("Expected ready date & time");
-  if (!newListing.village?.trim()) newListingMissing.push("Village");
-  if (!newListing.ward?.trim()) newListingMissing.push("Ward");
-  if (!newListing.location) newListingMissing.push("Sub-county");
+  if (!newListing.countyId) newListingMissing.push("County");
+  if (!newListing.subCountyId) newListingMissing.push("Sub-county");
+  if (!newListing.wardId) newListingMissing.push("Ward");
+  if (!newListing.villageId) newListingMissing.push("Village");
   if (!newListing.aggregationCenterId) newListingMissing.push("Aggregation centre");
   const isNewListingSubmitDisabled = newListingMissing.length > 0;
 
@@ -593,60 +594,71 @@ export function ProduceManagement() {
                 </FieldGroup>
               </div>
 
-              {/* Location information */}
+              {/* Location information (from location hierarchy) */}
               <div className="space-y-3">
                 <p className="text-sm font-medium text-stone-700">Location information</p>
                 <FieldGroup>
-                  <FieldLabel>Village</FieldLabel>
-                  <Input
-                    placeholder="e.g. Masinga Central"
-                    value={newListing.village}
-                    onChange={(e) => setNewListing((prev) => ({ ...prev, village: e.target.value }))}
-                  />
-                </FieldGroup>
-                <FieldGroup>
-                  <FieldLabel>Ward</FieldLabel>
-                  <Input
-                    placeholder="e.g. Masinga Ward"
-                    value={newListing.ward}
-                    onChange={(e) => setNewListing((prev) => ({ ...prev, ward: e.target.value }))}
+                  <FieldLabel>County</FieldLabel>
+                  <SearchableSelect
+                    options={locationCounties.map((c) => ({ value: c.id, label: c.name, searchText: c.name }))}
+                    value={newListing.countyId}
+                    onValueChange={(v) =>
+                      setNewListing((prev) => ({
+                        ...prev,
+                        countyId: v,
+                        subCountyId: "",
+                        wardId: "",
+                        villageId: "",
+                      }))
+                    }
+                    placeholder="Select county"
+                    searchPlaceholder="Search counties..."
                   />
                 </FieldGroup>
                 <FieldGroup>
                   <FieldLabel>Sub-county</FieldLabel>
-                  <Select
-                    value={newListing.location}
-                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, location: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue>{newListing.location ? undefined : "Select sub-county"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subCounties.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={locationSubCounties.map((s) => ({ value: s.id, label: s.name, searchText: s.name }))}
+                    value={newListing.subCountyId}
+                    onValueChange={(v) =>
+                      setNewListing((prev) => ({ ...prev, subCountyId: v, wardId: "", villageId: "" }))
+                    }
+                    placeholder="Select sub-county"
+                    searchPlaceholder="Search sub-counties..."
+                    disabled={!newListing.countyId}
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Ward</FieldLabel>
+                  <SearchableSelect
+                    options={locationWards.map((w) => ({ value: w.id, label: w.name, searchText: w.name }))}
+                    value={newListing.wardId}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, wardId: v, villageId: "" }))}
+                    placeholder="Select ward"
+                    searchPlaceholder="Search wards..."
+                    disabled={!newListing.subCountyId}
+                  />
+                </FieldGroup>
+                <FieldGroup>
+                  <FieldLabel>Village</FieldLabel>
+                  <SearchableSelect
+                    options={locationVillages.map((v) => ({ value: v.id, label: v.name, searchText: v.name }))}
+                    value={newListing.villageId}
+                    onValueChange={(v) => setNewListing((prev) => ({ ...prev, villageId: v }))}
+                    placeholder="Select village"
+                    searchPlaceholder="Search villages..."
+                    disabled={!newListing.wardId}
+                  />
                 </FieldGroup>
                 <FieldGroup>
                   <FieldLabel>Assigned aggregation centre</FieldLabel>
-                  <Select
+                  <SearchableSelect
+                    options={aggregationCenters.map((c) => ({ value: c.id, label: c.name, searchText: c.name }))}
                     value={newListing.aggregationCenterId}
                     onValueChange={(v) => setNewListing((prev) => ({ ...prev, aggregationCenterId: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue>{newListing.aggregationCenterId ? undefined : "Select centre (auto-linked if assigned)"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {aggregationCenters.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder="Select centre (auto-linked if assigned)"
+                    searchPlaceholder="Search centres..."
+                  />
                 </FieldGroup>
               </div>
 
@@ -655,12 +667,50 @@ export function ProduceManagement() {
                 <p className="text-sm font-medium text-stone-700">Visual evidence (optional)</p>
                 <FieldGroup>
                   <FieldLabel>Images of the produce</FieldLabel>
-                  <Textarea
-                    placeholder="Add image URLs, one per line or comma-separated"
-                    value={newListing.photoUrls}
-                    onChange={(e) => setNewListing((prev) => ({ ...prev, photoUrls: e.target.value }))}
-                    rows={2}
-                  />
+                  <div className="border-2 border-dashed rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      id="post-produce-photo-upload"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handlePostProducePhotoUpload}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="post-produce-photo-upload"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <IconPhoto className="h-8 w-8 text-muted-foreground" />
+                      <span className="text-sm font-medium">Click to upload photos</span>
+                      <span className="text-xs text-muted-foreground">JPEG, PNG, WebP, GIF — up to 10MB each</span>
+                    </label>
+                  </div>
+                  {uploadingPhotos && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
+                      Uploading...
+                    </div>
+                  )}
+                  {newListing.photos && newListing.photos.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                      {newListing.photos.map((photo, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={getImageFullUrl(photo)}
+                            alt={`Produce ${index + 1}`}
+                            className="w-full aspect-square object-cover rounded-lg border"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePostProducePhoto(index)}
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <IconX className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </FieldGroup>
               </div>
 

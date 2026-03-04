@@ -30,6 +30,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { IconEdit, IconTrash, IconPlus, IconSeeding, IconPhoto, IconX, IconLoader2 } from "@tabler/icons-react";
 import { useInput } from "@/contexts/InputContext";
+import { uploadImage, getImageFullUrl } from "@/services/uploadService";
+import { showError } from "@/lib/toast";
 import type { Input as InputType, InputCategory } from "@/types/input";
 
 export default function InputManagement() {
@@ -100,42 +102,35 @@ export default function InputManagement() {
     setDialogOpen(true);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith("image/")) {
-      alert("Please select an image file");
+      showError("Invalid file", "Please select an image file (JPEG, PNG, WebP, GIF)");
       return;
     }
-
-    // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert("Image size should be less than 10MB");
+      showError("File too large", "Image should be less than 10MB");
       return;
     }
 
     setUploadingPhoto(true);
-
-    // Create preview using FileReader
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setImagePreview(result);
-      setFormData({ ...formData, image: result });
+    try {
+      const { url } = await uploadImage(file);
+      setFormData((prev) => ({ ...prev, image: url }));
+      setImagePreview(url);
+    } catch (err) {
+      showError("Upload failed", err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
       setUploadingPhoto(false);
-    };
-    reader.onerror = () => {
-      alert("Error reading image file");
-      setUploadingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+      e.target.value = "";
+    }
   };
 
   const handleRemovePhoto = () => {
     setImagePreview(null);
-    setFormData({ ...formData, image: "" });
+    setFormData((prev) => ({ ...prev, image: "" }));
   };
 
   const handleSaveInput = async () => {
@@ -355,7 +350,7 @@ export default function InputManagement() {
                   {imagePreview ? (
                     <div className="relative border rounded-lg p-4">
                       <img
-                        src={imagePreview}
+                        src={getImageFullUrl(imagePreview)}
                         alt="Input preview"
                         className="w-full h-48 object-contain rounded-lg bg-muted"
                       />
@@ -437,7 +432,7 @@ export default function InputManagement() {
                   <TableCell>
                     {input.images && input.images.length > 0 ? (
                       <img
-                        src={input.images[0]}
+                        src={getImageFullUrl(input.images[0])}
                         alt={input.name}
                         className="w-12 h-12 object-cover rounded-md"
                       />

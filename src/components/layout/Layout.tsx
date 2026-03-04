@@ -18,23 +18,28 @@ function MainContent() {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Guard: clear any stale inline overflow styles on body (e.g. leaked from select/dialog)
+  useEffect(() => {
+    document.body.style.overflow = "";
+  });
+
   // Note: Sidebar closing on route change is handled in RoleBasedSidebar
 
   return (
     <div
-      className="flex-1 flex flex-col transition-all duration-300 w-full min-w-0 overflow-x-hidden"
+      className="flex-1 flex flex-col transition-all duration-300 w-full min-w-0 min-h-0"
       style={{
         marginLeft: isMobile ? "0" : collapsed ? "80px" : "250px",
       }}
     >
       <Header />
-      <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-auto overflow-x-hidden w-full max-w-full">
+      <main data-layout-main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto overflow-x-hidden w-full max-w-full min-h-0">
         <Outlet />
       </main>
     </div>
@@ -70,7 +75,7 @@ export function Layout() {
       <AnalyticsProvider>
         <ProSidebarProvider>
           <SidebarProvider>
-            <div className="min-h-screen bg-background flex">
+            <div className="h-screen bg-background flex overflow-hidden">
               <RoleBasedSidebar />
               <MainContent />
             </div>

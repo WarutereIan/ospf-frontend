@@ -27,6 +27,7 @@ import {
   IconPlant,
   IconFileText,
 } from "@tabler/icons-react";
+import { getImageFullUrl } from "@/services/uploadService";
 
 export interface TraceabilityStep {
   id: string;
@@ -571,7 +572,7 @@ export function BatchTraceabilityDialog({
                                 {step.photos.map((photo, idx) => (
                                   <img
                                     key={idx}
-                                    src={photo}
+                                    src={getImageFullUrl(photo)}
                                     alt={`${step.stage} photo ${idx + 1}`}
                                     className="w-16 h-16 rounded border border-stone-200 object-cover"
                                   />

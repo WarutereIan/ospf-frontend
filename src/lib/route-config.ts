@@ -16,6 +16,7 @@ export interface RouteRoleRule {
 const ROUTE_ROLE_RULES: RouteRoleRule[] = [
   { pattern: "/login", roles: [] },
   { pattern: "/register", roles: [] },
+  { pattern: "/verify", roles: [] },
 
   { pattern: "/dashboard/staff", roles: ["staff"] },
   { pattern: "/dashboard/county-officer", roles: ["officer", "county_officer"] },

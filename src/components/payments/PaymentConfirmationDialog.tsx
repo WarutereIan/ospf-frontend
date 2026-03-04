@@ -26,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { apiPost } from "@/lib/api-client";
+import { uploadImage } from "@/services/uploadService";
 
 interface PaymentConfirmationDialogProps {
   open: boolean;
@@ -159,18 +160,10 @@ export function PaymentConfirmationDialog({
     setIsSubmitting(true);
 
     try {
-      // Upload evidence if provided
       let evidenceUrl: string | undefined;
       if (paymentEvidence) {
-        // TODO: Implement image upload to storage service
-        // For now, we'll convert to base64 (not ideal for production)
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(paymentEvidence);
-        });
-        evidenceUrl = base64;
+        const { url } = await uploadImage(paymentEvidence);
+        evidenceUrl = url;
       }
 
       // Call API to confirm payment

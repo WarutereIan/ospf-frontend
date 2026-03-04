@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,9 @@ import {
 import QRCode from "react-qr-code";
 import { useTransport } from "@/contexts/TransportContext";
 import { extractReceiptFromBooking } from "@/services/transportService";
+import { uploadImage, getImageFullUrl } from "@/services/uploadService";
+import { getBatchVerifyUrl } from "@/services/traceabilityService";
+import generatePDF from "react-to-pdf";
 import { useAuth } from "@/contexts/AuthContext";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -48,6 +51,8 @@ export function MyPickupBookings() {
   const [receipt, setReceipt] = useState<PickupReceipt | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const receiptPdfRef = useRef<HTMLDivElement>(null);
 
   // Confirmation form state
   const [confirmationForm, setConfirmationForm] = useState({
@@ -209,23 +214,34 @@ export function MyPickupBookings() {
     setConfirmDialogOpen(true);
   };
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files?.length) return;
 
-    // TODO: Replace with actual file upload API
-    const newPhotos = Array.from(files).map((file) => URL.createObjectURL(file));
-    setConfirmationForm({
-      ...confirmationForm,
-      photos: [...confirmationForm.photos, ...newPhotos],
-    });
+    setUploadingPhotos(true);
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { url } = await uploadImage(files[i]);
+        urls.push(url);
+      }
+      setConfirmationForm((prev) => ({
+        ...prev,
+        photos: [...prev.photos, ...urls],
+      }));
+    } catch (err) {
+      showError("Upload failed", err instanceof Error ? err.message : "Failed to upload photos");
+    } finally {
+      setUploadingPhotos(false);
+      event.target.value = "";
+    }
   };
 
   const handleRemovePhoto = (index: number) => {
-    setConfirmationForm({
-      ...confirmationForm,
-      photos: confirmationForm.photos.filter((_, i) => i !== index),
-    });
+    setConfirmationForm((prev) => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSubmitConfirmation = async () => {
@@ -320,9 +336,17 @@ export function MyPickupBookings() {
     }, 1000);
   };
 
-  const handleDownloadReceipt = () => {
-    // TODO: Implement PDF download
-    alert("PDF download feature coming soon");
+  const handleDownloadReceipt = async () => {
+    if (!receipt || !receiptPdfRef.current) return;
+    try {
+      await generatePDF(receiptPdfRef, {
+        filename: `receipt_${receipt.receiptNumber}.pdf`,
+        page: { format: "a4", margin: 10 },
+      });
+    } catch (err) {
+      console.error("Failed to generate receipt PDF:", err);
+      showError("Failed to generate PDF. Please try again.");
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -550,9 +574,15 @@ export function MyPickupBookings() {
               <div className="space-y-2">
                 <Label>Photos (Optional)</Label>
                 <div className="flex flex-wrap gap-2">
+                  {uploadingPhotos && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <IconLoader2 className="h-4 w-4 animate-spin" />
+                      Uploading...
+                    </div>
+                  )}
                   {confirmationForm.photos.map((photo, index) => (
                     <div key={index} className="relative">
-                      <img src={photo} alt={`Photo ${index + 1}`} className="h-20 w-20 object-cover rounded" />
+                      <img src={getImageFullUrl(photo)} alt={`Photo ${index + 1}`} className="h-20 w-20 object-cover rounded" />
                       <Button
                         type="button"
                         variant="destructive"
@@ -621,7 +651,7 @@ export function MyPickupBookings() {
             </DialogDescription>
           </DialogHeader>
           {receipt && (
-            <div className="space-y-6 print:space-y-4">
+            <div ref={receiptPdfRef} className="space-y-6 print:space-y-4">
               {/* Receipt Header */}
               <div className="border-b pb-4">
                 <div className="flex items-center justify-between">
@@ -643,11 +673,11 @@ export function MyPickupBookings() {
                     <p className="text-sm font-medium text-stone-600">Batch ID</p>
                     <p className="text-lg font-bold font-mono">{receipt.batchId}</p>
                   </div>
-                  {receipt.qrCode && (
+                  {(receipt.batchId || receipt.qrCode) && (
                     <div className="text-center">
                       <div className="bg-white p-2 rounded-lg inline-block">
                         <QRCode
-                          value={receipt.qrCode}
+                          value={getBatchVerifyUrl(receipt.batchId || receipt.qrCode)}
                           size={120}
                           style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                           viewBox={`0 0 120 120`}
@@ -707,7 +737,7 @@ export function MyPickupBookings() {
                     {receipt.photos.map((photo, index) => (
                       <img
                         key={index}
-                        src={photo}
+                        src={getImageFullUrl(photo)}
                         alt={`Photo ${index + 1}`}
                         className="h-24 w-full object-cover rounded"
                       />

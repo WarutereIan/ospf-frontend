@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { Sidebar, Menu, MenuItem, useProSidebar } from "react-pro-sidebar";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSidebarContext } from "@/contexts/SidebarContext";
 import {
   IconShoppingBag,
@@ -86,6 +86,7 @@ const staffMenuItems: MenuItem[] = [
   { name: "Commodity approval", path: "/dashboard/lead-farmer", icon: IconClipboardCheck },
   { name: "Farmer Groups", path: "/dashboard/staff/farmer-groups", icon: IconUsers },
   { name: "Aggregation Centers", path: "/dashboard/staff/aggregation-centers", icon: IconBuilding },
+  { name: "Locations", path: "/dashboard/staff/locations", icon: IconMapPin },
   { name: "Activity Logs", path: "/dashboard/staff/activity-logs", icon: IconFileText },
   { name: "Analytics", path: "/dashboard/staff/analytics", icon: IconChartBar },
   { name: "Reports", path: "/dashboard/staff/reports", icon: IconFileText },
@@ -158,6 +159,7 @@ export function RoleBasedSidebar() {
   const [isMobile, setIsMobile] = useState(false);
 
   const menuItems = getMenuItemsForRole(role);
+  const prevPathnameRef = useRef(location.pathname);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -167,18 +169,23 @@ export function RoleBasedSidebar() {
         setToggled(false);
       }
     };
-    
+
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, [setToggled]);
 
-  // Close sidebar on mobile when route changes
+  // Close sidebar on mobile only when route actually changes (e.g. after nav click).
+  // Do NOT depend on toggled, or the effect runs when menu opens and closes it immediately.
   useEffect(() => {
-    if (isMobile && toggled) {
+    if (!isMobile) return;
+    if (prevPathnameRef.current !== location.pathname) {
+      prevPathnameRef.current = location.pathname;
       setToggled(false);
+    } else {
+      prevPathnameRef.current = location.pathname;
     }
-  }, [isMobile, location.pathname, toggled, setToggled]);
+  }, [isMobile, location.pathname, setToggled]);
 
   // Close sidebar on mobile when menu item is clicked
   const handleMenuItemClick = (path: string) => {

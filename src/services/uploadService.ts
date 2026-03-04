@@ -8,7 +8,8 @@
 
 import { apiPostFormData } from "@/lib/api-client";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+// Must match backend origin so img src requests hit the API (uploads are served there)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
 
 export interface UploadImageResult {
   url: string;

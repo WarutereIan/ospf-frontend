@@ -295,7 +295,7 @@ export default function RequestTransport({
                   onValueChange={setDeliveryCounty}
                 >
                   <SelectTrigger>
-                    <SelectValue>{deliveryCounty ? undefined : "Select county"}</SelectValue>
+                    <SelectValue>{deliveryCounty ? ({ machakos: "Machakos", nairobi: "Nairobi", kiambu: "Kiambu", kajiado: "Kajiado", makueni: "Makueni", other: "Other" } as Record<string, string>)[deliveryCounty] ?? deliveryCounty : "Select county"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="machakos">Machakos</SelectItem>

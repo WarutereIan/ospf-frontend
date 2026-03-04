@@ -791,7 +791,7 @@ export function MarketplacePage() {
                     <Label className="text-sm font-medium mb-2 block">Delivery County *</Label>
                     <Select value={deliveryCounty} onValueChange={(value) => setDeliveryCounty(value || "")}>
                       <SelectTrigger>
-                        <SelectValue>{deliveryCounty ? undefined : "Select county"}</SelectValue>
+                        <SelectValue>{deliveryCounty ? ({ machakos: "Machakos", nairobi: "Nairobi", kiambu: "Kiambu", kajiado: "Kajiado", makueni: "Makueni", other: "Other" } as Record<string, string>)[deliveryCounty] ?? deliveryCounty : "Select county"}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="machakos">Machakos</SelectItem>

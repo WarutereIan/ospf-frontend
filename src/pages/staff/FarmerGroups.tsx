@@ -193,7 +193,7 @@ export function FarmerGroups() {
             </div>
             <Select value={countyFilter} onValueChange={setCountyFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue>{countyFilter === "all" ? "All Counties" : undefined}</SelectValue>
+                <SelectValue>{countyFilter === "all" ? "All Counties" : countyFilter}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Counties</SelectItem>
@@ -206,7 +206,7 @@ export function FarmerGroups() {
             </Select>
             <Select value={subCountyFilter} onValueChange={setSubCountyFilter}>
               <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue>{subCountyFilter === "all" ? "All Subcounties" : undefined}</SelectValue>
+                <SelectValue>{subCountyFilter === "all" ? "All Subcounties" : subCountyFilter}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subcounties</SelectItem>
@@ -343,7 +343,7 @@ export function FarmerGroups() {
                 onValueChange={(value) => setFormData({ ...formData, subCounty: value })}
               >
                 <SelectTrigger>
-                  <SelectValue>{formData.subCounty ? undefined : "Select subcounty"}</SelectValue>
+                  <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {VALID_SUBCOUNTIES.map((subCounty) => (
@@ -423,7 +423,7 @@ export function FarmerGroups() {
                 onValueChange={(value) => setFormData({ ...formData, subCounty: value })}
               >
                 <SelectTrigger>
-                  <SelectValue>{formData.subCounty ? undefined : "Select subcounty"}</SelectValue>
+                  <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {VALID_SUBCOUNTIES.map((subCounty) => (

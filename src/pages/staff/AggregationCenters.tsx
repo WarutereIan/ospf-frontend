@@ -369,7 +369,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.subCounty ? undefined : "Select subcounty (optional)"}</SelectValue>
+                    <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty (optional)"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
@@ -426,7 +426,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, mainCenterId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.mainCenterId ? undefined : "Select main center"}</SelectValue>
+                    <SelectValue>{formData.mainCenterId ? (mainCenters.find((c) => c.id === formData.mainCenterId)?.name ?? formData.mainCenterId) : "Select main center"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {mainCenters.map((center) => (
@@ -454,7 +454,7 @@ export function AggregationCenters() {
                 onValueChange={(value) => setFormData({ ...formData, managerId: value })}
               >
                 <SelectTrigger>
-                  <SelectValue>{formData.managerId ? undefined : "Select aggregation manager"}</SelectValue>
+                  <SelectValue>{formData.managerId ? (aggregationManagers.find((m) => m.id === formData.managerId)?.name ?? formData.managerId) : "Select aggregation manager"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {aggregationManagers.map((manager) => (
@@ -540,7 +540,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.subCounty ? undefined : "Select subcounty (optional)"}</SelectValue>
+                    <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty (optional)"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
@@ -594,7 +594,7 @@ export function AggregationCenters() {
                   onValueChange={(value) => setFormData({ ...formData, mainCenterId: value })}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.mainCenterId ? undefined : "Select main center"}</SelectValue>
+                    <SelectValue>{formData.mainCenterId ? (mainCenters.find((c) => c.id === formData.mainCenterId)?.name ?? formData.mainCenterId) : "Select main center"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {mainCenters.map((center) => (
@@ -621,7 +621,7 @@ export function AggregationCenters() {
                 onValueChange={(value) => setFormData({ ...formData, managerId: value })}
               >
                 <SelectTrigger>
-                  <SelectValue>{formData.managerId ? undefined : "Select aggregation manager"}</SelectValue>
+                  <SelectValue>{formData.managerId ? (aggregationManagers.find((m) => m.id === formData.managerId)?.name ?? formData.managerId) : "Select aggregation manager"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {aggregationManagers.map((manager) => (

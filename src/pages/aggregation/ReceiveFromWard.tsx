@@ -30,6 +30,7 @@ import {
 } from "@/data/gradingMatrix";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 import { showError } from "@/lib/toast";
 import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 
@@ -114,20 +115,27 @@ export function ReceiveFromWard() {
     }));
   };
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
-    if (!files) return;
+    if (!files?.length) return;
 
     setUploadingPhotos(true);
-    // TODO: Replace with actual file upload API
-    setTimeout(() => {
-      const newPhotos = Array.from(files).map((file) => URL.createObjectURL(file));
+    try {
+      const urls: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const { url } = await uploadImage(files[i]);
+        urls.push(url);
+      }
       setFormData((prev) => ({
         ...prev,
-        photos: [...(prev.photos || []), ...newPhotos],
+        photos: [...(prev.photos || []), ...urls],
       }));
+    } catch (err) {
+      showError("Upload failed", err instanceof Error ? err.message : "Failed to upload photos");
+    } finally {
       setUploadingPhotos(false);
-    }, 1000);
+      event.target.value = "";
+    }
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -628,7 +636,7 @@ export function ReceiveFromWard() {
                     {formData.photos.map((photo, index) => (
                       <div key={index} className="relative group">
                         <img
-                          src={photo}
+                          src={getImageFullUrl(photo)}
                           alt={`Photo ${index + 1}`}
                           className="w-full aspect-square object-cover rounded-lg border"
                         />

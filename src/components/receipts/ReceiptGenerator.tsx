@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +17,9 @@ import {
   IconLoader2,
 } from "@tabler/icons-react";
 import QRCode from "react-qr-code";
+import { getBatchVerifyUrl } from "@/services/traceabilityService";
 import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
+import { usePDF } from "react-to-pdf";
 import { useReactToPrint } from "react-to-print";
 
 interface ReceiptData {
@@ -35,6 +36,7 @@ interface ReceiptData {
   location?: string;
   transactionId?: string;
   qrCode?: string;
+  batchId?: string;
 }
 
 interface ReceiptGeneratorProps {
@@ -52,20 +54,28 @@ export function ReceiptGenerator({
   onDownload,
   onPrint,
 }: ReceiptGeneratorProps) {
-  const receiptRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState<"png" | "pdf" | null>(null);
 
-  // Generate QR code value - include receipt ID and transaction ID for verification
-  const qrCodeValue = receiptData.qrCode || receiptData.transactionId || receiptData.receiptId;
+  // PDF generation using react-to-pdf (captures receipt content as PDF)
+  const { toPDF, targetRef } = usePDF({
+    filename: `receipt_${receiptData.receiptId}.pdf`,
+    page: { format: "a4", margin: 10 },
+  });
 
   // Print functionality using react-to-print
   const printReceipt = useReactToPrint({
-    contentRef: receiptRef,
+    contentRef: targetRef,
     documentTitle: `Receipt_${receiptData.receiptId}`,
   });
 
+  // For batch traceability: QR opens verify page. Otherwise use qrCode/transactionId/receiptId.
+  const batchOrQr = receiptData.batchId || (receiptData.qrCode?.startsWith("QR-") ? receiptData.qrCode : null);
+  const qrCodeValue = batchOrQr
+    ? getBatchVerifyUrl(batchOrQr)
+    : receiptData.qrCode || receiptData.transactionId || receiptData.receiptId;
+
   const handleDownloadPNG = async () => {
-    if (!receiptRef.current) return;
+    if (!targetRef.current) return;
 
     if (onDownload) {
       onDownload("png");
@@ -74,7 +84,7 @@ export function ReceiptGenerator({
 
     setIsDownloading("png");
     try {
-      const canvas = await html2canvas(receiptRef.current, {
+      const canvas = await html2canvas(targetRef.current, {
         scale: 2,
         backgroundColor: "#ffffff",
         useCORS: true,
@@ -95,7 +105,7 @@ export function ReceiptGenerator({
   };
 
   const handleDownloadPDF = async () => {
-    if (!receiptRef.current) return;
+    if (!targetRef.current) return;
 
     if (onDownload) {
       onDownload("pdf");
@@ -104,38 +114,7 @@ export function ReceiptGenerator({
 
     setIsDownloading("pdf");
     try {
-      const canvas = await html2canvas(receiptRef.current, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-        useCORS: true,
-        logging: false,
-        windowWidth: receiptRef.current.scrollWidth,
-        windowHeight: receiptRef.current.scrollHeight,
-      });
-
-      const imgData = canvas.toDataURL("image/png", 1.0);
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      // Convert canvas dimensions from pixels to mm (assuming 96 DPI)
-      const imgWidth = canvas.width / 3.779527559; // pixels to mm
-      const imgHeight = canvas.height / 3.779527559; // pixels to mm
-      
-      // Calculate scaling to fit page
-      const widthRatio = pdfWidth / imgWidth;
-      const heightRatio = pdfHeight / imgHeight;
-      const ratio = Math.min(widthRatio, heightRatio, 1); // Don't scale up
-      
-      const scaledWidth = imgWidth * ratio;
-      const scaledHeight = imgHeight * ratio;
-      
-      // Center the image
-      const imgX = (pdfWidth - scaledWidth) / 2;
-      const imgY = 0;
-
-      pdf.addImage(imgData, "PNG", imgX, imgY, scaledWidth, scaledHeight);
-      pdf.save(`receipt_${receiptData.receiptId}.pdf`);
+      await toPDF();
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to generate PDF. Please try again.");
@@ -172,7 +151,7 @@ export function ReceiptGenerator({
         <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4">
           <Card 
             id="receipt-content" 
-            ref={receiptRef}
+            ref={targetRef}
             className="print:shadow-none w-full max-w-full bg-white"
           >
             <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">

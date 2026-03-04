@@ -83,8 +83,10 @@ import { StaffReports } from "@/pages/staff/Reports";
 import { Settings } from "@/pages/staff/Settings";
 import { FarmerGroups } from "@/pages/staff/FarmerGroups";
 import { AggregationCenters } from "@/pages/staff/AggregationCenters";
+import { Locations } from "@/pages/staff/Locations";
 import { PendingApprovalPage } from "@/pages/lead-farmer/PendingApprovalPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+import { VerifyBatchPage } from "@/pages/VerifyBatchPage";
 
 export function App() {
   return (
@@ -103,6 +105,7 @@ export function App() {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify" element={<VerifyBatchPage />} />
           
           {/* Protected Routes with Layout */}
           <Route element={<Layout />}>
@@ -180,6 +183,7 @@ export function App() {
             <Route path="/dashboard/staff/users" element={<Users />} />
             <Route path="/dashboard/staff/farmer-groups" element={<FarmerGroups />} />
             <Route path="/dashboard/staff/aggregation-centers" element={<AggregationCenters />} />
+            <Route path="/dashboard/staff/locations" element={<Locations />} />
             <Route path="/dashboard/staff/analytics" element={<Analytics />} />
             <Route path="/dashboard/staff/settings" element={<Settings />} />
             <Route path="/dashboard/staff/partners" element={<Partners />} />
