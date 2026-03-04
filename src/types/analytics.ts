@@ -228,8 +228,9 @@ export interface Advisory {
   // Delivery tracking properties
   status?: "draft" | "sent" | "delivered" | "failed"; // Advisory delivery status
   sentDate?: string; // ISO 8601 - When advisory was sent
-  deliveryCount?: number; // Number of successful deliveries
-  readCount?: number; // Number of times advisory was read
+  deliveryCount?: number; // Number of notifications sent (no error)
+  smsDeliveredCount?: number; // DLR-confirmed SMS deliveries (Africa's Talking callback)
+  readCount?: number; // Number of times advisory was read (notification marked read)
   impact?: { // Impact metrics
     ordersIncrease?: number; // Percentage increase in orders
     engagementIncrease?: number; // Percentage increase in engagement

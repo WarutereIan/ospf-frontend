@@ -111,6 +111,15 @@ const MOCK_CREDENTIALS: Record<string, { role: UserRole; name: string; phone: st
     email: "james.omondi@example.com",
     location: "Nairobi",
   },
+  lead_farmer: {
+    role: "lead_farmer",
+    name: "Kamau Mwangi",
+    phone: "+254789012345",
+    password: "leadfarmer123",
+    email: "kamau.lead@example.com",
+    location: "Kangundo",
+    subCounty: "Kangundo",
+  },
 };
 
 const MOCK_USER_KEY = "ofsp_mock_user";

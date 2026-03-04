@@ -46,15 +46,9 @@ export function Advisory() {
         type: "information",
         title: formData.title,
         content: formData.message,
-        targetAudience: formData.targetAudience === "all" 
-          ? ["farmer", "buyer", "officer"] 
-          : formData.targetAudience === "sub_county"
-          ? ["officer"]
-          : ["farmer"],
-        category: formData.targetValue || undefined,
+        targetAudience: formData.targetAudience,
+        targetValue: formData.targetAudience !== "all" ? (formData.targetValue || undefined) : undefined,
         isActive: true,
-        createdBy: "", // Will be set by context
-        createdAt: new Date().toISOString(),
       });
       setIsDialogOpen(false);
       setFormData({ title: "", message: "", targetAudience: "all", targetValue: "" });
@@ -97,10 +91,11 @@ export function Advisory() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Delivered</p>
+                <p className="text-sm text-muted-foreground">Notifications Sent</p>
                 <p className="text-2xl font-bold">
-                  {advisories.filter((a) => a.status === "delivered").length}
+                  {advisories.reduce((sum, a) => sum + (a.deliveryCount ?? 0), 0)}
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">SMS + web-push accepted (matches sum below)</p>
               </div>
               <IconCheck className="h-8 w-8 text-green-600" />
             </div>
@@ -112,8 +107,9 @@ export function Advisory() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Reach</p>
                 <p className="text-2xl font-bold">
-                  {advisories.reduce((sum, a) => sum + a.deliveryCount, 0)}
+                  {advisories.reduce((sum, a) => sum + (a.deliveryCount ?? 0), 0)}
                 </p>
+                <p className="text-xs text-muted-foreground mt-1">Total farmer notifications</p>
               </div>
               <IconUsers className="h-8 w-8 text-blue-600" />
             </div>
@@ -126,11 +122,11 @@ export function Advisory() {
                 <p className="text-sm text-muted-foreground">Read Rate</p>
                 <p className="text-2xl font-bold">
                   {advisories.length > 0
-                    ? Math.round(
-                        (advisories.reduce((sum, a) => sum + a.readCount, 0) /
-                          advisories.reduce((sum, a) => sum + a.deliveryCount, 0)) *
-                          100
-                      )
+                    ? (() => {
+                        const totalDelivered = advisories.reduce((sum, a) => sum + (a.deliveryCount ?? 0), 0);
+                        const totalRead = advisories.reduce((sum, a) => sum + (a.readCount ?? 0), 0);
+                        return totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0;
+                      })()
                     : 0}
                   %
                 </p>
@@ -199,9 +195,15 @@ export function Advisory() {
                   </div>
                   <div className="flex items-center gap-6 pt-2 border-t">
                     <div className="text-sm">
-                      <span className="text-muted-foreground">Delivered: </span>
+                      <span className="text-muted-foreground">Sent: </span>
                       <span className="font-medium">{advisory.deliveryCount}</span>
                     </div>
+                    {advisory.smsDeliveredCount != null && advisory.smsDeliveredCount > 0 && (
+                      <div className="text-sm">
+                        <span className="text-muted-foreground">SMS delivered (DLR): </span>
+                        <span className="font-medium">{advisory.smsDeliveredCount}</span>
+                      </div>
+                    )}
                     <div className="text-sm">
                       <span className="text-muted-foreground">Read: </span>
                       <span className="font-medium">{advisory.readCount}</span>

@@ -18,6 +18,7 @@ This document contains all mock login credentials for testing the OFSP Digital M
 | Aggregation Manager | Peter Kariuki | +254756789012 | `manager123` | `/dashboard/aggregation` |
 | Input Provider | Grace Njeri | +254767890123 | `input123` | `/dashboard/input-provider` |
 | Transport Provider | James Omondi | +254778901234 | `transport123` | `/dashboard/transport-provider` |
+| Lead Farmer | Kamau Mwangi | +254789012345 | `leadfarmer123` | `/dashboard/lead-farmer` |
 
 ---
 
@@ -189,6 +190,27 @@ Role:     transport_provider
 - Active Deliveries: `/dashboard/deliveries`
 - Completed Deliveries: `/dashboard/completed-deliveries`
 - Earnings: `/dashboard/earnings`
+
+---
+
+### 8. Lead Farmer - Kamau Mwangi
+```
+Phone:    +254789012345
+Password: leadfarmer123
+Role:     lead_farmer
+```
+
+**Features Access:**
+- All farmer features (post produce, orders, pickup schedules, marketplace, inputs, analytics)
+- Approvals: review and approve/reject commodity listings from farmers before they go live
+- Pending approval queue at `/dashboard/lead-farmer`
+
+**Dashboard:** `/dashboard/lead-farmer`
+
+**Key Pages:**
+- Pending Approval: `/dashboard/lead-farmer` (commodity posting approval queue)
+- My Produce: `/dashboard/produce`
+- Pickup Schedules: `/dashboard/farmer/pickup-schedules`
 
 ---
 

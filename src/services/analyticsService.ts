@@ -472,50 +472,100 @@ export async function downloadReport(id: string): Promise<string> {
   return "";
 }
 
-// ==================== Advisories (Placeholder - Not yet implemented in backend) ====================
+// ==================== Advisories ====================
+
+function mapBackendAdvisoryToFrontend(row: any): Advisory {
+  const creator = row.creator;
+  const createdByName = creator?.profile
+    ? [creator.profile.firstName, creator.profile.lastName].filter(Boolean).join(" ").trim()
+    : creator?.email ?? creator?.phone ?? row.createdBy;
+  return {
+    id: row.id,
+    type: (row.type ?? "GENERAL").toLowerCase() as Advisory["type"],
+    title: row.title,
+    content: row.content,
+    message: row.content,
+    targetAudience: Array.isArray(row.targetAudience) ? row.targetAudience[0] ?? "all" : row.targetAudience ?? "all",
+    targetValue: row.targetValue ?? undefined,
+    category: row.category ?? undefined,
+    priority: row.priority ?? undefined,
+    effectiveDate: row.effectiveDate ? new Date(row.effectiveDate).toISOString() : undefined,
+    expiryDate: row.expiryDate ? new Date(row.expiryDate).toISOString() : undefined,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
+    createdBy: row.createdBy,
+    createdByName,
+    createdAt: new Date(row.createdAt).toISOString(),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : undefined,
+    isActive: row.isActive ?? true,
+    views: row.views ?? 0,
+    status: row.status ?? undefined,
+    sentDate: row.sentDate ? new Date(row.sentDate).toISOString() : undefined,
+    deliveryCount: row.deliveryCount ?? 0,
+    smsDeliveredCount: row.smsDeliveredCount ?? 0,
+    readCount: row.readCount ?? 0,
+  };
+}
 
 /**
- * Get advisories
- * TODO: Implement when backend endpoint is available
+ * Get advisories from backend (sent via SMS + web-push).
  */
 export async function getAdvisories(filters?: AdvisoryFilters): Promise<Advisory[]> {
-  // Placeholder - backend endpoint not yet implemented
-  return [];
+  const params: Record<string, string> = {};
+  if (filters?.isActive !== undefined) params.isActive = String(filters.isActive);
+  if (filters?.searchQuery) params.limit = "100";
+  const data = await apiGet<unknown>("/analytics/advisories", Object.keys(params).length ? params : undefined);
+  const raw = Array.isArray(data) ? data : (data as { data?: unknown[]; list?: unknown[] })?.data ?? (data as { list?: unknown[] })?.list;
+  const list = Array.isArray(raw) ? raw : [];
+  return list.map(mapBackendAdvisoryToFrontend);
 }
 
 /**
  * Get advisory by ID
- * TODO: Implement when backend endpoint is available
  */
 export async function getAdvisoryById(id: string): Promise<Advisory | null> {
-  // Placeholder - backend endpoint not yet implemented
-  return null;
+  const data = await apiGet<any>(`/analytics/advisories/${id}`);
+  if (!data || !data.id) return null;
+  return mapBackendAdvisoryToFrontend(data);
 }
 
 /**
- * Create advisory
- * TODO: Implement when backend endpoint is available
+ * Create and send advisory to farmers (SMS + web-push). Backend resolves recipients and sends.
  */
 export async function createAdvisory(advisory: Partial<Advisory>): Promise<ApiResponse<Advisory>> {
-  // Placeholder - backend endpoint not yet implemented
-  return { data: advisory as Advisory, message: "Advisory creation not yet implemented" };
+  const targetAudience = typeof advisory.targetAudience === "string"
+    ? advisory.targetAudience
+    : Array.isArray(advisory.targetAudience)
+      ? advisory.targetAudience[0]
+      : "all";
+  const body = {
+    title: advisory.title,
+    content: advisory.content ?? advisory.message,
+    type: advisory.type ? String(advisory.type).toUpperCase() : "GENERAL",
+    category: advisory.category,
+    priority: advisory.priority,
+    targetAudience: targetAudience as "all" | "sub_county" | "farmer_group" | "individual",
+    targetValue: advisory.targetValue,
+  };
+  const data = await apiPost<any>("/analytics/advisories", body);
+  const created = data?.data ?? data;
+  return {
+    data: created ? mapBackendAdvisoryToFrontend(created) : (advisory as Advisory),
+    message: data?.message ?? "Advisory sent",
+  };
 }
 
 /**
- * Update advisory
- * TODO: Implement when backend endpoint is available
+ * Update advisory (backend may not support; list/create are primary).
  */
 export async function updateAdvisory(id: string, advisory: Partial<Advisory>): Promise<ApiResponse<Advisory>> {
-  // Placeholder - backend endpoint not yet implemented
   return { data: advisory as Advisory, message: "Advisory update not yet implemented" };
 }
 
 /**
- * Delete advisory
- * TODO: Implement when backend endpoint is available
+ * Delete advisory. Backend does not expose DELETE yet; no-op to avoid 404.
  */
-export async function deleteAdvisory(id: string): Promise<void> {
-  // Placeholder - backend endpoint not yet implemented
+export async function deleteAdvisory(_id: string): Promise<void> {
+  // DELETE /analytics/advisories/:id not yet implemented
 }
 
 // ==================== Analytics Statistics ====================
