@@ -106,10 +106,11 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify" element={<VerifyBatchPage />} />
+          <Route path="/" element={<LoginPage />} />
           
           {/* Protected Routes with Layout */}
           <Route element={<Layout />}>
-            <Route path="/" element={<HomePage />} />
+            
             <Route path="/marketplace" element={<MarketplacePage />} />
             <Route path="/farmer/marketplace" element={<BuyerRequests />} />
             <Route path="/dashboard/buyer/marketplace" element={<MarketplacePage />} />

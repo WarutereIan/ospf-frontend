@@ -93,7 +93,7 @@ export function LoginPage() {
                     {error}
                   </div>
                 )}
-                <div className="flex items-center justify-between">
+               {/*  <div className="flex items-center justify-between">
                   <label className="text-sm text-muted-foreground">
                     <input type="checkbox" className="mr-2" />
                     Remember me
@@ -104,23 +104,23 @@ export function LoginPage() {
                   >
                     Forgot password?
                   </Link>
-                </div>
+                </div> */}
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
               </FieldGroup>
             </form>
-            <div className="mt-4 text-center text-sm text-muted-foreground">
+           {/*  <div className="mt-4 text-center text-sm text-muted-foreground">
               Don't have an account?{" "}
               <Link to="/register" className="text-primary hover:underline">
                 Register here
               </Link>
-            </div>
+            </div> */}
           </CardContent>
         </Card>
 
         {/* Mock Credentials Display */}
-        <Card className="w-full">
+       {/*  <Card className="w-full">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <IconInfoCircle className="h-5 w-5 text-primary" />
@@ -207,7 +207,7 @@ export function LoginPage() {
               </p>
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
     </div>
   );
