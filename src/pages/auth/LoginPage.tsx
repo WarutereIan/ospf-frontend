@@ -120,7 +120,7 @@ export function LoginPage() {
         </Card>
 
         {/* Mock Credentials Display */}
-       {/*  <Card className="w-full">
+        <Card className="w-full">
           <CardHeader className="space-y-1">
             <div className="flex items-center gap-2">
               <IconInfoCircle className="h-5 w-5 text-primary" />
@@ -207,7 +207,7 @@ export function LoginPage() {
               </p>
             </div>
           </CardContent>
-        </Card> */}
+        </Card>
       </div>
     </div>
   );
