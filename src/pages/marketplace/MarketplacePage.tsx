@@ -597,14 +597,31 @@ export function MarketplacePage() {
                   )}
 
                   {/* Overlay Info */}
-                  {isHarvestedThisWeek && (
-                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/50 to-transparent">
-                      <div className="flex items-center gap-1 text-white/90 text-xs font-medium">
-                        <IconClock className="h-3 w-3" />
-                        <span>Harvested this week</span>
-                      </div>
-                    </div>
-                  )}
+                  {(() => {
+                    const readyAt = listing.expectedReadyAt ? new Date(listing.expectedReadyAt) : null;
+                    const isAdvanceOrder = readyAt && readyAt.getTime() > Date.now();
+                    if (isAdvanceOrder) {
+                      return (
+                        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/50 to-transparent">
+                          <div className="flex items-center gap-1 text-white/90 text-xs font-medium">
+                            <IconClock className="h-3 w-3" />
+                            <span>Advance order – ready by {readyAt.toLocaleDateString(undefined, { dateStyle: "medium" })}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (isHarvestedThisWeek) {
+                      return (
+                        <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/50 to-transparent">
+                          <div className="flex items-center gap-1 text-white/90 text-xs font-medium">
+                            <IconClock className="h-3 w-3" />
+                            <span>Harvested this week</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* Content */}
@@ -631,6 +648,14 @@ export function MarketplacePage() {
                   {listing.description && (
                     <p className="text-sm text-stone-500 line-clamp-2 mb-4 leading-relaxed">
                       {listing.description}
+                    </p>
+                  )}
+
+                  {/* Advance order: ready-by date */}
+                  {listing.expectedReadyAt && new Date(listing.expectedReadyAt).getTime() > Date.now() && (
+                    <p className="text-xs text-amber-600 font-medium mb-2 flex items-center gap-1">
+                      <IconClock className="h-3.5 w-3.5" />
+                      Available from {new Date(listing.expectedReadyAt).toLocaleDateString(undefined, { dateStyle: "medium" })} – advance orders welcome
                     </p>
                   )}
 

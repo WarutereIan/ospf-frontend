@@ -27,6 +27,7 @@ import {
   IconCheck,
   IconX,
   IconUpload,
+  IconDownload,
   IconChevronUp,
   IconChevronDown,
   IconSelector,
@@ -519,6 +520,24 @@ export function Users() {
     setBulkResult(null);
   };
 
+  /** Download CSV template for bulk farmer upload (headers + example rows). */
+  const downloadBulkFarmersTemplate = () => {
+    const header = "first_name,last_name,gender,phone,password,email,county,subcounty,ward,village";
+    const exampleRows = [
+      "John,Kamau,Male,+254712345678,SecurePass123!,john.kamau@example.com,Machakos,Kangundo,Mutonga,",
+      "Mary,Wanjiku,Female,+254723456789,,mary.w@example.com,Machakos,Kathiani,Kathiani Central,",
+      ",,,,,,,,,,",
+    ];
+    const csv = [header, ...exampleRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "bulk-farmers-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const formatRoleName = (role: string): string => {
     const roleMap: Record<string, string> = {
       farmer: "Farmer",
@@ -1009,12 +1028,16 @@ export function Users() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Required: <strong>name</strong>, <strong>phone</strong>. Optional: <strong>password</strong> (min 8 characters; farmers can change it later),{" "}
-              <strong>email</strong>, <strong>farmer_group_code</strong>, <strong>county</strong>, <strong>subcounty</strong>,{" "}
-              <strong>ward</strong>. Aliases: <code className="text-xs bg-muted px-1 rounded">full_name</code>,{" "}
-              <code className="text-xs bg-muted px-1 rounded">phone_number</code>, <code className="text-xs bg-muted px-1 rounded">farmer_group</code>,{" "}
-              <code className="text-xs bg-muted px-1 rounded">pwd</code> (for password).
+              Required: <strong>phone</strong> and either <strong>name</strong> or <strong>first_name</strong> / <strong>last_name</strong>. Optional:{" "}
+              <strong>gender</strong> (male/female or m/f; normalized to Male/Female), <strong>password</strong> (min 8 characters), <strong>email</strong>,{" "}
+              <strong>county</strong>, <strong>subcounty</strong>, <strong>ward</strong>, <strong>village</strong>. Aliases:{" "}
+              <code className="text-xs bg-muted px-1 rounded">full_name</code>, <code className="text-xs bg-muted px-1 rounded">phone_number</code>,{" "}
+              <code className="text-xs bg-muted px-1 rounded">sex</code>, <code className="text-xs bg-muted px-1 rounded">pwd</code>.
             </p>
+            <Button type="button" variant="outline" size="sm" onClick={downloadBulkFarmersTemplate} className="w-full sm:w-auto">
+              <IconDownload className="mr-2 h-4 w-4" />
+              Download CSV template
+            </Button>
             <div className="space-y-2">
               <label className="text-sm font-medium">CSV file</label>
               <Input
@@ -1036,20 +1059,20 @@ export function Users() {
               <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
                 <p className="text-sm font-medium">Result</p>
                 <div className="flex gap-4 text-sm">
-                  <span className="text-green-600">Created: {bulkResult.created}</span>
-                  <span className="text-red-600">Failed: {bulkResult.failed}</span>
+                  <span className="text-green-600">Created: {bulkResult.created ?? 0}</span>
+                  <span className="text-red-600">Failed: {bulkResult.failed ?? 0}</span>
                 </div>
-                {bulkResult.errors.length > 0 && (
+                {(bulkResult.errors ?? []).length > 0 && (
                   <div className="mt-2 max-h-40 overflow-y-auto">
                     <p className="text-xs font-medium text-muted-foreground mb-1">Row errors:</p>
                     <ul className="text-xs space-y-0.5">
-                      {bulkResult.errors.slice(0, 20).map((err, i) => (
+                      {(bulkResult.errors ?? []).slice(0, 20).map((err, i) => (
                         <li key={i}>
                           Row {err.row}: {err.message}
                         </li>
                       ))}
-                      {bulkResult.errors.length > 20 && (
-                        <li className="text-muted-foreground">… and {bulkResult.errors.length - 20} more</li>
+                      {(bulkResult.errors ?? []).length > 20 && (
+                        <li className="text-muted-foreground">… and {(bulkResult.errors ?? []).length - 20} more</li>
                       )}
                     </ul>
                   </div>

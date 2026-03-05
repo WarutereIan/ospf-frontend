@@ -525,7 +525,6 @@ export async function apiPost<T>(
 
 /**
  * POST request with FormData (e.g. file upload). Do not set Content-Type; browser sets multipart boundary.
- * Returns the full response body (backend may not wrap in { data }).
  */
 export async function apiPostFormData<T>(
   endpoint: string,
@@ -538,7 +537,7 @@ export async function apiPostFormData<T>(
     apiOptions: options,
   });
 
-  return (response as unknown) as T;
+  return response.data;
 }
 
 /**

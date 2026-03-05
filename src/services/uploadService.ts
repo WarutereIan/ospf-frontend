@@ -22,11 +22,11 @@ export interface UploadImageResult {
 export async function uploadImage(file: File): Promise<UploadImageResult> {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await apiPostFormData<{ data?: { url: string }; url?: string }>(
+  const response = await apiPostFormData<{ url: string }>(
     "/upload/image",
     formData
   );
-  const url = response?.data?.url ?? response?.url;
+  const url = response?.url;
   if (!url) {
     throw new Error("Upload failed: no URL returned");
   }
