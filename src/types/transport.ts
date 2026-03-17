@@ -214,7 +214,7 @@ export interface PickupSlotBooking {
   pickupConfirmedBy?: string; // Farmer ID who confirmed
   pickupReceiptId?: string; // Receipt ID for pickup
   variety?: string; // Produce variety
-  qualityGrade?: "A" | "B" | "C"; // Quality grade
+  qualityGrade?: string; // Quality grade code from catalog
   photos?: string[]; // Photos taken at pickup
   /** Nested receipt returned by confirm API */
   pickupReceipt?: PickupReceipt;
@@ -335,7 +335,7 @@ export interface PickupReceipt {
   qrCode: string; // QR code for batch
   quantity: number; // Quantity in kg
   variety: string; // Produce variety
-  qualityGrade: "A" | "B" | "C"; // Quality grade
+  qualityGrade: string; // Quality grade code from catalog
   pickupLocation: string; // Where produce was picked up
   pickupDate: string; // ISO 8601 - Pickup date
   pickupTime: string; // ISO 8601 - Pickup time

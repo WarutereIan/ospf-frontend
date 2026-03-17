@@ -95,7 +95,7 @@ interface TransportContextType {
   fetchFarmerBookings: (farmerId: string) => Promise<void>;
   confirmPickup: (bookingId: string, data: {
     variety: string;
-    qualityGrade: "A" | "B" | "C";
+    qualityGrade: string;
     photos?: string[];
     notes?: string;
   }) => Promise<PickupSlotBooking | null>;
@@ -526,7 +526,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     bookingId: string,
     data: {
       variety: string;
-      qualityGrade: "A" | "B" | "C";
+      qualityGrade: string;
       photos?: string[];
       notes?: string;
     }

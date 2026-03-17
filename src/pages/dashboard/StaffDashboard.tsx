@@ -567,6 +567,11 @@ export function StaffDashboard() {
               Reports
             </Button>
           </Link>
+          <Link to="/dashboard/staff/commodity-settings">
+            <Button size="sm" variant="outline">
+              Commodity settings
+            </Button>
+          </Link>
           <Link to="/dashboard/staff/settings">
             <Button size="sm">
               <IconSettings className="mr-2 h-4 w-4" />

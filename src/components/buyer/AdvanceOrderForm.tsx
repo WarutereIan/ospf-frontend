@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { IconCalendar, IconPackage, IconMapPin } from "@tabler/icons-react";
 import { useState } from "react";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 interface AdvanceOrderFormProps {
   onSubmit: (order: AdvanceOrderData) => void;
@@ -24,19 +25,11 @@ export interface AdvanceOrderData {
   preferredPrice?: number;
 }
 
-const ofspVarieties = [
-  { value: "kenya", label: "Kenya" },
-  { value: "spk004", label: "SPK004" },
-  { value: "kabode", label: "Kabode" },
-];
-
-const qualityGrades = [
-  { value: "A", label: "Grade A - Premium" },
-  { value: "B", label: "Grade B - Standard" },
-  { value: "C", label: "Grade C - Processing" },
-];
-
 export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) {
+  const { varieties, qualityGrades } = useCatalog();
+  const varietyOptions = varieties.map((v) => ({ value: v.code, label: v.label }));
+  const gradeOptions = qualityGrades.map((g) => ({ value: g.code, label: g.label }));
+
   const [formData, setFormData] = useState<AdvanceOrderData>({
     variety: "",
     qualityGrade: "",
@@ -82,7 +75,7 @@ export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ofspVarieties.map((variety) => (
+                    {varietyOptions.map((variety) => (
                       <SelectItem key={variety.value} value={variety.value}>
                         {variety.label}
                       </SelectItem>
@@ -101,7 +94,7 @@ export function AdvanceOrderForm({ onSubmit, onCancel }: AdvanceOrderFormProps) 
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {qualityGrades.map((grade) => (
+                    {gradeOptions.map((grade) => (
                       <SelectItem key={grade.value} value={grade.value}>
                         {grade.label}
                       </SelectItem>

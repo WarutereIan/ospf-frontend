@@ -10,6 +10,7 @@ import {
   IconSend,
 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { getInventory } from "@/services/aggregationService";
 import type { RFQ, RFQResponse, QualityGrade, OFSPVariety } from "@/types/marketplace";
 import type { InventoryItem, AggregationCenter } from "@/types/aggregation";
@@ -27,6 +28,7 @@ interface RFQResponseFormProps {
 
 export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProps) {
   const { user } = useAuth();
+  const { varieties: availableVarieties, qualityGrades: availableQualityGrades, productTypes, getQuantityTypes } = useCatalog();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
@@ -34,7 +36,7 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
 
   // Form state
   const [quantity, setQuantity] = useState("");
-  const [quantityUnit, setQuantityUnit] = useState<"kg" | "tons" | "units">(rfq.unit || "kg");
+  const [quantityUnit, setQuantityUnit] = useState<string>(rfq.unit || "kg");
   const [pricePerUnit, setPricePerUnit] = useState("");
   const [variety, setVariety] = useState<OFSPVariety | "">(rfq.variety || "");
   const [qualityGrade, setQualityGrade] = useState<QualityGrade>(rfq.qualityGrade || "A");
@@ -44,13 +46,11 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
   const [notes, setNotes] = useState("");
 
   // Helper function to convert quantity to kg based on unit
-  const convertToKg = (qty: number, unit: "kg" | "tons" | "units"): number => {
-    if (unit === "tons") {
-      return qty * 1000;
-    } else if (unit === "units") {
-      // Assume 1 unit = 50kg for bags (common for sweet potatoes)
-      return qty * 50;
-    }
+  const convertToKg = (qty: number, unit: string): number => {
+    const u = (unit || "kg").toLowerCase();
+    if (u === "tons") return qty * 1000;
+    if (u === "units" || u === "bags") return qty * 50; // Assume 1 unit/bag = 50kg
+    if (u === "bundles") return qty * 25; // Estimate for planting vines
     return qty;
   };
 
@@ -213,14 +213,16 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
             </div>
             <div className="space-y-2">
               <Label htmlFor="quantityUnit">Unit *</Label>
-              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value as "kg" | "tons" | "units")}>
+              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                  <SelectItem value="tons">Tons</SelectItem>
-                  <SelectItem value="units">Units</SelectItem>
+                  {getQuantityTypes(productTypes.find((p) => p.code.toLowerCase() === rfq.productType)?.code ?? "FRESH_ROOTS").map((qt) => (
+                    <SelectItem key={qt.id} value={qt.code}>
+                      {qt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -254,11 +256,11 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Kenya">Kenya</SelectItem>
-                    <SelectItem value="SPK004">SPK004</SelectItem>
-                    <SelectItem value="Kakamega">Kakamega</SelectItem>
-                    <SelectItem value="Kabode">Kabode</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {availableVarieties.map((v) => (
+                      <SelectItem key={v.code} value={v.code}>
+                        {v.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -269,9 +271,11 @@ export function RFQResponseForm({ rfq, onSubmit, onCancel }: RFQResponseFormProp
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="A">Grade A</SelectItem>
-                    <SelectItem value="B">Grade B</SelectItem>
-                    <SelectItem value="C">Grade C</SelectItem>
+                    {availableQualityGrades.map((g) => (
+                      <SelectItem key={g.code} value={g.code}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

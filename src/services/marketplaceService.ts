@@ -42,8 +42,6 @@ import type {
   MarketplaceOrderStatus,
   ListingStatus,
   PaymentStatus,
-  OFSPVariety,
-  SourcingProductType,
   RFQStatus,
   RFQResponseStatus,
   NegotiationStatus,
@@ -135,26 +133,20 @@ function mapPaymentStatus(backendStatus: string): PaymentStatus {
 /**
  * Map backend OFSP variety (UPPER_CASE) to frontend format (Title Case)
  */
-function mapOFSPVariety(backendVariety: string | null | undefined): OFSPVariety | undefined {
+function mapOFSPVariety(backendVariety: string | null | undefined): string | undefined {
   if (!backendVariety) return undefined;
-  // Backend sends uppercase enum values, normalize to uppercase and return uppercase
-  const upper = backendVariety.toUpperCase();
-  const validVarieties: OFSPVariety[] = ['KENYA', 'SPK004', 'KAKAMEGA', 'KABODE', 'OTHER'];
-  return validVarieties.includes(upper as OFSPVariety) ? (upper as OFSPVariety) : 'KENYA';
+  return backendVariety.trim() || undefined;
 }
 
-/**
- * Map backend sourcing product type (UPPER_CASE) to frontend format (lowercase)
- * Handles "OFSP" if present (though frontend doesn't have it)
- */
-function mapSourcingProductType(backendType: string): SourcingProductType {
-  const typeMap: Record<string, SourcingProductType> = {
+/** Map backend product type code to frontend format (lowercase for UI compatibility) */
+function mapSourcingProductType(backendType: string): string {
+  const typeMap: Record<string, string> = {
     FRESH_ROOTS: 'fresh_roots',
     PROCESS_GRADE: 'process_grade',
     PLANTING_VINES: 'planting_vines',
-    OFSP: 'fresh_roots', // Map OFSP to fresh_roots if backend sends it
+    OFSP: 'fresh_roots',
   };
-  return typeMap[backendType] || 'fresh_roots';
+  return typeMap[backendType] ?? backendType.toLowerCase();
 }
 
 /**
@@ -935,11 +927,11 @@ export async function getSourcingRequestById(id: string): Promise<SourcingReques
 interface CreateSourcingRequestDto {
   title?: string;
   publishImmediately?: boolean;
-  productType: 'FRESH_ROOTS' | 'PROCESS_GRADE' | 'PLANTING_VINES' | 'OFSP';
-  variety: 'KENYA' | 'SPK004' | 'KAKAMEGA' | 'KABODE' | 'OTHER';
+  productType: string;
+  variety: string;
   quantity: number;
   unit?: 'kg' | 'tons' | 'units';
-  qualityGrade: 'A' | 'B' | 'C';
+  qualityGrade: string;
   deliveryDate: string; // ISO 8601
   deliveryLocation: string;
   description?: string;
@@ -949,28 +941,28 @@ interface CreateSourcingRequestDto {
   priceUnit?: 'kg' | 'unit';
 }
 
-function toBackendProductType(v: string | undefined): CreateSourcingRequestDto['productType'] {
-  const s = (v || '').toLowerCase().replace(/\s+/g, '_');
-  if (s === 'fresh_roots' || s === 'fresh_ofsp_roots') return 'FRESH_ROOTS';
-  if (s === 'process_grade' || s === 'ofsp_flour') return 'PROCESS_GRADE';
-  if (s === 'planting_vines' || s === 'planting_vines') return 'PLANTING_VINES';
-  if (s === 'ofsp') return 'OFSP';
-  return 'FRESH_ROOTS';
+function toBackendProductType(v: string | undefined): string {
+  if (!v) return 'FRESH_ROOTS';
+  const s = v.trim();
+  if (!s) return 'FRESH_ROOTS';
+  return s.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_-]/gi, '') || 'FRESH_ROOTS';
 }
 
-function toBackendVariety(v: string | undefined): CreateSourcingRequestDto['variety'] {
-  const u = (v || 'KENYA').toUpperCase();
-  const valid: CreateSourcingRequestDto['variety'][] = ['KENYA', 'SPK004', 'KAKAMEGA', 'KABODE', 'OTHER'];
-  return valid.includes(u as any) ? (u as CreateSourcingRequestDto['variety']) : 'KENYA';
+function toBackendVariety(v: string | undefined): string {
+  if (!v) return 'KENYA';
+  const s = v.trim();
+  return s ? s.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_-]/gi, '') || 'KENYA' : 'KENYA';
 }
 
-function toBackendQualityGrade(v: string | undefined): CreateSourcingRequestDto['qualityGrade'] {
-  if (v === 'A' || v === 'B' || v === 'C') return v;
-  const s = (v || '').toLowerCase();
-  if (s.includes('grade a') || s.includes('premium')) return 'A';
-  if (s.includes('grade b') || s.includes('standard')) return 'B';
-  if (s.includes('processing')) return 'C';
-  return 'B';
+function toBackendQualityGrade(v: string | undefined): string {
+  if (!v) return 'B';
+  const s = v.trim();
+  if (s === 'A' || s === 'B' || s === 'C') return s;
+  const lower = s.toLowerCase();
+  if (lower.includes('grade a') || lower.includes('premium')) return 'A';
+  if (lower.includes('grade b') || lower.includes('standard')) return 'B';
+  if (lower.includes('processing') || lower.includes('grade c')) return 'C';
+  return s;
 }
 
 function toBackendUnit(v: string | undefined): 'kg' | 'tons' | 'units' {

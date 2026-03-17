@@ -37,11 +37,12 @@ import generatePDF from "react-to-pdf";
 import { useAuth } from "@/contexts/AuthContext";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
-import { OFSPVariety, OFSP_VARIETY_LABELS, OFSP_VARIETY_VALUES } from "@/types/shared/enums";
+import { useCatalog } from "@/contexts/CatalogContext";
 import type { PickupSlotBooking, PickupReceipt } from "@/types/transport";
 
 export function MyPickupBookings() {
   const { user } = useAuth();
+  const { varieties, qualityGrades } = useCatalog();
   const { fetchFarmerBookings, confirmPickup, fetchPickupReceipt, farmerBookings, isLoading: transportLoading } = useTransport();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -56,8 +57,8 @@ export function MyPickupBookings() {
 
   // Confirmation form state
   const [confirmationForm, setConfirmationForm] = useState({
-    variety: "" as OFSPVariety | "",
-    qualityGrade: "A" as "A" | "B" | "C",
+    variety: "",
+    qualityGrade: qualityGrades[0]?.code ?? "A",
     notes: "",
     photos: [] as string[],
   });
@@ -532,17 +533,15 @@ export function MyPickupBookings() {
                   <Label htmlFor="variety">Produce Variety *</Label>
                   <Select
                     value={confirmationForm.variety}
-                    onValueChange={(value: OFSPVariety) => {
-                      setConfirmationForm({ ...confirmationForm, variety: value });
-                    }}
+                    onValueChange={(value) => setConfirmationForm({ ...confirmationForm, variety: value })}
                   >
                     <SelectTrigger id="variety" className="w-full">
                       <SelectValue>{confirmationForm.variety ? undefined : "Select variety"}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {OFSP_VARIETY_VALUES.map((variety) => (
-                        <SelectItem key={variety} value={variety}>
-                          {OFSP_VARIETY_LABELS[variety as OFSPVariety]}
+                      {varieties.map((v) => (
+                        <SelectItem key={v.id} value={v.code}>
+                          {v.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -554,17 +553,17 @@ export function MyPickupBookings() {
                   <Label htmlFor="qualityGrade">Quality Grade *</Label>
                   <Select
                     value={confirmationForm.qualityGrade}
-                    onValueChange={(value: "A" | "B" | "C") =>
-                      setConfirmationForm({ ...confirmationForm, qualityGrade: value })
-                    }
+                    onValueChange={(value) => setConfirmationForm({ ...confirmationForm, qualityGrade: value })}
                   >
                     <SelectTrigger id="qualityGrade" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="A">Grade A (Premium)</SelectItem>
-                      <SelectItem value="B">Grade B (Standard)</SelectItem>
-                      <SelectItem value="C">Grade C (Economy)</SelectItem>
+                      {qualityGrades.map((g) => (
+                        <SelectItem key={g.id} value={g.code}>
+                          {g.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

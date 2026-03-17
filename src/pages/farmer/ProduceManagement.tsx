@@ -56,20 +56,7 @@ import { cn } from "@/lib/utils";
 import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 import type { ProduceListing } from "@/types/marketplace";
 import type { PickupSlotBooking } from "@/types/transport";
-
-// OFSP Varieties
-const ofspVarieties = [
-  { label: "Kenya", value: "kenya" },
-  { label: "SPK004", value: "spk004" },
-  { label: "Kabode", value: "kabode" },
-];
-
-// Quality Grades
-const qualityGrades = [
-  { label: "Grade A - Premium", value: "A", color: "bg-green-100 text-green-800" },
-  { label: "Grade B - Standard", value: "B", color: "bg-yellow-100 text-yellow-800" },
-  { label: "Grade C - Processing", value: "C", color: "bg-orange-100 text-orange-800" },
-];
+import { useCatalog } from "@/contexts/CatalogContext";
 
 const quantityUnits = [
   { label: "Kilograms (kg)", value: "kg" },
@@ -90,7 +77,7 @@ interface UnifiedProduce {
   type: "listing" | "picked_up";
   variety: string;
   quantity: number;
-  qualityGrade: "A" | "B" | "C";
+  qualityGrade: string;
   batchId?: string;
   qrCode?: string;
   status: string;
@@ -128,6 +115,7 @@ export function ProduceManagement() {
   const { user } = useAuth();
   const { fetchFarmerBookings } = useTransport();
   const { centers: aggregationCenters, fetchCenters } = useAggregation();
+  const { varieties: availableVarieties, qualityGrades, getGradeColor } = useCatalog();
 
   const [activeTab, setActiveTab] = useState<ProduceType>("all");
   const [pickedUpProduce, setPickedUpProduce] = useState<PickupSlotBooking[]>([]);
@@ -416,13 +404,8 @@ export function ProduceManagement() {
     }
   };
 
-  const getGradeColor = (grade: string) => {
-    const gradeInfo = qualityGrades.find((g) => g.value === grade);
-    return gradeInfo?.color || "bg-gray-100 text-gray-800";
-  };
-
   const getVarietyName = (value: string) => {
-    const variety = ofspVarieties.find((v) => v.value === value);
+    const variety = availableVarieties.find((v) => v.code.toLowerCase() === value.toLowerCase());
     return variety?.label || value;
   };
 
@@ -431,9 +414,13 @@ export function ProduceManagement() {
     return subCounty?.label || value;
   };
 
-  // Calculate variety breakdown (from all produce)
-  const varietyBreakdown = ofspVarieties.map((variety) => {
-    const varietyProduce = unifiedProduce.filter((p) => p.variety === variety.value);
+  // Calculate variety breakdown (from catalog; context provides fallbacks)
+  const varietyBreakdownSource = availableVarieties.map((v) => ({ code: v.code, label: v.label }));
+
+  const varietyBreakdown = varietyBreakdownSource.map((variety) => {
+    const varietyProduce = unifiedProduce.filter(
+      (p) => p.variety.toLowerCase() === variety.code.toLowerCase(),
+    );
     const totalQuantity = varietyProduce.reduce((sum, p) => sum + p.quantity, 0);
     const allQuantity = unifiedProduce.reduce((sum, p) => sum + p.quantity, 0);
     return {
@@ -517,8 +504,8 @@ export function ProduceManagement() {
                       <SelectValue>{newListing.variety ? undefined : "Select variety"}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {ofspVarieties.map((v) => (
-                        <SelectItem key={v.value} value={v.value}>
+                      {availableVarieties.map((v) => (
+                        <SelectItem key={v.code} value={v.code}>
                           {v.label}
                         </SelectItem>
                       ))}
@@ -566,7 +553,7 @@ export function ProduceManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       {qualityGrades.map((g) => (
-                        <SelectItem key={g.value} value={g.value}>
+                        <SelectItem key={g.code} value={g.code}>
                           {g.label}
                         </SelectItem>
                       ))}
@@ -574,7 +561,7 @@ export function ProduceManagement() {
                   </Select>
                 </FieldGroup>
                 <FieldGroup>
-                  <FieldLabel>Expected date and time ready at aggregation centre</FieldLabel>
+                  <FieldLabel>Harvest date</FieldLabel>
                   <Input
                     type="datetime-local"
                     value={newListing.expectedReadyAt}
@@ -861,8 +848,17 @@ export function ProduceManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>
-                {ofspVarieties.map((variety) => (
-                  <SelectItem key={variety.value} value={variety.value}>
+                {(availableVarieties.length > 0
+                  ? availableVarieties
+                  : [
+                      { code: "KENYA", label: "Kenya" },
+                      { code: "SPK004", label: "SPK004" },
+                      { code: "KAKAMEGA", label: "Kakamega" },
+                      { code: "KABODE", label: "Kabode" },
+                      { code: "OTHER", label: "Other" },
+                    ]
+                ).map((variety) => (
+                  <SelectItem key={variety.code} value={variety.code}>
                     {variety.label}
                   </SelectItem>
                 ))}

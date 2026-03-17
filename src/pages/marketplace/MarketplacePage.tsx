@@ -49,20 +49,7 @@ import {
 import { BatchTraceabilityDialog } from "@/components/buyer/BatchTraceabilityDialog";
 import { LocationPicker } from "@/components/marketplace/LocationPicker";
 import type { ProduceListing, OFSPVariety } from "@/types/marketplace";
-
-const ofspVarieties = [
-  { value: "all", label: "All Varieties" },
-  { value: "kenya", label: "Kenya" },
-  { value: "spk004", label: "SPK004" },
-  { value: "kabode", label: "Kabode" },
-];
-
-const qualityGrades = [
-  { value: "all", label: "All Grades" },
-  { value: "A", label: "Grade A" },
-  { value: "B", label: "Grade B" },
-  { value: "C", label: "Grade C" },
-];
+import { useCatalog } from "@/contexts/CatalogContext";
 
 const subCounties = [
   { value: "all", label: "All Locations" },
@@ -84,7 +71,16 @@ const sortOptions = [
 export function MarketplacePage() {
   const { role, user } = useAuth();
   const { listings, fetchListings, createOrder, createSourcingRequest, isLoading, listingFilters, setListingFilters } = useMarketplace();
-  
+  const { varieties, qualityGrades, getGradeColor } = useCatalog();
+  const varietyFilterOptions = [
+    { value: "all", label: "All Varieties" },
+    ...varieties.map((v) => ({ value: v.code, label: v.label })),
+  ];
+  const gradeFilterOptions = [
+    { value: "all", label: "All Grades" },
+    ...qualityGrades.map((g) => ({ value: g.code, label: g.label })),
+  ];
+
   const [filteredListings, setFilteredListings] = useState<ProduceListing[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedVariety, setSelectedVariety] = useState("all");
@@ -302,19 +298,6 @@ export function MarketplacePage() {
     }
   };
 
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case "A":
-        return "bg-green-100 text-green-800 border-green-300";
-      case "B":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300";
-      case "C":
-        return "bg-orange-100 text-orange-800 border-orange-300";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-300";
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -382,7 +365,7 @@ export function MarketplacePage() {
                 <IconChevronDown className="h-3.5 w-3.5 text-stone-400" />
               </SelectTrigger>
               <SelectContent>
-                {ofspVarieties.map((v) => (
+                {varietyFilterOptions.map((v) => (
                   <SelectItem key={v.value} value={v.value}>
                     {v.label}
                   </SelectItem>
@@ -397,7 +380,7 @@ export function MarketplacePage() {
                 <IconChevronDown className="h-3.5 w-3.5 text-stone-400" />
               </SelectTrigger>
               <SelectContent>
-                {qualityGrades.map((g) => (
+                {gradeFilterOptions.map((g) => (
                   <SelectItem key={g.value} value={g.value}>
                     {g.label}
                   </SelectItem>

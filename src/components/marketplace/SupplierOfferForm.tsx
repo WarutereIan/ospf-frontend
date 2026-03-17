@@ -17,6 +17,7 @@ import {
   IconPackage,
 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { getInventory } from "@/services/aggregationService";
 import type { SourcingRequest, SupplierOffer, QualityGrade } from "@/types/marketplace";
 import type { InventoryItem, AggregationCenter } from "@/types/aggregation";
@@ -41,6 +42,7 @@ interface SupplierOfferModalProps {
 
 export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: SupplierOfferFormProps) {
   const { user } = useAuth();
+  const { productTypes, getQuantityTypes } = useCatalog();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
@@ -48,20 +50,18 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
 
   // Form state
   const [quantity, setQuantity] = useState("");
-  const [quantityUnit, setQuantityUnit] = useState<"kg" | "tons" | "units">(sourcingRequest.unit || "kg");
+  const [quantityUnit, setQuantityUnit] = useState<string>(sourcingRequest.unit || "kg");
   const [pricePerKg, setPricePerKg] = useState("");
   const [qualityGrade, setQualityGrade] = useState<QualityGrade>("A");
   const [selectedBatchId, setSelectedBatchId] = useState<string>("");
   const [notes, setNotes] = useState("");
 
   // Helper function to convert quantity to kg based on unit
-  const convertToKg = (qty: number, unit: "kg" | "tons" | "units"): number => {
-    if (unit === "tons") {
-      return qty * 1000;
-    } else if (unit === "units") {
-      // Assume 1 unit = 50kg for bags (common for sweet potatoes)
-      return qty * 50;
-    }
+  const convertToKg = (qty: number, unit: string): number => {
+    const u = (unit || "kg").toLowerCase();
+    if (u === "tons") return qty * 1000;
+    if (u === "units" || u === "bags") return qty * 50; // Assume 1 unit/bag = 50kg
+    if (u === "bundles") return qty * 25; // Estimate for planting vines
     return qty;
   };
 
@@ -235,14 +235,16 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
             </div>
             <div className="space-y-2">
               <Label htmlFor="quantityUnit">Unit *</Label>
-              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value as "kg" | "tons" | "units")}>
+              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                  <SelectItem value="tons">Tons</SelectItem>
-                  <SelectItem value="units">Units</SelectItem>
+                  {getQuantityTypes(productTypes.find((p) => p.code.toLowerCase() === (sourcingRequest.productType || ""))?.code ?? "FRESH_ROOTS").map((qt) => (
+                    <SelectItem key={qt.id} value={qt.code}>
+                      {qt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

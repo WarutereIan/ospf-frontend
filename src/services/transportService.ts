@@ -1211,7 +1211,7 @@ export async function confirmPickup(
   bookingId: string,
   data: {
     variety: string;
-    qualityGrade: "A" | "B" | "C";
+    qualityGrade: string;
     photos?: string[];
     notes?: string;
   }

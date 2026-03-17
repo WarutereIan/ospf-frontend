@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import {
   IconSeeding,
 } from "@tabler/icons-react";
 import type { RFQ, SourcingProductType, RecurringFrequency, OFSPVariety, QualityGrade } from "@/types/marketplace";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 interface RFQFormProps {
   rfq?: RFQ; // If provided, edit mode
@@ -21,15 +22,20 @@ interface RFQFormProps {
 }
 
 export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
+  const { varieties: availableVarieties, productTypes: availableProductTypes, qualityGrades: availableQualityGrades, getQuantityTypes } = useCatalog();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const productTypeOptions = availableProductTypes;
+  const varietyOptions = availableVarieties;
+  const gradeOptions = availableQualityGrades;
 
   // Form state
   const [title, setTitle] = useState(rfq?.title || "");
   const [productType, setProductType] = useState<SourcingProductType | "">(rfq?.productType || "");
   const [variety, setVariety] = useState<OFSPVariety | "">(rfq?.variety || "");
   const [quantity, setQuantity] = useState(rfq?.total?.toString() || "");
-  const [quantityUnit, setQuantityUnit] = useState<"kg" | "tons" | "units">(rfq?.unit || "kg");
+  const [quantityUnit, setQuantityUnit] = useState<string>(rfq?.unit || "kg");
   const [qualityGrade, setQualityGrade] = useState<QualityGrade | "">(rfq?.qualityGrade || "");
   const [priceMin, setPriceMin] = useState(rfq?.priceRange?.min?.toString() || "");
   const [priceMax, setPriceMax] = useState(rfq?.priceRange?.max?.toString() || "");
@@ -130,29 +136,33 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="productType">Product Type *</Label>
-            <Select value={productType} onValueChange={(value) => setProductType(value as SourcingProductType)}>
+            <Select
+              value={productType}
+              onValueChange={(value) => {
+                setProductType(value as SourcingProductType);
+                const ptCode = availableProductTypes.find((p) => p.code.toLowerCase() === value)?.code ?? "FRESH_ROOTS";
+                const qtyTypes = getQuantityTypes(ptCode);
+                const firstUnit = qtyTypes[0]?.code ?? "kg";
+                setQuantityUnit(qtyTypes.some((qt) => qt.code === quantityUnit) ? quantityUnit : firstUnit);
+              }}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue>{productType ? undefined : "Select product type"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="fresh_roots">
-                  <div className="flex items-center gap-2">
-                    <IconCarrot className="h-4 w-4 text-orange-600" />
-                    Fresh OFSP Roots
-                  </div>
-                </SelectItem>
-                <SelectItem value="process_grade">
-                  <div className="flex items-center gap-2">
-                    <IconPackage className="h-4 w-4 text-blue-600" />
-                    Process Grade (Flour)
-                  </div>
-                </SelectItem>
-                <SelectItem value="planting_vines">
-                  <div className="flex items-center gap-2">
-                    <IconSeeding className="h-4 w-4 text-green-600" />
-                    Planting Vines
-                  </div>
-                </SelectItem>
+                {productTypeOptions.map((p) => {
+                  const value = p.code.toLowerCase() as SourcingProductType;
+                  const Icon = p.code === "FRESH_ROOTS" ? IconCarrot : p.code === "PROCESS_GRADE" ? IconPackage : IconSeeding;
+                  const color = p.code === "FRESH_ROOTS" ? "text-orange-600" : p.code === "PROCESS_GRADE" ? "text-blue-600" : "text-green-600";
+                  return (
+                    <SelectItem key={p.id} value={value}>
+                      <div className="flex items-center gap-2">
+                        <Icon className={`h-4 w-4 ${color}`} />
+                        {p.label}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -165,11 +175,11 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
                   <SelectValue>{variety ? undefined : "Select variety (optional)"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Kenya">Kenya</SelectItem>
-                  <SelectItem value="SPK004">SPK004</SelectItem>
-                  <SelectItem value="Kakamega">Kakamega</SelectItem>
-                  <SelectItem value="Kabode">Kabode</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {varietyOptions.map((v) => (
+                    <SelectItem key={v.id} value={v.code}>
+                      {v.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -191,14 +201,16 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="quantityUnit">Unit *</Label>
-              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value as "kg" | "tons" | "units")}>
+              <Select value={quantityUnit} onValueChange={(value) => setQuantityUnit(value)}>
                 <SelectTrigger className="w-full">
                   <SelectValue>{quantityUnit ? undefined : "Select unit"}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kg">Kilograms (kg)</SelectItem>
-                  <SelectItem value="tons">Tons</SelectItem>
-                  <SelectItem value="units">Units</SelectItem>
+                  {getQuantityTypes(availableProductTypes.find((p) => p.code.toLowerCase() === productType)?.code ?? "FRESH_ROOTS").map((qt) => (
+                    <SelectItem key={qt.id} value={qt.code}>
+                      {qt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -211,9 +223,11 @@ export function RFQForm({ rfq, onSubmit, onCancel }: RFQFormProps) {
                 <SelectValue>{qualityGrade ? undefined : "Select quality grade (optional)"}</SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="A">Grade A</SelectItem>
-                <SelectItem value="B">Grade B</SelectItem>
-                <SelectItem value="C">Grade C</SelectItem>
+                {gradeOptions.map((g) => (
+                  <SelectItem key={g.id} value={g.code}>
+                    {g.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

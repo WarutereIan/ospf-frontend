@@ -39,7 +39,7 @@ import {
 } from "@tabler/icons-react";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import type { SourcingRequest, SupplierOffer, SourcingRequestFilters } from "@/types/marketplace";
-import { OFSPVariety, OFSP_VARIETY_LABELS, OFSP_VARIETY_VALUES } from "@/types/shared/enums";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { showSuccess, showError, formatApiError } from "@/lib/toast";
 
 // Types imported from marketplace.ts
@@ -47,36 +47,22 @@ import { showSuccess, showError, formatApiError } from "@/lib/toast";
 type TabType = "active" | "drafts" | "completed";
 type ViewType = "list" | "create" | "manage";
 
-/** Product type options matching backend CreateSourcingRequestDto enum */
-const PRODUCT_TYPE_OPTIONS = [
-  { value: "FRESH_ROOTS", label: "Fresh OFSP Roots" },
-  { value: "PROCESS_GRADE", label: "OFSP Flour" },
-  { value: "PLANTING_VINES", label: "Planting Vines" },
-  { value: "OFSP", label: "OFSP (General)" },
-] as const;
-
-/** Variety options matching backend OFSPVariety enum */
-const VARIETY_OPTIONS = OFSP_VARIETY_VALUES.map(value => ({
-  value,
-  label: OFSP_VARIETY_LABELS[value as OFSPVariety],
-}));
-
-function frontendProductTypeToEnum(
-  v: SourcingRequest["productType"]
-): (typeof PRODUCT_TYPE_OPTIONS)[number]["value"] {
-  const map: Record<string, (typeof PRODUCT_TYPE_OPTIONS)[number]["value"]> = {
-    fresh_roots: "FRESH_ROOTS",
-    process_grade: "PROCESS_GRADE",
-    planting_vines: "PLANTING_VINES",
-  };
-  return map[v] ?? "FRESH_ROOTS";
+/** Map frontend productType (lowercase) to backend code. Uses catalog when available. */
+function frontendProductTypeToCode(
+  productType: SourcingRequest["productType"],
+  productTypes: { code: string }[]
+): string {
+  if (!productType) return productTypes[0]?.code ?? "FRESH_ROOTS";
+  const found = productTypes.find((p) => p.code.toLowerCase() === productType);
+  if (found) return found.code;
+  return productType.toUpperCase().replace(/-/g, "_");
 }
 
 interface CreateRequestForm {
   productType: string;
   variety: string;
   quantity: string;
-  quantityUnit: "kg" | "tons" | "bags";
+  quantityUnit: string;
   qualityGrade: string;
   priceMin: string;
   priceMax: string;
@@ -118,11 +104,15 @@ export function SourcingRequests() {
   const [closeConfirmDialogOpen, setCloseConfirmDialogOpen] = useState(false);
   const [isClosingRequest, setIsClosingRequest] = useState(false);
   const [publishingRequestId, setPublishingRequestId] = useState<string | null>(null);
+  const { varieties, productTypes, qualityGrades, getQuantityTypes } = useCatalog();
+  const defaultVariety = varieties[0]?.code ?? "KENYA";
+  const defaultProductType = productTypes[0]?.code ?? "FRESH_ROOTS";
+  const defaultQuantityUnit = getQuantityTypes(defaultProductType)[0]?.code ?? "kg";
   const [formData, setFormData] = useState<CreateRequestForm>({
-    productType: "FRESH_ROOTS",
-    variety: OFSPVariety.KENYA,
+    productType: defaultProductType,
+    variety: defaultVariety,
     quantity: "",
-    quantityUnit: "kg",
+    quantityUnit: defaultQuantityUnit,
     qualityGrade: "",
     priceMin: "",
     priceMax: "",
@@ -338,10 +328,10 @@ export function SourcingRequests() {
     setView("list");
     // Reset form
     setFormData({
-      productType: "FRESH_ROOTS",
-      variety: OFSPVariety.KENYA,
+      productType: defaultProductType,
+      variety: defaultVariety,
       quantity: "",
-      quantityUnit: "kg",
+      quantityUnit: defaultQuantityUnit,
       qualityGrade: "",
       priceMin: "",
       priceMax: "",
@@ -368,28 +358,28 @@ export function SourcingRequests() {
     }
   };
 
-  const formQualityToGrade = (s: string): "A" | "B" | "C" | undefined => {
+  const formQualityToGrade = (s: string): string | undefined => {
     if (!s) return undefined;
-    const lower = s.toLowerCase();
+    const trimmed = s.trim();
+    if (!trimmed) return undefined;
+    if (qualityGrades.some((g) => g.code === trimmed)) return trimmed;
+    const lower = trimmed.toLowerCase();
     if (lower.includes("grade a") || lower.includes("premium")) return "A";
     if (lower.includes("grade b") || lower.includes("standard")) return "B";
-    if (lower.includes("processing")) return "C";
-    if (s === "A" || s === "B" || s === "C") return s;
-    return undefined;
+    if (lower.includes("processing") || lower.includes("grade c")) return "C";
+    return trimmed;
   };
 
   const buildCreatePayload = (opts?: { publishImmediately?: boolean }) => {
-    const productType = formData.productType || "FRESH_ROOTS";
-    // Ensure variety is a valid OFSPVariety enum value
-    const varietyValue = formData.variety || OFSPVariety.KENYA;
-    const variety: OFSPVariety = OFSP_VARIETY_VALUES.includes(varietyValue) 
-      ? (varietyValue as OFSPVariety) 
-      : OFSPVariety.KENYA;
-    const unit = formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg";
+    const productType = formData.productType || defaultProductType;
+    const varietyValue = formData.variety || defaultVariety;
+    const variety = varieties.some((v) => v.code === varietyValue) ? varietyValue : defaultVariety;
+    const qtyTypes = getQuantityTypes(productType);
+    const unit = qtyTypes.some((qt) => qt.code === formData.quantityUnit) ? formData.quantityUnit : (qtyTypes[0]?.code ?? "kg");
     const quantity = parseFloat(formData.quantity) || 0;
     const deadline = formData.deadline || new Date().toISOString().split("T")[0];
     const qualityGrade = formQualityToGrade(formData.qualityGrade);
-    const label = PRODUCT_TYPE_OPTIONS.find((o) => o.value === productType)?.label ?? "New Request";
+    const label = productTypes.find((p) => p.code === productType)?.label ?? "New Request";
     
     // Build price information
     const priceMin = formData.priceMin ? parseFloat(formData.priceMin) : undefined;
@@ -497,10 +487,14 @@ export function SourcingRequests() {
       const recurringEndYmd =
         typeof recEnd === "string" && recEnd.includes("T") ? (recEnd.split("T")[0] ?? "") : (recEnd ?? "");
       setFormData({
-        productType: frontendProductTypeToEnum(selectedSourcingRequest.productType),
-        variety: (selectedSourcingRequest.variety?.toUpperCase() as OFSPVariety) || OFSPVariety.KENYA,
+        productType: frontendProductTypeToCode(selectedSourcingRequest.productType, productTypes),
+        variety: selectedSourcingRequest.variety ?? defaultVariety,
         quantity: selectedSourcingRequest.total.toString(),
-        quantityUnit: selectedSourcingRequest.unit === "tons" ? "tons" : selectedSourcingRequest.unit === "units" ? "bags" : "kg",
+        quantityUnit: (() => {
+          const qtyTypes = getQuantityTypes(frontendProductTypeToCode(selectedSourcingRequest.productType, productTypes));
+          const unit = selectedSourcingRequest.unit ?? "kg";
+          return qtyTypes.some((qt) => qt.code === unit) ? unit : (qtyTypes[0]?.code ?? "kg");
+        })(),
         qualityGrade: selectedSourcingRequest.qualityGrade || "",
         priceMin: selectedSourcingRequest.priceRange?.min.toString() || "",
         priceMax: selectedSourcingRequest.priceRange?.max.toString() || "",
@@ -532,16 +526,10 @@ export function SourcingRequests() {
         };
       } else {
         // For draft requests, send all fields
-        const unit: "kg" | "tons" | "units" =
-          formData.quantityUnit === "tons" ? "tons" : formData.quantityUnit === "bags" ? "units" : "kg";
+        const qtyTypes = getQuantityTypes(formData.productType);
+        const unit = qtyTypes.some((qt) => qt.code === formData.quantityUnit) ? formData.quantityUnit : (qtyTypes[0]?.code ?? "kg");
         const title =
-          PRODUCT_TYPE_OPTIONS.find((o) => o.value === formData.productType)?.label ?? selectedSourcingRequest.title;
-        // Convert backend enum to frontend format
-        const productTypeMap: Record<string, SourcingRequest["productType"]> = {
-          "FRESH_ROOTS": "fresh_roots",
-          "PROCESS_GRADE": "process_grade",
-          "PLANTING_VINES": "planting_vines",
-        };
+          productTypes.find((p) => p.code === formData.productType)?.label ?? selectedSourcingRequest.title;
         // Build price information
         const priceMin = formData.priceMin ? parseFloat(formData.priceMin) : undefined;
         const priceMax = formData.priceMax ? parseFloat(formData.priceMax) : undefined;
@@ -550,8 +538,8 @@ export function SourcingRequests() {
         updatedRequest = {
           ...selectedSourcingRequest,
           title,
-          productType: productTypeMap[formData.productType] || selectedSourcingRequest.productType,
-          variety: (formData.variety as OFSPVariety) || selectedSourcingRequest.variety || OFSPVariety.KENYA,
+          productType: formData.productType || selectedSourcingRequest.productType,
+          variety: formData.variety || selectedSourcingRequest.variety || defaultVariety,
           total: parseFloat(formData.quantity) || selectedSourcingRequest.total,
           unit,
           qualityGrade: formQualityToGrade(formData.qualityGrade) || selectedSourcingRequest.qualityGrade,
@@ -1116,7 +1104,12 @@ export function SourcingRequests() {
                       </Label>
                       <Select
                         value={formData.productType}
-                        onValueChange={(value) => setFormData({ ...formData, productType: value })}
+                        onValueChange={(value) => {
+                          const qtyTypes = getQuantityTypes(value);
+                          const firstUnit = qtyTypes[0]?.code ?? "kg";
+                          const validUnit = qtyTypes.some((qt) => qt.code === formData.quantityUnit) ? formData.quantityUnit : firstUnit;
+                          setFormData({ ...formData, productType: value, quantityUnit: validUnit });
+                        }}
                         disabled={isPublishedRequest}
                       >
                         <SelectTrigger
@@ -1126,9 +1119,9 @@ export function SourcingRequests() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg border-stone-200">
-                          {PRODUCT_TYPE_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
+                          {productTypes.map((p) => (
+                            <SelectItem key={p.id} value={p.code}>
+                              {p.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1152,9 +1145,9 @@ export function SourcingRequests() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg border-stone-200">
-                          {VARIETY_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
+                          {varieties.map((v) => (
+                            <SelectItem key={v.id} value={v.code}>
+                              {v.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1178,16 +1171,18 @@ export function SourcingRequests() {
                         />
                         <Select
                           value={formData.quantityUnit}
-                          onValueChange={(value: "kg" | "tons" | "bags") => setFormData({ ...formData, quantityUnit: value })}
+                          onValueChange={(value) => setFormData({ ...formData, quantityUnit: value })}
                           disabled={isPublishedRequest}
                         >
                           <SelectTrigger className={`w-24 rounded-lg border text-sm py-2.5 h-auto ${isPublishedRequest ? disabledClassName : "bg-stone-50 border-stone-200"}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="rounded-lg border-stone-200">
-                            <SelectItem value="kg">kg</SelectItem>
-                            <SelectItem value="tons">tons</SelectItem>
-                            <SelectItem value="bags">bags</SelectItem>
+                            {getQuantityTypes(formData.productType).map((qt) => (
+                              <SelectItem key={qt.id} value={qt.code}>
+                                {qt.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1210,9 +1205,11 @@ export function SourcingRequests() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-lg border-stone-200">
-                          <SelectItem value="Grade A (Premium)">Grade A (Premium)</SelectItem>
-                          <SelectItem value="Grade B (Standard)">Grade B (Standard)</SelectItem>
-                          <SelectItem value="Processing Grade">Processing Grade</SelectItem>
+                          {qualityGrades.map((g) => (
+                            <SelectItem key={g.id} value={g.code}>
+                              {g.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1451,7 +1448,12 @@ export function SourcingRequests() {
                   </Label>
                   <Select
                     value={formData.productType}
-                    onValueChange={(value) => setFormData({ ...formData, productType: value })}
+                    onValueChange={(value) => {
+                      const qtyTypes = getQuantityTypes(value);
+                      const firstUnit = qtyTypes[0]?.code ?? "kg";
+                      const validUnit = qtyTypes.some((qt) => qt.code === formData.quantityUnit) ? formData.quantityUnit : firstUnit;
+                      setFormData({ ...formData, productType: value, quantityUnit: validUnit });
+                    }}
                   >
                     <SelectTrigger 
                       id="productType" 
@@ -1460,9 +1462,9 @@ export function SourcingRequests() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-stone-200">
-                      {PRODUCT_TYPE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {productTypes.map((p) => (
+                        <SelectItem key={p.id} value={p.code}>
+                          {p.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1485,9 +1487,9 @@ export function SourcingRequests() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-stone-200">
-                      {VARIETY_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {varieties.map((v) => (
+                        <SelectItem key={v.id} value={v.code}>
+                          {v.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1510,15 +1512,17 @@ export function SourcingRequests() {
                     />
                     <Select
                       value={formData.quantityUnit}
-                      onValueChange={(value: "kg" | "tons" | "bags") => setFormData({ ...formData, quantityUnit: value })}
+                      onValueChange={(value) => setFormData({ ...formData, quantityUnit: value })}
                     >
                       <SelectTrigger className="w-24 rounded-lg border border-stone-200 text-sm bg-stone-50 py-2.5 h-auto">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-lg border-stone-200">
-                        <SelectItem value="kg">kg</SelectItem>
-                        <SelectItem value="tons">tons</SelectItem>
-                        <SelectItem value="bags">bags</SelectItem>
+                        {getQuantityTypes(formData.productType).map((qt) => (
+                          <SelectItem key={qt.id} value={qt.code}>
+                            {qt.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1540,9 +1544,11 @@ export function SourcingRequests() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-stone-200">
-                      <SelectItem value="Grade A (Premium)">Grade A (Premium)</SelectItem>
-                      <SelectItem value="Grade B (Standard)">Grade B (Standard)</SelectItem>
-                      <SelectItem value="Processing Grade">Processing Grade</SelectItem>
+                      {qualityGrades.map((g) => (
+                        <SelectItem key={g.id} value={g.code}>
+                          {g.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

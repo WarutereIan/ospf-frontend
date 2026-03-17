@@ -119,13 +119,13 @@ export function BuyerDemandMatching() {
     return null;
   };
 
-  const getGradeBadge = (grade: "A" | "B" | "C") => {
-    const colors = {
+  const getGradeBadge = (grade: string) => {
+    const colors: Record<string, string> = {
       A: "bg-green-100 text-green-800",
       B: "bg-yellow-100 text-yellow-800",
       C: "bg-orange-100 text-orange-800",
     };
-    return <Badge className={colors[grade]}>Grade {grade}</Badge>;
+    return <Badge className={colors[grade] ?? "bg-gray-100 text-gray-800"}>Grade {grade}</Badge>;
   };
 
 

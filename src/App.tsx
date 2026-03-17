@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProfileProvider } from "@/contexts/ProfileContext";
 import { InputProvider } from "@/contexts/InputContext";
@@ -9,6 +10,7 @@ import { PaymentProvider } from "@/contexts/PaymentContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { AnalyticsProvider } from "@/contexts/AnalyticsContext";
 import { StaffProvider } from "@/contexts/StaffContext";
+import { CatalogProvider } from "@/contexts/CatalogContext";
 import { Layout } from "@/components/layout/Layout";
 import { Toaster } from "@/components/ui/toaster";
 import { PushNotificationPrompt } from "@/components/notifications/PushNotificationPrompt";
@@ -84,14 +86,23 @@ import { Settings } from "@/pages/staff/Settings";
 import { FarmerGroups } from "@/pages/staff/FarmerGroups";
 import { AggregationCenters } from "@/pages/staff/AggregationCenters";
 import { Locations } from "@/pages/staff/Locations";
+import { CommoditySettings } from "@/pages/staff/CommoditySettings";
 import { PendingApprovalPage } from "@/pages/lead-farmer/PendingApprovalPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { VerifyBatchPage } from "@/pages/VerifyBatchPage";
+
+function LandingPageRedirect() {
+  useEffect(() => {
+    window.location.href = "/landing-page.html";
+  }, []);
+  return null;
+}
 
 export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <CatalogProvider>
         <ProfileProvider>
         <InputProvider>
           <MarketplaceProvider>
@@ -106,7 +117,7 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify" element={<VerifyBatchPage />} />
-          <Route path="/" element={<LoginPage />} />
+          <Route path="/" element={<LandingPageRedirect />} />
           
           {/* Protected Routes with Layout */}
           <Route element={<Layout />}>
@@ -187,6 +198,7 @@ export function App() {
             <Route path="/dashboard/staff/locations" element={<Locations />} />
             <Route path="/dashboard/staff/analytics" element={<Analytics />} />
             <Route path="/dashboard/staff/settings" element={<Settings />} />
+            <Route path="/dashboard/staff/commodity-settings" element={<CommoditySettings />} />
             <Route path="/dashboard/staff/partners" element={<Partners />} />
             <Route path="/dashboard/staff/activity-logs" element={<ActivityLogs />} />
             <Route path="/dashboard/staff/data-quality" element={<DataQuality />} />
@@ -232,6 +244,7 @@ export function App() {
           </MarketplaceProvider>
         </InputProvider>
         </ProfileProvider>
+        </CatalogProvider>
         <Toaster />
         <PushNotificationPrompt />
       </AuthProvider>

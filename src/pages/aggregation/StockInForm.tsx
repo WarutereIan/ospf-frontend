@@ -44,7 +44,7 @@ interface StockInEntry {
   farmerName?: string;
   variety: string;
   quantity: number; // kg
-  qualityGrade: "A" | "B" | "C";
+  qualityGrade: string;
   // Grading Matrix Criteria
   weightRange: WeightRange | "";
   colorIntensity: number; // 1-10

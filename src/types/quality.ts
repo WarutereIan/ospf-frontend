@@ -10,7 +10,8 @@
 /**
  * Quality grade
  */
-export type QualityGrade = "A" | "B" | "C";
+/** Quality grade code (flexible string from catalog) */
+export type QualityGrade = string;
 
 /**
  * Weight Range Category

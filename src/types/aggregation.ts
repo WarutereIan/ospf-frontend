@@ -20,10 +20,8 @@ export type CenterType = "main" | "satellite";
  */
 export type CenterStatus = "operational" | "maintenance" | "closed";
 
-/**
- * Quality grade
- */
-export type QualityGrade = "A" | "B" | "C";
+/** Quality grade code (flexible string from catalog) */
+export type QualityGrade = string;
 
 /**
  * Stock transaction type

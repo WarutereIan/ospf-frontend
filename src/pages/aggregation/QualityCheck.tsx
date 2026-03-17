@@ -37,12 +37,13 @@ import {
 import type { QualityCheck } from "@/types/aggregation";
 import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
 import { uploadImage, getImageFullUrl } from "@/services/uploadService";
+import { useCatalog } from "@/contexts/CatalogContext";
 
 interface QualityCheckForm {
   stockId: string;
   variety: string;
   quantity: number;
-  qualityGrade: "A" | "B" | "C" | null;
+  qualityGrade: string | null;
   // Grading Matrix Criteria
   weightRange: WeightRange | "";
   colorIntensity: number; // 1-10
@@ -54,18 +55,18 @@ interface QualityCheckForm {
   approved: boolean | null;
 }
 
-const qualityGrades = [
-  { value: "A", label: "Grade A - Premium", color: "bg-green-100 text-green-800" },
-  { value: "B", label: "Grade B - Standard", color: "bg-yellow-100 text-yellow-800" },
-  { value: "C", label: "Grade C - Processing", color: "bg-orange-100 text-orange-800" },
-];
-
-
 export function QualityCheck() {
   const { id } = useParams<{ id: string }>();
   const { recordQualityCheck, qualityChecks, fetchQualityChecks, inventory, fetchInventory, isLoading: aggregationLoading } = useAggregation();
   const { user } = useAuth();
-  
+  const { varieties, qualityGrades, getGradeColor } = useCatalog();
+  const varietyOptions = varieties.map((v) => ({ value: v.code.toLowerCase(), label: v.label }));
+  const gradeOptions = qualityGrades.map((g) => ({
+    value: g.code,
+    label: g.label,
+    color: getGradeColor(g.code),
+  }));
+
   const isNew = !id || id === "new";
   const [formData, setFormData] = useState<QualityCheckForm>({
     stockId: "",
@@ -280,9 +281,11 @@ export function QualityCheck() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kenya">Kenya</SelectItem>
-                      <SelectItem value="spk004">SPK004</SelectItem>
-                      <SelectItem value="kabode">Kabode</SelectItem>
+                      {varietyOptions.map((v) => (
+                        <SelectItem key={v.value} value={v.value}>
+                          {v.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -314,7 +317,7 @@ export function QualityCheck() {
               <div className="space-y-3">
                 <Label>Quality Grade *</Label>
                 <div className="grid grid-cols-3 gap-3">
-                  {qualityGrades.map((grade) => (
+                  {gradeOptions.map((grade) => (
                     <button
                       key={grade.value}
                       type="button"
@@ -336,7 +339,7 @@ export function QualityCheck() {
                           <IconCheck className="h-5 w-5 text-primary" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">{grade.label.split(" - ")[1]}</p>
+                      <p className="text-xs text-muted-foreground">{grade.label.split(" - ")[1] ?? grade.label}</p>
                     </button>
                   ))}
                 </div>
@@ -606,7 +609,7 @@ export function QualityCheck() {
                   {formData.qualityGrade ? (
                     <Badge
                       variant="outline"
-                      className={qualityGrades.find((g) => g.value === formData.qualityGrade)?.color}
+                      className={gradeOptions.find((g) => g.value === formData.qualityGrade)?.color ?? getGradeColor(formData.qualityGrade)}
                     >
                       Grade {formData.qualityGrade}
                     </Badge>

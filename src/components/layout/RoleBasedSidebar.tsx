@@ -24,6 +24,7 @@ import {
   IconRefresh,
   IconMessageCircle,
   IconBuilding,
+  IconList,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,7 @@ const staffMenuItems: MenuItem[] = [
   { name: "Farmer Groups", path: "/dashboard/staff/farmer-groups", icon: IconUsers },
   { name: "Aggregation Centers", path: "/dashboard/staff/aggregation-centers", icon: IconBuilding },
   { name: "Locations", path: "/dashboard/staff/locations", icon: IconMapPin },
+  { name: "Commodity settings", path: "/dashboard/staff/commodity-settings", icon: IconList },
   { name: "Activity Logs", path: "/dashboard/staff/activity-logs", icon: IconFileText },
   { name: "Analytics", path: "/dashboard/staff/analytics", icon: IconChartBar },
   { name: "Reports", path: "/dashboard/staff/reports", icon: IconFileText },

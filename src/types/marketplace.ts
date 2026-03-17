@@ -18,17 +18,11 @@ export type ListingStatus =
   | "PENDING_LEAD_APPROVAL"
   | "REVISION_REQUESTED";
 
-/**
- * Quality grade
- */
-export type QualityGrade = "A" | "B" | "C";
+/** Quality grade code (flexible string from catalog) */
+export type QualityGrade = string;
 
-/**
- * OFSP variety
- * @deprecated Use OFSPVariety enum from @/types/shared/enums instead
- * Keeping for backward compatibility - use uppercase enum values
- */
-export type OFSPVariety = "KENYA" | "SPK004" | "KAKAMEGA" | "KABODE" | "OTHER";
+/** Variety code (flexible string from catalog) */
+export type OFSPVariety = string;
 
 /**
  * Marketplace Order Status
@@ -209,7 +203,8 @@ export type SourcingRequestStatus = "open" | "urgent" | "draft" | "closed" | "fu
 /**
  * Product Type for Sourcing
  */
-export type SourcingProductType = "fresh_roots" | "process_grade" | "planting_vines";
+/** Product type code (flexible string from catalog, often lowercase in UI) */
+export type SourcingProductType = string;
 
 /**
  * Recurring Frequency
@@ -232,7 +227,7 @@ export interface SourcingRequest {
   fulfilled: number; // Quantity fulfilled
   total: number; // Total quantity needed
   quantity?: number; // Alias for total (used in some contexts)
-  unit: "tons" | "kg" | "units";
+  unit: string; // From catalog quantity types (e.g. kg, tons, units, bundles)
   priceRange?: { min: number; max: number };
   pricePerUnit?: number;
   priceUnit: "kg" | "unit";
@@ -275,7 +270,7 @@ export interface SupplierOffer {
   rating?: number;
   isNewSupplier?: boolean;
   quantity: number;
-  quantityUnit: "kg" | "tons" | "units";
+  quantityUnit: string; // From catalog quantity types
   pricePerKg: number;
   grade: QualityGrade;
   batchId?: string; // Batch ID for traceability
@@ -466,7 +461,7 @@ export interface RFQResponse {
   status: RFQResponseStatus;
   // Quote details
   quantity: number; // Quantity offered
-  quantityUnit: "kg" | "tons" | "units";
+  quantityUnit: string; // From catalog quantity types
   pricePerUnit: number; // Price per unit
   priceUnit: "kg" | "unit";
   totalAmount: number; // Total quote amount
