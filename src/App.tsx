@@ -14,6 +14,7 @@ import { CatalogProvider } from "@/contexts/CatalogContext";
 import { Layout } from "@/components/layout/Layout";
 import { Toaster } from "@/components/ui/toaster";
 import { PushNotificationPrompt } from "@/components/notifications/PushNotificationPrompt";
+import { Analytics as VercelAnalytics } from "@vercel/analytics/react";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { RegisterPage } from "@/pages/auth/RegisterPage";
@@ -255,6 +256,7 @@ export function App() {
         </CatalogProvider>
         <Toaster />
         <PushNotificationPrompt />
+        <VercelAnalytics />
       </AuthProvider>
     </BrowserRouter>
   );

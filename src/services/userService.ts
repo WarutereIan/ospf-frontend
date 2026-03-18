@@ -66,6 +66,7 @@ export interface User {
   };
   createdAt?: string;
   updatedAt?: string;
+  lastLogin?: string;
 }
 
 /**
@@ -195,6 +196,7 @@ export async function getUsers(filters?: {
       profile: user.profile,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      lastLogin: user.lastLogin,
     }));
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -217,6 +219,7 @@ export async function getUserById(id: string): Promise<User | null> {
       profile: response.profile,
       createdAt: response.createdAt,
       updatedAt: response.updatedAt,
+      lastLogin: response.lastLogin,
     };
   } catch (error) {
     console.error('Error fetching user:', error);

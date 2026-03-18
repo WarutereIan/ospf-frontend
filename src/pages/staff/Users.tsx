@@ -310,9 +310,9 @@ export function Users() {
         aVal = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         bVal = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       } else {
-        // lastLogin - use lastLoginAt if present (backend may add later)
-        const aLogin = (a as Profile & { lastLoginAt?: string }).lastLoginAt ?? "";
-        const bLogin = (b as Profile & { lastLoginAt?: string }).lastLoginAt ?? "";
+        // lastLogin
+        const aLogin = (a as Profile).lastLogin ?? "";
+        const bLogin = (b as Profile).lastLogin ?? "";
         aVal = aLogin ? new Date(aLogin).getTime() : 0;
         bVal = bLogin ? new Date(bLogin).getTime() : 0;
       }
@@ -993,7 +993,11 @@ export function Users() {
                     <TableCell>
                       {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                     </TableCell>
-                    <TableCell>N/A</TableCell>
+                    <TableCell>
+                      {(user as Profile).lastLogin
+                        ? new Date((user as Profile).lastLogin!).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+                        : "N/A"}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button

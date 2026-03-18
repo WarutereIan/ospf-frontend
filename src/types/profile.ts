@@ -63,6 +63,9 @@ export interface BaseProfile {
   assignedSubCounty?: string;
   assignedWard?: string;
   hasAllAccess?: boolean;
+
+  // User activity
+  lastLogin?: string;
 }
 
 /**

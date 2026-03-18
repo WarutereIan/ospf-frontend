@@ -133,6 +133,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       location: user.profile?.location || user.profile?.county || '',
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      lastLogin: user.lastLogin,
       permissions: [],
     } as Profile;
   }, []);

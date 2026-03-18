@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { IconMapPin, IconPlus, IconTrash, IconEdit, IconArrowUp, IconArrowDown, IconSelector } from "@tabler/icons-react";
+import { IconMapPin, IconPlus, IconTrash, IconEdit, IconArrowUp, IconArrowDown, IconSelector, IconSearch } from "@tabler/icons-react";
 import {
   getCounties,
   getSubCounties,
@@ -56,6 +56,10 @@ export function Locations() {
   const [selectedId, setSelectedId] = useState<string | null>(null); // when set, dialog is in edit mode
 
   const [activeTab, setActiveTab] = useState<Level>("county");
+  const [countySearch, setCountySearch] = useState("");
+  const [subCountySearch, setSubCountySearch] = useState("");
+  const [wardSearch, setWardSearch] = useState("");
+  const [villageSearch, setVillageSearch] = useState("");
   const [countyForm, setCountyForm] = useState({ name: "", code: "" });
   const [subCountyForm, setSubCountyForm] = useState({ name: "", countyId: "" });
   const [wardForm, setWardForm] = useState({ name: "", subCountyId: "" });
@@ -291,6 +295,37 @@ export function Locations() {
     return list;
   }, [villages, villageSort, wards]);
 
+  const q = (s: string) => s.trim().toLowerCase();
+  const filteredCounties = useMemo(() => {
+    if (!countySearch.trim()) return sortedCounties;
+    const k = q(countySearch);
+    return sortedCounties.filter((c) => q(c.name).includes(k) || q(c.code ?? "").includes(k));
+  }, [sortedCounties, countySearch]);
+
+  const filteredSubCounties = useMemo(() => {
+    if (!subCountySearch.trim()) return sortedSubCounties;
+    const k = q(subCountySearch);
+    return sortedSubCounties.filter(
+      (s) => q(s.name).includes(k) || q(s.county?.name ?? getCountyName(s.countyId)).includes(k)
+    );
+  }, [sortedSubCounties, subCountySearch, counties]);
+
+  const filteredWards = useMemo(() => {
+    if (!wardSearch.trim()) return sortedWards;
+    const k = q(wardSearch);
+    return sortedWards.filter(
+      (w) => q(w.name).includes(k) || q(w.subCounty?.name ?? getSubCountyName(w.subCountyId)).includes(k)
+    );
+  }, [sortedWards, wardSearch, subCounties]);
+
+  const filteredVillages = useMemo(() => {
+    if (!villageSearch.trim()) return sortedVillages;
+    const k = q(villageSearch);
+    return sortedVillages.filter(
+      (v) => q(v.name).includes(k) || q(v.ward?.name ?? getWardName(v.wardId)).includes(k)
+    );
+  }, [sortedVillages, villageSearch, wards]);
+
   const SortableTh = ({
     label,
     column,
@@ -393,7 +428,17 @@ export function Locations() {
         </CardHeader>
         <CardContent>
           {activeTab === "county" && (
-            <Table>
+            <>
+              <div className="relative mb-4">
+                <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search counties by name or code..."
+                  value={countySearch}
+                  onChange={(e) => setCountySearch(e.target.value)}
+                  className="pl-8 max-w-sm"
+                />
+              </div>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <SortableTh
@@ -414,14 +459,14 @@ export function Locations() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedCounties.length === 0 ? (
+                {filteredCounties.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                      No counties yet. Click Add to create one.
+                      {countySearch.trim() ? "No counties match your search." : "No counties yet. Click Add to create one."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedCounties.map((c) => (
+                  filteredCounties.map((c) => (
                     <TableRow key={c.id}>
                       <TableCell>{c.name}</TableCell>
                       <TableCell>{c.code ?? "—"}</TableCell>
@@ -446,9 +491,20 @@ export function Locations() {
                 )}
               </TableBody>
             </Table>
+            </>
           )}
           {activeTab === "subcounty" && (
-            <Table>
+            <>
+              <div className="relative mb-4">
+                <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search sub-counties by name or county..."
+                  value={subCountySearch}
+                  onChange={(e) => setSubCountySearch(e.target.value)}
+                  className="pl-8 max-w-sm"
+                />
+              </div>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <SortableTh
@@ -469,14 +525,14 @@ export function Locations() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedSubCounties.length === 0 ? (
+                {filteredSubCounties.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                      No sub-counties yet. Add a county first, then click Add.
+                      {subCountySearch.trim() ? "No sub-counties match your search." : "No sub-counties yet. Add a county first, then click Add."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedSubCounties.map((s) => (
+                  filteredSubCounties.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell>{s.name}</TableCell>
                       <TableCell>{s.county?.name ?? getCountyName(s.countyId)}</TableCell>
@@ -501,9 +557,20 @@ export function Locations() {
                 )}
               </TableBody>
             </Table>
+            </>
           )}
           {activeTab === "ward" && (
-            <Table>
+            <>
+              <div className="relative mb-4">
+                <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search wards by name or sub-county..."
+                  value={wardSearch}
+                  onChange={(e) => setWardSearch(e.target.value)}
+                  className="pl-8 max-w-sm"
+                />
+              </div>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <SortableTh
@@ -524,14 +591,14 @@ export function Locations() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedWards.length === 0 ? (
+                {filteredWards.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                      No wards yet. Add a sub-county first, then click Add.
+                      {wardSearch.trim() ? "No wards match your search." : "No wards yet. Add a sub-county first, then click Add."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedWards.map((w) => (
+                  filteredWards.map((w) => (
                     <TableRow key={w.id}>
                       <TableCell>{w.name}</TableCell>
                       <TableCell>{w.subCounty?.name ?? getSubCountyName(w.subCountyId)}</TableCell>
@@ -556,9 +623,20 @@ export function Locations() {
                 )}
               </TableBody>
             </Table>
+            </>
           )}
           {activeTab === "village" && (
-            <Table>
+            <>
+              <div className="relative mb-4">
+                <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search villages by name or ward..."
+                  value={villageSearch}
+                  onChange={(e) => setVillageSearch(e.target.value)}
+                  className="pl-8 max-w-sm"
+                />
+              </div>
+              <Table>
               <TableHeader>
                 <TableRow>
                   <SortableTh
@@ -579,14 +657,14 @@ export function Locations() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedVillages.length === 0 ? (
+                {filteredVillages.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                      No villages yet. Add a ward first, then click Add.
+                      {villageSearch.trim() ? "No villages match your search." : "No villages yet. Add a ward first, then click Add."}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedVillages.map((v) => (
+                  filteredVillages.map((v) => (
                     <TableRow key={v.id}>
                       <TableCell>{v.name}</TableCell>
                       <TableCell>{v.ward?.name ?? getWardName(v.wardId)}</TableCell>
@@ -611,6 +689,7 @@ export function Locations() {
                 )}
               </TableBody>
             </Table>
+            </>
           )}
         </CardContent>
       </Card>
