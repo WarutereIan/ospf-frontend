@@ -38,7 +38,7 @@ interface AuthContextType {
   isLoading: boolean;
 
   // Auth Methods
-  login: (phone: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (phone: string, password: string) => Promise<{ success: boolean; error?: string; role?: UserRole }>;
   logout: () => void;
   
   // User Methods
@@ -188,21 +188,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
 
-          // Show cached user immediately for better UX
-          setUser(cachedUser as unknown as User);
+          // Verify session with backend (this validates the HttpOnly cookie).
+          // Do NOT trust cached user before verification completes -- a timeout
+          // or unreachable server must be treated as "not authenticated".
+          const SESSION_VERIFY_TIMEOUT_MS = 10_000;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), SESSION_VERIFY_TIMEOUT_MS);
 
-          // Verify session with backend (this validates the HttpOnly cookie)
-          // Suppress error toast for /auth/me calls during session restore
-          const result = await getCurrentUser();
-          if (result.success && result.user) {
-            setUser(result.user);
-          } else {
-            // Session invalid - clear local data
+          try {
+            const result = await getCurrentUser(controller.signal);
+            clearTimeout(timeoutId);
+
+            if (result.success && result.user) {
+              setUser(result.user);
+            } else {
+              setUser(null);
+              clearLocalAuth();
+            }
+          } catch {
+            clearTimeout(timeoutId);
+            // Timeout, network failure, or any other error -- treat as unauthenticated
             setUser(null);
             clearLocalAuth();
           }
         } catch (error: any) {
-          // Don't log 401 errors during session restore - they're expected when not authenticated
           if (error?.statusCode !== 401 && error?.statusCode !== 429) {
             console.error("Error restoring session:", error);
           }
@@ -221,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = async (phone: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (phone: string, password: string): Promise<{ success: boolean; error?: string; role?: UserRole }> => {
     try {
       // Try backend API first
       const result = await apiLogin(phone, password);
@@ -230,7 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(result.user);
         // Clear any mock user
         localStorage.removeItem(MOCK_USER_KEY);
-        return { success: true };
+        return { success: true, role: result.user.role };
       } else {
         // Fallback to mock credentials for development/testing
         const normalizedPhone = phone.replace(/\s+/g, "").replace(/-/g, "");
@@ -255,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(newUser);
           // Store mock user separately
           localStorage.setItem(MOCK_USER_KEY, JSON.stringify(newUser));
-          return { success: true };
+          return { success: true, role: credential.role };
         } else {
           return { success: false, error: result.error || "Invalid phone number or password" };
         }

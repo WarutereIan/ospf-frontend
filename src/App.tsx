@@ -90,6 +90,9 @@ import { CommoditySettings } from "@/pages/staff/CommoditySettings";
 import { PendingApprovalPage } from "@/pages/lead-farmer/PendingApprovalPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { VerifyBatchPage } from "@/pages/VerifyBatchPage";
+import { ForgotPasswordPage } from "@/pages/auth/ForgotPasswordPage";
+import { ChangePasswordPage } from "@/pages/settings/ChangePasswordPage";
+import { ProfileSettingsPage } from "@/pages/settings/ProfileSettingsPage";
 
 function LandingPageRedirect() {
   useEffect(() => {
@@ -116,6 +119,7 @@ export function App() {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/verify" element={<VerifyBatchPage />} />
           <Route path="/" element={<LandingPageRedirect />} />
           
@@ -230,6 +234,10 @@ export function App() {
             <Route path="/dashboard/deliveries" element={<ActiveDeliveries />} />
             <Route path="/dashboard/completed-deliveries" element={<CompletedDeliveries />} />
             <Route path="/dashboard/earnings" element={<PaymentHistory />} /> {/* Reusing PaymentHistory for now */}
+            
+            {/* Account - available to all logged-in users */}
+            <Route path="/dashboard/change-password" element={<ChangePasswordPage />} />
+            <Route path="/dashboard/profile" element={<ProfileSettingsPage />} />
           </Route>
           
           {/* 404 */}

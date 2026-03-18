@@ -25,6 +25,10 @@ export interface ApiRequestOptions {
    * Custom error message to show in toast (overrides API error message)
    */
   errorMessage?: string;
+  /**
+   * AbortSignal for request cancellation / timeout
+   */
+  signal?: AbortSignal;
 }
 
 export interface ApiError {
@@ -256,7 +260,7 @@ async function apiRequest<T>(
   options: RequestInit & { apiOptions?: ApiRequestOptions } = {}
 ): Promise<ApiResponse<T>> {
   const { apiOptions = {}, ...fetchOptions } = options;
-  const { showErrorToast = true, errorMessage } = apiOptions;
+  const { showErrorToast = true, errorMessage, signal } = apiOptions;
   // Construct URL: if API_BASE_URL is empty (dev), use relative path for proxy
   // Otherwise use full URL (production)
   const url = API_BASE_URL 
@@ -312,7 +316,8 @@ async function apiRequest<T>(
     method: fetchOptions.method ?? 'GET',
     body,
     headers,
-    credentials: 'include', // Send HttpOnly cookies with request
+    credentials: 'include',
+    ...(signal ? { signal } : {}),
   });
 
   // If 401, try to refresh token and retry once (unless session is already invalidated)

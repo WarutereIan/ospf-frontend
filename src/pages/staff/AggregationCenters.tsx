@@ -27,8 +27,9 @@ import { useAggregation } from "@/contexts/AggregationContext";
 import { useProfile } from "@/contexts/ProfileContext";
 import type { AggregationCenter } from "@/types/aggregation";
 import { createAggregationCenter, updateAggregationCenter } from "@/services/aggregationService";
+import { getCounties, getSubCounties, getWards } from "@/services/locationsService";
 import { showSuccess, showError } from "@/lib/toast";
-import { VALID_SUBCOUNTIES } from "@/constants/locations";
+import type { County, SubCounty as SubCountyType, Ward as WardType } from "@/types/locations";
 
 /** Form state uses coordinates as "lat,lng" string for the Input. */
 type AggregationCenterFormState = Omit<Partial<AggregationCenter>, "coordinates"> & { coordinates?: string };
@@ -64,6 +65,10 @@ export function AggregationCenters() {
     isActive: true,
   });
 
+  const [counties, setCounties] = useState<County[]>([]);
+  const [subCounties, setSubCounties] = useState<SubCountyType[]>([]);
+  const [wards, setWards] = useState<WardType[]>([]);
+
   // Get aggregation managers for dropdown (case-insensitive role check for API compatibility)
   const aggregationManagers = profiles.filter(
     (p) => String(p.role ?? "").toLowerCase() === "aggregation_manager"
@@ -72,7 +77,7 @@ export function AggregationCenters() {
   // Get main centers for satellite center selection
   const mainCenters = centers.filter(c => c.centerType === "main");
 
-  // Fetch centers and aggregation managers (for Manager dropdown) on mount
+  // Fetch centers, managers, and counties on mount
   useEffect(() => {
     fetchCenters();
   }, [fetchCenters]);
@@ -80,6 +85,32 @@ export function AggregationCenters() {
   useEffect(() => {
     fetchProfiles({ role: "aggregation_manager" });
   }, [fetchProfiles]);
+
+  useEffect(() => {
+    getCounties().then(setCounties).catch(() => setCounties([]));
+  }, []);
+
+  // Load subcounties when county changes
+  const selectedCounty = counties.find(c => c.name === formData.county);
+  useEffect(() => {
+    if (selectedCounty?.id) {
+      getSubCounties(selectedCounty.id).then(setSubCounties).catch(() => setSubCounties([]));
+      setWards([]);
+    } else {
+      setSubCounties([]);
+      setWards([]);
+    }
+  }, [selectedCounty?.id]);
+
+  // Load wards when subcounty changes
+  const selectedSubCounty = subCounties.find(sc => sc.name === formData.subCounty);
+  useEffect(() => {
+    if (selectedSubCounty?.id) {
+      getWards(selectedSubCounty.id).then(setWards).catch(() => setWards([]));
+    } else {
+      setWards([]);
+    }
+  }, [selectedSubCounty?.id]);
 
   const handleCreateCenter = async () => {
     try {
@@ -356,27 +387,34 @@ export function AggregationCenters() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">County *</label>
-                <Input
-                  placeholder="e.g., Machakos"
-                  value={formData.county}
-                  onChange={(e) => setFormData({ ...formData, county: e.target.value })}
-                />
+                <Select
+                  value={formData.county || ""}
+                  onValueChange={(value) => setFormData({ ...formData, county: value, subCounty: undefined, ward: undefined })}
+                >
+                  <SelectTrigger>
+                    <SelectValue>{formData.county || "Select county"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {counties.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Subcounty</label>
                 <Select
                   value={formData.subCounty || ""}
-                  onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
+                  onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined, ward: undefined })}
+                  disabled={subCounties.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty (optional)"}</SelectValue>
+                    <SelectValue>{formData.subCounty || "Select subcounty"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
-                    {VALID_SUBCOUNTIES.map((subCounty) => (
-                      <SelectItem key={subCounty} value={subCounty}>
-                        {subCounty}
-                      </SelectItem>
+                    {subCounties.map((sc) => (
+                      <SelectItem key={sc.id} value={sc.name}>{sc.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -384,12 +422,21 @@ export function AggregationCenters() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Ward (Optional)</label>
-              <Input
-                placeholder="e.g., Kangundo North"
-                value={formData.ward}
-                onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Ward assignment is optional</p>
+              <Select
+                value={formData.ward || ""}
+                onValueChange={(value) => setFormData({ ...formData, ward: value || undefined })}
+                disabled={wards.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue>{formData.ward || "Select ward"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {wards.map((w) => (
+                    <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Coordinates (lat,lng)</label>
@@ -528,26 +575,34 @@ export function AggregationCenters() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">County *</label>
-                <Input
-                  value={formData.county}
-                  onChange={(e) => setFormData({ ...formData, county: e.target.value })}
-                />
+                <Select
+                  value={formData.county || ""}
+                  onValueChange={(value) => setFormData({ ...formData, county: value, subCounty: undefined, ward: undefined })}
+                >
+                  <SelectTrigger>
+                    <SelectValue>{formData.county || "Select county"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {counties.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Subcounty</label>
                 <Select
                   value={formData.subCounty || ""}
-                  onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined })}
+                  onValueChange={(value) => setFormData({ ...formData, subCounty: value || undefined, ward: undefined })}
+                  disabled={subCounties.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue>{formData.subCounty ? formData.subCounty : "Select subcounty (optional)"}</SelectValue>
+                    <SelectValue>{formData.subCounty || "Select subcounty"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">None</SelectItem>
-                    {VALID_SUBCOUNTIES.map((subCounty) => (
-                      <SelectItem key={subCounty} value={subCounty}>
-                        {subCounty}
-                      </SelectItem>
+                    {subCounties.map((sc) => (
+                      <SelectItem key={sc.id} value={sc.name}>{sc.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -555,11 +610,21 @@ export function AggregationCenters() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Ward (Optional)</label>
-              <Input
-                value={formData.ward}
-                onChange={(e) => setFormData({ ...formData, ward: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Ward assignment is optional</p>
+              <Select
+                value={formData.ward || ""}
+                onValueChange={(value) => setFormData({ ...formData, ward: value || undefined })}
+                disabled={wards.length === 0}
+              >
+                <SelectTrigger>
+                  <SelectValue>{formData.ward || "Select ward"}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {wards.map((w) => (
+                    <SelectItem key={w.id} value={w.name}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Coordinates</label>

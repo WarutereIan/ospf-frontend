@@ -33,6 +33,7 @@ import {
 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { RFQDetails } from "@/components/marketplace/RFQDetails";
 import { RFQResponseForm } from "@/components/marketplace/RFQResponseForm";
 import { SupplierOfferForm } from "@/components/marketplace/SupplierOfferForm";
@@ -64,6 +65,7 @@ interface BuyerRequestCard {
 
 export function BuyerRequests() {
   const { user } = useAuth();
+  const { productTypes: catalogProductTypes } = useCatalog();
   const {
     rfqs,
     sourcingRequests,
@@ -86,50 +88,53 @@ export function BuyerRequests() {
   const [offerFormOpen, setOfferFormOpen] = useState(false);
 
   useEffect(() => {
-    // Fetch published RFQs
-    fetchRFQs({ status: "published" });
-    // Fetch open sourcing requests
-    fetchSourcingRequests({ status: "open" });
+    fetchRFQs();
+    fetchSourcingRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Combine RFQs and Sourcing Requests into unified cards
+  const excludedStatuses = new Set(["draft", "cancelled"]);
+
   const buyerRequestCards: BuyerRequestCard[] = [
-    ...rfqs.map((rfq) => ({
-      id: rfq.id,
-      type: "rfq" as const,
-      title: rfq.title,
-      productType: rfq.productType,
-      quantity: rfq.total,
-      unit: rfq.unit,
-      priceRange: rfq.priceRange,
-      deadline: rfq.quoteDeadline || rfq.deadline,
-      location: rfq.deliveryRegion,
-      buyerName: rfq.buyerName || "Buyer",
-      status: rfq.rfqStatus,
-      responses: rfq.totalResponses,
-      createdAt: rfq.createdAt,
-      data: rfq,
-    })),
-    ...sourcingRequests.map((sr) => ({
-      id: sr.id,
-      type: "sourcing" as const,
-      title: sr.title,
-      productType: sr.productType,
-      quantity: sr.total,
-      unit: sr.unit,
-      fulfilled: sr.fulfilled,
-      priceRange: sr.priceRange,
-      pricePerUnit: sr.pricePerUnit,
-      priceUnit: sr.priceUnit,
-      deadline: sr.deadline,
-      location: sr.deliveryRegion,
-      buyerName: sr.buyerName || "Buyer",
-      status: sr.status,
-      responses: sr.suppliers?.length || 0,
-      createdAt: sr.createdAt,
-      data: sr,
-    })),
+    ...rfqs
+      .filter((rfq) => !excludedStatuses.has(rfq.rfqStatus))
+      .map((rfq) => ({
+        id: rfq.id,
+        type: "rfq" as const,
+        title: rfq.title,
+        productType: rfq.productType,
+        quantity: rfq.total,
+        unit: rfq.unit,
+        priceRange: rfq.priceRange,
+        deadline: rfq.quoteDeadline || rfq.deadline,
+        location: rfq.deliveryRegion,
+        buyerName: rfq.buyerName || "Buyer",
+        status: rfq.rfqStatus,
+        responses: rfq.totalResponses,
+        createdAt: rfq.createdAt,
+        data: rfq,
+      })),
+    ...sourcingRequests
+      .filter((sr) => !excludedStatuses.has(sr.status))
+      .map((sr) => ({
+        id: sr.id,
+        type: "sourcing" as const,
+        title: sr.title,
+        productType: sr.productType,
+        quantity: sr.total,
+        unit: sr.unit,
+        fulfilled: sr.fulfilled,
+        priceRange: sr.priceRange,
+        pricePerUnit: sr.pricePerUnit,
+        priceUnit: sr.priceUnit,
+        deadline: sr.deadline,
+        location: sr.deliveryRegion,
+        buyerName: sr.buyerName || "Buyer",
+        status: sr.status,
+        responses: sr.suppliers?.length || 0,
+        createdAt: sr.createdAt,
+        data: sr,
+      })),
   ];
 
   // Filter and sort
@@ -141,15 +146,15 @@ export function BuyerRequests() {
       // Product type filter
       if (selectedProductType !== "all" && card.productType !== selectedProductType) return false;
       
-      // Status filter
-      if (selectedStatus !== "all" && card.status !== selectedStatus) return false;
-      
-      // Exclude requests with passed deadlines
-      if (card.deadline) {
-        const deadlineDate = new Date(card.deadline);
-        const now = new Date();
-        if (deadlineDate <= now) {
-          return false; // Exclude requests with passed deadlines
+      // Status filter — "active" matches both RFQ "published" and sourcing "open"
+      if (selectedStatus !== "all") {
+        if (selectedStatus === "active") {
+          const isActive =
+            (card.type === "rfq" && card.status === "published") ||
+            (card.type === "sourcing" && (card.status === "open" || card.status === "urgent"));
+          if (!isActive) return false;
+        } else if (card.status !== selectedStatus) {
+          return false;
         }
       }
       
@@ -180,15 +185,12 @@ export function BuyerRequests() {
       }
     });
 
-  const getProductIcon = (type: SourcingProductType) => {
-    switch (type) {
-      case "fresh_roots":
-        return <IconCarrot className="h-5 w-5 text-orange-600" />;
-      case "process_grade":
-        return <IconPackage className="h-5 w-5 text-blue-600" />;
-      case "planting_vines":
-        return <IconSeeding className="h-5 w-5 text-green-600" />;
-    }
+  const getProductIcon = (type: string) => {
+    const code = type?.toLowerCase();
+    if (code === "fresh_roots" || code === "ofsp") return <IconCarrot className="h-5 w-5 text-orange-600" />;
+    if (code === "process_grade") return <IconPackage className="h-5 w-5 text-blue-600" />;
+    if (code === "planting_vines") return <IconSeeding className="h-5 w-5 text-green-600" />;
+    return <IconPackage className="h-5 w-5 text-stone-500" />;
   };
 
   const getStatusBadge = (status: string, type: "rfq" | "sourcing") => {
@@ -345,9 +347,11 @@ export function BuyerRequests() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Products</SelectItem>
-                <SelectItem value="fresh_roots">Fresh Roots</SelectItem>
-                <SelectItem value="process_grade">Process Grade</SelectItem>
-                <SelectItem value="planting_vines">Planting Vines</SelectItem>
+                {catalogProductTypes.filter(p => p.isActive).map((pt) => (
+                  <SelectItem key={pt.id} value={pt.code.toLowerCase()}>
+                    {pt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -359,10 +363,11 @@ export function BuyerRequests() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="published">Open</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="urgent">Urgent</SelectItem>
                 <SelectItem value="evaluating">Evaluating</SelectItem>
+                <SelectItem value="awarded">Awarded</SelectItem>
+                <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
             </Select>
 
@@ -439,12 +444,13 @@ export function BuyerRequests() {
         <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}>
           {filteredCards.map((card) => {
             const daysUntilDeadline = getDaysUntilDeadline(card.deadline);
-            const isUrgent = daysUntilDeadline <= 3;
+            const isPastDeadline = card.deadline ? daysUntilDeadline < 0 : false;
+            const isUrgent = !isPastDeadline && daysUntilDeadline >= 0 && daysUntilDeadline <= 3;
 
             return (
               <div
                 key={`${card.type}-${card.id}`}
-                className="bg-white rounded-2xl border border-stone-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col"
+                className={`bg-white rounded-2xl border shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col ${isPastDeadline ? "border-stone-300 opacity-75" : "border-stone-200"}`}
               >
                 {/* Header Area */}
                 <div className="relative h-32 bg-gradient-to-br from-stone-100 to-stone-50 rounded-t-2xl overflow-hidden border-b border-stone-100 p-4">
@@ -465,11 +471,15 @@ export function BuyerRequests() {
                         </div>
                       </div>
                     </div>
-                    {isUrgent && (
+                    {isPastDeadline ? (
+                      <Badge variant="outline" className="bg-stone-100 text-stone-600 border-stone-300 text-xs">
+                        Past Deadline
+                      </Badge>
+                    ) : isUrgent ? (
                       <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
                         Urgent
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
@@ -525,10 +535,13 @@ export function BuyerRequests() {
                     <div className="flex items-center justify-between">
                       <span className="text-stone-500 flex items-center gap-1">
                         <IconCalendar className="h-3.5 w-3.5" />
-                        Deadline:
+                        {card.type === "sourcing" ? "Delivery by:" : "Deadline:"}
                       </span>
-                      <span className={`font-semibold ${isUrgent ? "text-red-600" : "text-stone-900"}`}>
-                        {formatDate(card.deadline)} ({daysUntilDeadline}d)
+                      <span className={`font-semibold ${isPastDeadline ? "text-stone-400" : isUrgent ? "text-red-600" : "text-stone-900"}`}>
+                        {formatDate(card.deadline)}
+                        {isPastDeadline
+                          ? ` (${Math.abs(daysUntilDeadline)}d ago)`
+                          : ` (${daysUntilDeadline}d)`}
                       </span>
                     </div>
                     {card.responses !== undefined && card.responses > 0 && (

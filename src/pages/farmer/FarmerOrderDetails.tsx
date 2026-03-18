@@ -13,6 +13,15 @@ import {
   IconStar,
   IconLoader2,
 } from "@tabler/icons-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { OrderStatusHistory } from "@/components/orders/OrderStatusHistory";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
@@ -25,11 +34,13 @@ import type { MarketplaceOrder } from "@/types/marketplace";
 export function FarmerOrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { selectedOrder, fetchOrderById, isLoading, updateOrderStatus } = useMarketplace();
+  const { selectedOrder, fetchOrderById, isLoading, updateOrderStatus, cancelOrder } = useMarketplace();
   const { payments, fetchPayments } = usePayment();
   
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   // Fetch order details on mount
   useEffect(() => {
@@ -50,13 +61,17 @@ export function FarmerOrderDetails() {
     payment.status !== "CONFIRMED_BY_FARMER" &&
     (order?.status === "payment_secured" || order?.status === "order_accepted" || order?.status === "order_placed");
 
-  // Check if order can be accepted or cancelled (only when status is order_placed)
-  const canAcceptOrCancel = order?.status === "order_placed";
+  const canAccept = order?.status === "order_placed";
 
-  // Handle accept order
+  const PAID_STATUSES = ["secured", "confirmed_by_farmer", "released"];
+  const TERMINAL_STATUSES = ["completed", "cancelled", "order_rejected", "refunded", "disputed"];
+  const canCancel =
+    order &&
+    !TERMINAL_STATUSES.includes(order.status) &&
+    !PAID_STATUSES.includes(order.paymentStatus?.toLowerCase() ?? "");
+
   const handleAcceptOrder = async () => {
     if (!order || !id) return;
-    
     setIsUpdatingStatus(true);
     try {
       await updateOrderStatus(id, "order_accepted");
@@ -69,19 +84,14 @@ export function FarmerOrderDetails() {
     }
   };
 
-  // Handle cancel order
   const handleCancelOrder = async () => {
-    if (!order || !id) return;
-    
-    // Confirm cancellation
-    if (!window.confirm("Are you sure you want to cancel this order? This action cannot be undone.")) {
-      return;
-    }
-    
+    if (!order || !id || !cancelReason.trim()) return;
     setIsUpdatingStatus(true);
     try {
-      await updateOrderStatus(id, "cancelled");
+      await cancelOrder(id, cancelReason.trim());
       showSuccess("Order Cancelled", "The order has been cancelled successfully");
+      setCancelDialogOpen(false);
+      setCancelReason("");
       await fetchOrderById(id);
     } catch (error) {
       showError("Failed to Cancel Order", error instanceof Error ? error.message : "An error occurred");
@@ -134,43 +144,34 @@ export function FarmerOrderDetails() {
             <p className="text-sm text-muted-foreground mt-1">Order #{order.id}</p>
           </div>
           <div className="flex items-center gap-2">
-            {canAcceptOrCancel && (
-              <>
-                <Button
-                  onClick={handleAcceptOrder}
-                  disabled={isUpdatingStatus}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {isUpdatingStatus ? (
-                    <>
-                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Accepting...
-                    </>
-                  ) : (
-                    <>
-                      <IconCheck className="mr-2 h-4 w-4" />
-                      Accept Order
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={handleCancelOrder}
-                  disabled={isUpdatingStatus}
-                  variant="destructive"
-                >
-                  {isUpdatingStatus ? (
-                    <>
-                      <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Cancelling...
-                    </>
-                  ) : (
-                    <>
-                      <IconX className="mr-2 h-4 w-4" />
-                      Cancel Order
-                    </>
-                  )}
-                </Button>
-              </>
+            {canAccept && (
+              <Button
+                onClick={handleAcceptOrder}
+                disabled={isUpdatingStatus}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isUpdatingStatus ? (
+                  <>
+                    <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Accepting...
+                  </>
+                ) : (
+                  <>
+                    <IconCheck className="mr-2 h-4 w-4" />
+                    Accept Order
+                  </>
+                )}
+              </Button>
+            )}
+            {canCancel && (
+              <Button
+                onClick={() => setCancelDialogOpen(true)}
+                disabled={isUpdatingStatus}
+                variant="destructive"
+              >
+                <IconX className="mr-2 h-4 w-4" />
+                Cancel Order
+              </Button>
             )}
             {needsFarmerConfirmation && (
               <Button
@@ -522,6 +523,43 @@ export function FarmerOrderDetails() {
           }}
         />
       )}
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={(open) => { setCancelDialogOpen(open); if (!open) setCancelReason(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Order</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for cancelling order #{order?.orderNumber || order?.id}. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Why are you cancelling this order?"
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={isUpdatingStatus}>
+              Go back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelOrder}
+              disabled={isUpdatingStatus || !cancelReason.trim()}
+            >
+              {isUpdatingStatus ? (
+                <>
+                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Confirm cancellation"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

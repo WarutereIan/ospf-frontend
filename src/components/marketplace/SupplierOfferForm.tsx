@@ -42,7 +42,7 @@ interface SupplierOfferModalProps {
 
 export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: SupplierOfferFormProps) {
   const { user } = useAuth();
-  const { productTypes, getQuantityTypes } = useCatalog();
+  const { productTypes, qualityGrades, getQuantityTypes } = useCatalog();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
@@ -74,9 +74,7 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
       if (!user?.id) return;
       
       setIsLoadingBatches(true);
-      // Reset selected batch and quantity when quality grade changes
       setSelectedBatchId("");
-      setQuantity("");
       
       try {
         const batches = await getInventory({
@@ -127,29 +125,22 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
       return;
     }
 
-    // Validate batch selection is mandatory
-    if (!selectedBatchId || !selectedBatch) {
-      setError("Please select a batch. Batch selection is required to submit an offer.");
-      return;
-    }
-
-    // Convert offer quantity to kg for comparison
     const qtyInKg = convertToKg(qty, quantityUnit);
 
-    // Validate against selected batch quantity
-    const batchQuantityKg = selectedBatch.quantity; // Already in kg
-    if (qtyInKg > batchQuantityKg) {
-      setError(
-        `Quantity cannot exceed available batch quantity. Available: ${batchQuantityKg.toLocaleString()} kg (${selectedBatch.batchId})`
-      );
-      return;
+    // Validate against selected batch quantity (only when a batch is selected)
+    if (selectedBatchId && selectedBatch) {
+      const batchQuantityKg = selectedBatch.quantity;
+      if (qtyInKg > batchQuantityKg) {
+        setError(
+          `Quantity cannot exceed available batch quantity. Available: ${batchQuantityKg.toLocaleString()} kg (${selectedBatch.batchId})`
+        );
+        return;
+      }
     }
 
     // Check if quantity exceeds request requirement
     const reqQuantity = sourcingRequest.total;
     const reqUnit = sourcingRequest.unit;
-    
-    // Convert request quantity to kg for comparison
     const reqQtyInKg = convertToKg(reqQuantity, reqUnit);
 
     if (qtyInKg > reqQtyInKg) {
@@ -172,7 +163,7 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
         quantityUnit,
         pricePerKg: price,
         grade: qualityGrade,
-        batchId: selectedBatchId,
+        ...(selectedBatchId ? { batchId: selectedBatchId } : {}),
         status: "pending",
       };
 
@@ -225,11 +216,11 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
                 step={0.1}
                 required
               />
-              {selectedBatch && quantity && (
+              {selectedBatch && quantity && parseFloat(quantity) > 0 && (
                 <p className={`text-xs ${convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity ? "text-destructive" : "text-muted-foreground"}`}>
                   {convertToKg(parseFloat(quantity), quantityUnit) > selectedBatch.quantity
-                    ? `⚠️ Exceeds available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`
-                    : `✓ Within available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`}
+                    ? `Exceeds available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`
+                    : `Within available batch quantity (${selectedBatch.quantity.toLocaleString()} kg)`}
                 </p>
               )}
             </div>
@@ -276,18 +267,20 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="A">Grade A</SelectItem>
-                  <SelectItem value="B">Grade B</SelectItem>
-                  <SelectItem value="C">Grade C</SelectItem>
+                  {qualityGrades.filter(g => g.isActive).map((g) => (
+                    <SelectItem key={g.id} value={g.code}>
+                      {g.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="batchId">Select Batch *</Label>
+            <Label htmlFor="batchId">Link to Batch (Optional)</Label>
             <p className="text-xs text-muted-foreground mb-2">
-              Select a batch that has been checked in at aggregation centers. Batch selection is required. Only batches matching Grade {qualityGrade} are shown.
+              Optionally link your offer to a batch checked in at an aggregation center. Only batches matching Grade {qualityGrade} are shown.
             </p>
             {isLoadingBatches ? (
               <div className="flex items-center justify-center py-4 border rounded-lg">
@@ -297,18 +290,21 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
             ) : availableBatches.length > 0 ? (
               <>
                 <div className="w-full">
-                  <Select value={selectedBatchId} onValueChange={setSelectedBatchId}>
+                  <Select value={selectedBatchId || "none"} onValueChange={(v) => setSelectedBatchId(v === "none" ? "" : v)}>
                     <SelectTrigger className="!w-full">
                       <SelectValue>
-                        {selectedBatchId 
+                        {selectedBatchId
                           ? `${selectedBatch?.batchId || "Selected"} - ${selectedBatch?.quantity.toLocaleString() || 0} kg available`
-                          : "Select a batch"}
+                          : "No batch — offer without linking"}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent 
+                    <SelectContent
                       className="min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-4rem)]"
                       alignItemWithTrigger={true}
                     >
+                      <SelectItem value="none">
+                        <span className="text-sm text-muted-foreground">No batch — offer without linking</span>
+                      </SelectItem>
                       {availableBatches.map((batch) => (
                         <SelectItem key={batch.batchId} value={batch.batchId || ""}>
                           <div className="flex flex-col w-full min-w-0 pr-4">
@@ -350,9 +346,10 @@ export function SupplierOfferForm({ sourcingRequest, onSubmit, onCancel }: Suppl
                 )}
               </>
             ) : (
-              <div className="border rounded-lg p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No batches available for Grade {qualityGrade} that have been checked in at aggregation centers.
+              <div className="border border-dashed rounded-lg p-3 text-center">
+                <IconPackage className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
+                <p className="text-xs text-muted-foreground">
+                  No batches found for Grade {qualityGrade}. You can still submit your offer without linking a batch.
                 </p>
               </div>
             )}

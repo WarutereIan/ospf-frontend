@@ -30,6 +30,7 @@ import {
 } from "@/data/gradingMatrix";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 import { showError } from "@/lib/toast";
 import type { WeightRange, PhysicalCondition, FreshnessLevel } from "@/types/quality";
@@ -55,21 +56,17 @@ interface WardTransferEntry {
   vehicleNumber?: string;
 }
 
-const ofspVarieties = [
-  { value: "kenya", label: "Kenya" },
-  { value: "spk004", label: "SPK004" },
-  { value: "kabode", label: "Kabode" },
-];
-
-const qualityGrades = [
-  { value: "A", label: "Grade A - Premium", color: "bg-green-100 text-green-800" },
-  { value: "B", label: "Grade B - Standard", color: "bg-yellow-100 text-yellow-800" },
-  { value: "C", label: "Grade C - Processing", color: "bg-orange-100 text-orange-800" },
-];
-
 export function ReceiveFromWard() {
   const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
   const { user } = useAuth();
+  const { varieties: catalogVarieties, qualityGrades: catalogGrades, getGradeColor } = useCatalog();
+
+  const ofspVarieties = catalogVarieties.filter(v => v.isActive).map(v => ({ value: v.code, label: v.label }));
+  const qualityGrades = catalogGrades.filter(g => g.isActive).map(g => ({
+    value: g.code,
+    label: g.label,
+    color: getGradeColor(g.code),
+  }));
   
   const [formData, setFormData] = useState<Partial<WardTransferEntry>>({
     fromCenterId: "",

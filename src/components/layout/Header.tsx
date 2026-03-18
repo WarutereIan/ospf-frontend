@@ -1,6 +1,16 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { IconUser, IconLogout, IconMenu2 } from "@tabler/icons-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { IconMenu2 } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSidebarContext } from "@/contexts/SidebarContext";
 import { useEffect, useState } from "react";
@@ -10,6 +20,7 @@ export function Header() {
   const { logout, user, isAuthenticated } = useAuth();
   const { toggled, setToggled } = useSidebarContext();
   const [isMobile, setIsMobile] = useState(false);
+  const [showSignOutDialog, setShowSignOutDialog] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -58,23 +69,27 @@ export function Header() {
         </div>
 
         {/* User Actions */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
           {isAuthenticated && user && (
             <>
-              <div className="flex items-center gap-2 mr-1 sm:mr-2">
-                <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
-              </div>
-              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-10 sm:w-10" title="Profile">
-                <IconUser className="h-4 w-4 sm:h-5 sm:w-5" />
-              </Button>
+              <span className="text-xs sm:text-sm text-muted-foreground hidden sm:inline">
+                {user.name}
+              </span>
               <Button
                 variant="ghost"
-                size="icon"
-                onClick={handleLogout}
-                className="h-9 w-9 sm:h-10 sm:w-10"
-                title="Logout"
+                size="sm"
+                className="text-xs sm:text-sm font-medium"
+                onClick={() => navigate("/dashboard/profile")}
               >
-                <IconLogout className="h-4 w-4 sm:h-5 sm:w-5" />
+                Settings
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs sm:text-sm font-medium"
+                onClick={() => setShowSignOutDialog(true)}
+              >
+                Sign Out
               </Button>
             </>
           )}
@@ -87,6 +102,23 @@ export function Header() {
           )}
         </div>
       </div>
+
+      <AlertDialog open={showSignOutDialog} onOpenChange={setShowSignOutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to sign out? You will need to sign in again to access your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout}>
+              Sign Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }

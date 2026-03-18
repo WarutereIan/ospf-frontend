@@ -7,6 +7,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { showError as showErrorToast } from "@/lib/toast";
 import type {
   ProduceListing,
   MarketplaceOrder,
@@ -35,6 +36,7 @@ import {
   getMarketplaceOrderById,
   createMarketplaceOrder,
   updateMarketplaceOrderStatus,
+  cancelMarketplaceOrder,
   markOrderAsCollected,
   confirmDeliveryByBuyer,
   getSourcingRequests,
@@ -124,6 +126,7 @@ interface MarketplaceContextType {
   fetchOrderById: (id: string) => Promise<void>;
   createOrder: (order: Partial<MarketplaceOrder>) => Promise<void>;
   updateOrderStatus: (id: string, status: MarketplaceOrder["status"]) => Promise<void>;
+  cancelOrder: (id: string, reason: string) => Promise<void>;
   markOrderAsCollected: (id: string) => Promise<void>;
   confirmDeliveryByBuyer: (id: string) => Promise<void>;
   setOrderFilters: (filters: MarketplaceOrderFilters) => void;
@@ -212,6 +215,12 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleError = useCallback((err: unknown, fallback: string) => {
+    const message = err instanceof Error ? err.message : fallback;
+    setError(message);
+    showErrorToast(fallback, err instanceof Error ? err.message : undefined);
+  }, []);
+
   // Listing Actions
   const fetchListings = useCallback(async (newFilters?: MarketplaceFilters) => {
     setIsLoading(true);
@@ -221,7 +230,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getListings(appliedFilters);
       setListings(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch listings");
+      handleError(err, "Failed to fetch listings");
     } finally {
       setIsLoading(false);
     }
@@ -234,7 +243,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const listing = await getListingById(id);
       setSelectedListing(listing);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch listing");
+      handleError(err, "Failed to fetch listing");
     } finally {
       setIsLoading(false);
     }
@@ -249,7 +258,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getListings(listingFilters);
       setListings(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create listing");
+      handleError(err, "Failed to create listing");
     } finally {
       setIsLoading(false);
     }
@@ -264,7 +273,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getListings(listingFilters);
       setListings(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update listing");
+      handleError(err, "Failed to update listing");
     } finally {
       setIsLoading(false);
     }
@@ -279,7 +288,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getListings(listingFilters);
       setListings(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete listing");
+      handleError(err, "Failed to delete listing");
     } finally {
       setIsLoading(false);
     }
@@ -293,7 +302,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         const data = await getListings(newFilters);
         setListings(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch listings");
+        handleError(err, "Failed to fetch listings");
       }
     })();
   }, []);
@@ -311,7 +320,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceOrders(appliedFilters);
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch orders");
+      handleError(err, "Failed to fetch orders");
     } finally {
       setIsLoading(false);
     }
@@ -324,7 +333,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const order = await getMarketplaceOrderById(id);
       setSelectedOrder(order);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch order");
+      handleError(err, "Failed to fetch order");
     } finally {
       setIsLoading(false);
     }
@@ -339,7 +348,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceOrders(orderFilters);
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create order");
+      handleError(err, "Failed to create order");
     } finally {
       setIsLoading(false);
     }
@@ -354,7 +363,25 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceOrders(orderFilters);
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update order status");
+      handleError(err, "Failed to update order status");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [orderFilters]);
+
+  const cancelOrderAction = useCallback(async (id: string, reason: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await cancelMarketplaceOrder(id, reason);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      const data = await getMarketplaceOrders(orderFilters);
+      setOrders(data);
+    } catch (err) {
+      handleError(err, "Failed to cancel order");
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -372,7 +399,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceOrders(orderFilters);
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to mark order as collected");
+      handleError(err, "Failed to mark order as collected");
       throw err; // Re-throw so caller can handle it
     } finally {
       setIsLoading(false);
@@ -391,7 +418,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceOrders(orderFilters);
       setOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to confirm delivery");
+      handleError(err, "Failed to confirm delivery");
       throw err; // Re-throw so caller can handle it
     } finally {
       setIsLoading(false);
@@ -406,7 +433,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         const data = await getMarketplaceOrders(newFilters);
         setOrders(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch orders");
+        handleError(err, "Failed to fetch orders");
       }
     })();
   }, []);
@@ -424,7 +451,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getSourcingRequests(appliedFilters);
       setSourcingRequests(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch sourcing requests");
+      handleError(err, "Failed to fetch sourcing requests");
     } finally {
       setIsLoading(false);
     }
@@ -437,7 +464,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const request = await getSourcingRequestById(id);
       setSelectedSourcingRequest(request);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch sourcing request");
+      handleError(err, "Failed to fetch sourcing request");
     } finally {
       setIsLoading(false);
     }
@@ -453,7 +480,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setSourcingRequests(data);
       return created;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create sourcing request");
+      handleError(err, "Failed to create sourcing request");
       return null;
     } finally {
       setIsLoading(false);
@@ -468,7 +495,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update sourcing request");
+      handleError(err, "Failed to update sourcing request");
     } finally {
       setIsLoading(false);
     }
@@ -482,7 +509,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to publish sourcing request");
+      handleError(err, "Failed to publish sourcing request");
     } finally {
       setIsLoading(false);
     }
@@ -500,7 +527,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         await fetchSourcingRequestById(id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to close sourcing request");
+      handleError(err, "Failed to close sourcing request");
     } finally {
       setIsLoading(false);
     }
@@ -515,7 +542,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit offer");
+      handleError(err, "Failed to submit offer");
     } finally {
       setIsLoading(false);
     }
@@ -530,7 +557,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getSourcingRequests(sourcingRequestFilters);
       setSourcingRequests(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to accept offer");
+      handleError(err, "Failed to accept offer");
     } finally {
       setIsLoading(false);
     }
@@ -544,7 +571,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         const data = await getSourcingRequests(newFilters);
         setSourcingRequests(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch sourcing requests");
+        handleError(err, "Failed to fetch sourcing requests");
       }
     })();
   }, []);
@@ -561,7 +588,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRecurringOrders();
       setRecurringOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch recurring orders");
+      handleError(err, "Failed to fetch recurring orders");
     } finally {
       setIsLoading(false);
     }
@@ -576,7 +603,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRecurringOrders();
       setRecurringOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create recurring order");
+      handleError(err, "Failed to create recurring order");
     } finally {
       setIsLoading(false);
     }
@@ -591,7 +618,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRecurringOrders();
       setRecurringOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update recurring order");
+      handleError(err, "Failed to update recurring order");
     } finally {
       setIsLoading(false);
     }
@@ -606,7 +633,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRecurringOrders();
       setRecurringOrders(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cancel recurring order");
+      handleError(err, "Failed to cancel recurring order");
     } finally {
       setIsLoading(false);
     }
@@ -621,7 +648,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getNegotiations(appliedFilters);
       setNegotiations(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch negotiations");
+      handleError(err, "Failed to fetch negotiations");
     } finally {
       setIsLoading(false);
     }
@@ -634,7 +661,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const negotiation = await getNegotiationById(id);
       setSelectedNegotiation(negotiation);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch negotiation");
+      handleError(err, "Failed to fetch negotiation");
     } finally {
       setIsLoading(false);
     }
@@ -650,7 +677,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setNegotiations(data);
       return result.data || null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to initiate negotiation");
+      handleError(err, "Failed to initiate negotiation");
       return null;
     } finally {
       setIsLoading(false);
@@ -668,7 +695,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getNegotiations(negotiationFilters);
       setNegotiations(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      handleError(err, "Failed to send message");
     } finally {
       setIsLoading(false);
     }
@@ -683,7 +710,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getNegotiations(negotiationFilters);
       setNegotiations(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to accept negotiation");
+      handleError(err, "Failed to accept negotiation");
     } finally {
       setIsLoading(false);
     }
@@ -698,7 +725,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getNegotiations(negotiationFilters);
       setNegotiations(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to reject negotiation");
+      handleError(err, "Failed to reject negotiation");
     } finally {
       setIsLoading(false);
     }
@@ -716,7 +743,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setNegotiations(negotiationsData);
       return result.data || null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to convert negotiation to order");
+      handleError(err, "Failed to convert negotiation to order");
       return null;
     } finally {
       setIsLoading(false);
@@ -731,7 +758,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         const data = await getNegotiations(newFilters);
         setNegotiations(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch negotiations");
+        handleError(err, "Failed to fetch negotiations");
       }
     })();
   }, []);
@@ -749,7 +776,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(appliedFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch RFQs");
+      handleError(err, "Failed to fetch RFQs");
     } finally {
       setIsLoading(false);
     }
@@ -762,7 +789,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const rfq = await getRFQById(id);
       setSelectedRFQ(rfq);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch RFQ");
+      handleError(err, "Failed to fetch RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -777,7 +804,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(rfqFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create RFQ");
+      handleError(err, "Failed to create RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -792,7 +819,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(rfqFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update RFQ");
+      handleError(err, "Failed to update RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -807,7 +834,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(rfqFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to publish RFQ");
+      handleError(err, "Failed to publish RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -822,7 +849,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(rfqFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to close RFQ");
+      handleError(err, "Failed to close RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -837,7 +864,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getRFQs(rfqFilters);
       setRFQs(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cancel RFQ");
+      handleError(err, "Failed to cancel RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -862,7 +889,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       }
       return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch RFQ responses");
+      handleError(err, "Failed to fetch RFQ responses");
       return [];
     } finally {
       setIsLoading(false);
@@ -884,7 +911,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const rfqsData = await getRFQs(rfqFilters);
       setRFQs(rfqsData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit RFQ response");
+      handleError(err, "Failed to submit RFQ response");
     } finally {
       setIsLoading(false);
     }
@@ -906,7 +933,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch RFQ response");
+      handleError(err, "Failed to fetch RFQ response");
     } finally {
       setIsLoading(false);
     }
@@ -938,7 +965,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const rfqsData = await getRFQs(rfqFilters);
       setRFQs(rfqsData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update RFQ response status");
+      handleError(err, "Failed to update RFQ response status");
     } finally {
       setIsLoading(false);
     }
@@ -955,7 +982,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const rfq = await getRFQById(rfqId);
       setSelectedRFQ(rfq);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to award RFQ");
+      handleError(err, "Failed to award RFQ");
     } finally {
       setIsLoading(false);
     }
@@ -973,7 +1000,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       setRFQs(rfqsData);
       return result.data || null;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to convert RFQ response to order");
+      handleError(err, "Failed to convert RFQ response to order");
       return null;
     } finally {
       setIsLoading(false);
@@ -988,7 +1015,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
         const data = await getRFQs(newFilters);
         setRFQs(data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch RFQs");
+        handleError(err, "Failed to fetch RFQs");
       }
     })();
   }, []);
@@ -1005,7 +1032,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
       const data = await getMarketplaceStats();
       setStats(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch stats");
+      handleError(err, "Failed to fetch stats");
     } finally {
       setIsLoading(false);
     }
@@ -1051,6 +1078,7 @@ export function MarketplaceProvider({ children }: { children: ReactNode }) {
     fetchOrderById,
     createOrder,
     updateOrderStatus,
+    cancelOrder: cancelOrderAction,
     markOrderAsCollected: markOrderAsCollectedAction,
     confirmDeliveryByBuyer: confirmDeliveryByBuyerAction,
     setOrderFilters,

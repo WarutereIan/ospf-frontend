@@ -29,12 +29,18 @@ export interface CreateUserData {
     county?: string;
     subcounty?: string;
     ward?: string;
-    // Extended assignment fields
-    farmerGroupId?: string;        // Optional for farmers
-    aggregationCenterId?: string;  // Mandatory for aggregation managers (validated in UI/backend)
-    assignedCounty?: string;       // For county staff
-    assignedSubCounty?: string;    // For county staff
-    hasAllAccess?: boolean;        // For county staff
+    village?: string;
+    countyId?: string;
+    subCountyId?: string;
+    wardId?: string;
+    villageId?: string;
+    farmerGroupId?: string;
+    aggregationCenterId?: string;
+    assignedVillageIds?: string[];
+    assignedCounty?: string;
+    assignedSubCounty?: string;
+    assignedWard?: string;
+    hasAllAccess?: boolean;
   };
 }
 
@@ -295,13 +301,12 @@ export async function updateUserRole(id: string, role: UserRole): Promise<User> 
 }
 
 /**
- * Reset user password
+ * Reset user password (admin/staff).
+ * If newPassword is omitted, the backend auto-generates one and sends it to the user via SMS/email.
  */
-export async function resetPassword(id: string, newPassword: string): Promise<void> {
+export async function resetPassword(id: string, newPassword?: string): Promise<void> {
   try {
-    await apiPost(`/users/${id}/reset-password`, {
-      newPassword,
-    });
+    await apiPost(`/users/${id}/reset-password`, newPassword ? { newPassword } : {});
   } catch (error) {
     console.error('Error resetting password:', error);
     throw error;
@@ -329,4 +334,20 @@ export async function bulkCreateFarmers(file: File): Promise<BulkCreateFarmersRe
   const formData = new FormData();
   formData.append("file", file);
   return apiPostFormData<BulkCreateFarmersResult>("/users/bulk-farmers", formData);
+}
+
+export async function getMyProfile(): Promise<User> {
+  return apiGet<User>("/users/me");
+}
+
+export async function updateMyProfile(data: Record<string, any>): Promise<any> {
+  return apiPatch("/users/me", data);
+}
+
+export async function sendOtp(purpose: "PHONE_CHANGE" | "EMAIL_CHANGE", newValue: string): Promise<{ message: string; channel: string; maskedTarget: string }> {
+  return apiPost("/users/me/send-otp", { purpose, newValue });
+}
+
+export async function verifyOtp(code: string, purpose: "PHONE_CHANGE" | "EMAIL_CHANGE"): Promise<{ message: string }> {
+  return apiPost("/users/me/verify-otp", { code, purpose });
 }

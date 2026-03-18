@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,8 +22,9 @@ import { ReceiptGenerator } from "@/components/receipts/ReceiptGenerator";
 import { GradingMatrixGuide } from "@/components/quality/GradingMatrixGuide";
 import { useAggregation } from "@/contexts/AggregationContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProfile } from "@/contexts/ProfileContext";
-import { searchBatches, confirmStockTransaction, rejectStockTransaction, getStockTransactions } from "@/services/aggregationService";
+import { useCatalog } from "@/contexts/CatalogContext";
+import { searchBatches, searchOrders, searchFarmers, confirmStockTransaction, rejectStockTransaction, getStockTransactions } from "@/services/aggregationService";
+import type { OrderSearchResult, FarmerSearchResult } from "@/services/aggregationService";
 import { uploadImage, getImageFullUrl } from "@/services/uploadService";
 import { showSuccess, showError } from "@/lib/toast";
 import { calculateGradeFromMatrix } from "@/data/gradingMatrix";
@@ -55,27 +56,17 @@ interface StockInEntry {
   notes?: string;
 }
 
-const ofspVarieties = [
-  { value: "kenya", label: "Kenya" },
-  { value: "spk004", label: "SPK004" },
-  { value: "kabode", label: "Kabode" },
-];
-
-const qualityGrades = [
-  { value: "A", label: "Grade A - Premium", color: "bg-green-100 text-green-800" },
-  { value: "B", label: "Grade B - Standard", color: "bg-yellow-100 text-yellow-800" },
-  { value: "C", label: "Grade C - Processing", color: "bg-orange-100 text-orange-800" },
-];
-
 export function StockInForm() {
   const { recordStockIn, centers, fetchCenters, selectedCenter, isLoading: aggregationLoading } = useAggregation();
   const { user } = useAuth();
-  const { profiles: allProfiles, fetchProfiles } = useProfile();
+  const { varieties: catalogVarieties, qualityGrades: catalogGrades, getGradeColor } = useCatalog();
 
-  const farmers = useMemo(
-    () => allProfiles.filter((p) => p.role === "farmer" || p.role === "lead_farmer"),
-    [allProfiles]
-  );
+  const ofspVarieties = catalogVarieties.filter(v => v.isActive).map(v => ({ value: v.code, label: v.label }));
+  const qualityGrades = catalogGrades.filter(g => g.isActive).map(g => ({
+    value: g.code,
+    label: g.label,
+    color: getGradeColor(g.code),
+  }));
 
   const [formData, setFormData] = useState<Partial<StockInEntry>>({
     batchId: "",
@@ -108,6 +99,25 @@ export function StockInForm() {
   const searchResultsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Farmer search state (backend PG full-text search)
+  const [farmerSearchTerm, setFarmerSearchTerm] = useState("");
+  const [farmerSearchResults, setFarmerSearchResults] = useState<FarmerSearchResult[]>([]);
+  const [isSearchingFarmers, setIsSearchingFarmers] = useState(false);
+  const [showFarmerResults, setShowFarmerResults] = useState(false);
+  const farmerInputRef = useRef<HTMLInputElement>(null);
+  const farmerResultsRef = useRef<HTMLDivElement>(null);
+  const [farmerDropdownPosition, setFarmerDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Order search state
+  const [orderSearchTerm, setOrderSearchTerm] = useState("");
+  const [orderSearchResults, setOrderSearchResults] = useState<OrderSearchResult[]>([]);
+  const [isSearchingOrders, setIsSearchingOrders] = useState(false);
+  const [showOrderSearchResults, setShowOrderSearchResults] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<OrderSearchResult | null>(null);
+  const orderInputRef = useRef<HTMLInputElement>(null);
+  const orderResultsRef = useRef<HTMLDivElement>(null);
+  const [orderDropdownPosition, setOrderDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
   const [pendingTransactions, setPendingTransactions] = useState<StockTransaction[]>([]);
   const [isLoadingPending, setIsLoadingPending] = useState(false);
   const [confirmingTransactionId, setConfirmingTransactionId] = useState<string | null>(null);
@@ -115,12 +125,11 @@ export function StockInForm() {
   const [selectedTransactionForReject, setSelectedTransactionForReject] = useState<StockTransaction | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  // Fetch centers, farmers, and pending transactions on mount
+  // Fetch centers and pending transactions on mount
   useEffect(() => {
     fetchCenters();
-    fetchProfiles({ role: "farmer" });
     fetchPendingTransactions();
-  }, [fetchCenters, fetchProfiles, selectedCenter]);
+  }, [fetchCenters, selectedCenter]);
 
   // Update dropdown position when input position changes
   useEffect(() => {
@@ -170,6 +179,171 @@ export function StockInForm() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showSearchResults]);
+
+  // Order search: debounced
+  useEffect(() => {
+    if (!orderSearchTerm || orderSearchTerm.trim().length < 2) {
+      setOrderSearchResults([]);
+      setIsSearchingOrders(false);
+      return;
+    }
+
+    setIsSearchingOrders(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const results = await searchOrders(orderSearchTerm.trim(), 10);
+        setOrderSearchResults(results);
+      } catch {
+        setOrderSearchResults([]);
+      } finally {
+        setIsSearchingOrders(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [orderSearchTerm]);
+
+  // Order search: dropdown positioning
+  useEffect(() => {
+    const updatePosition = () => {
+      if (orderInputRef.current && showOrderSearchResults && orderSearchResults.length > 0) {
+        const rect = orderInputRef.current.getBoundingClientRect();
+        setOrderDropdownPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      } else {
+        setOrderDropdownPosition(null);
+      }
+    };
+
+    if (showOrderSearchResults && orderSearchResults.length > 0) {
+      updatePosition();
+      window.addEventListener("scroll", updatePosition, true);
+      window.addEventListener("resize", updatePosition);
+    }
+
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [showOrderSearchResults, orderSearchResults.length, orderSearchTerm]);
+
+  // Order search: close on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        orderResultsRef.current &&
+        !orderResultsRef.current.contains(event.target as Node) &&
+        orderInputRef.current &&
+        !orderInputRef.current.contains(event.target as Node)
+      ) {
+        setShowOrderSearchResults(false);
+      }
+    };
+
+    if (showOrderSearchResults) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showOrderSearchResults]);
+
+  const handleSelectOrder = (order: OrderSearchResult) => {
+    setSelectedOrder(order);
+    setFormData((prev) => ({
+      ...prev,
+      orderId: order.id,
+      farmerId: "",
+      farmerName: "",
+      variety: order.variety || prev.variety,
+      quantity: order.quantity || prev.quantity,
+      qualityGrade: order.qualityGrade || prev.qualityGrade,
+    }));
+    setOrderSearchTerm("");
+    setShowOrderSearchResults(false);
+    setOrderSearchResults([]);
+  };
+
+  const handleClearOrder = () => {
+    setSelectedOrder(null);
+    setFormData((prev) => ({ ...prev, orderId: "" }));
+    setOrderSearchTerm("");
+  };
+
+  // Farmer search: debounced backend PG full-text search
+  useEffect(() => {
+    if (!farmerSearchTerm || farmerSearchTerm.trim().length < 2) {
+      setFarmerSearchResults([]);
+      setIsSearchingFarmers(false);
+      return;
+    }
+
+    setIsSearchingFarmers(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const results = await searchFarmers(farmerSearchTerm.trim(), 20);
+        setFarmerSearchResults(results);
+      } catch {
+        setFarmerSearchResults([]);
+      } finally {
+        setIsSearchingFarmers(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [farmerSearchTerm]);
+
+  // Farmer search: dropdown positioning
+  useEffect(() => {
+    const updatePosition = () => {
+      if (farmerInputRef.current && showFarmerResults && farmerSearchResults.length > 0) {
+        const rect = farmerInputRef.current.getBoundingClientRect();
+        setFarmerDropdownPosition({
+          top: rect.bottom + window.scrollY + 4,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      } else {
+        setFarmerDropdownPosition(null);
+      }
+    };
+
+    if (showFarmerResults && farmerSearchResults.length > 0) {
+      updatePosition();
+      window.addEventListener("scroll", updatePosition, true);
+      window.addEventListener("resize", updatePosition);
+    }
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [showFarmerResults, farmerSearchResults.length, farmerSearchTerm]);
+
+  // Farmer search: close on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        farmerResultsRef.current &&
+        !farmerResultsRef.current.contains(event.target as Node) &&
+        farmerInputRef.current &&
+        !farmerInputRef.current.contains(event.target as Node)
+      ) {
+        setShowFarmerResults(false);
+      }
+    };
+    if (showFarmerResults) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showFarmerResults]);
+
+  const handleSelectFarmer = (farmerId: string, farmerName: string) => {
+    setFormData((prev) => ({ ...prev, farmerId, farmerName }));
+    setFarmerSearchTerm("");
+    setShowFarmerResults(false);
+    setFarmerSearchResults([]);
+  };
 
   // Fetch pending transactions
   const fetchPendingTransactions = async () => {
@@ -426,6 +600,13 @@ export function StockInForm() {
       setFoundBatch(null);
       setBatchSearchResults([]);
       setShowSearchResults(false);
+      setOrderSearchTerm("");
+      setSelectedOrder(null);
+      setOrderSearchResults([]);
+      setShowOrderSearchResults(false);
+      setFarmerSearchTerm("");
+      setFarmerSearchResults([]);
+      setShowFarmerResults(false);
     } catch (error) {
       console.error("Failed to record stock in:", error);
       // Error handling is done by context
@@ -673,51 +854,208 @@ export function StockInForm() {
               </CardContent>
             </Card>
 
+            {/* Order Linking (optional) */}
+            <Card className="relative overflow-visible">
+              <CardHeader>
+                <CardTitle>Link to Order (Optional)</CardTitle>
+                <CardDescription>
+                  If this delivery fulfils a marketplace order, search and link the order here.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 overflow-visible relative">
+                {selectedOrder ? (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-sm">
+                          Order {selectedOrder.orderNumber}
+                        </p>
+                        <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                          <p>Buyer: {selectedOrder.buyerName}{selectedOrder.buyerPhone ? ` (${selectedOrder.buyerPhone})` : ""}</p>
+                          <p>Variety: {selectedOrder.variety} · Quantity: {selectedOrder.quantity} kg · Grade {selectedOrder.qualityGrade}</p>
+                          <p>Amount: KES {selectedOrder.totalAmount.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" onClick={handleClearOrder}>
+                        <IconX className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Search by Order ID or Buyer Name</Label>
+                    <div className="relative z-[5]" ref={orderInputRef}>
+                      <Input
+                        placeholder="e.g., ORD-1234567890 or buyer name..."
+                        value={orderSearchTerm}
+                        onChange={(e) => {
+                          setOrderSearchTerm(e.target.value);
+                          setShowOrderSearchResults(true);
+                        }}
+                        onFocus={() => {
+                          if (orderSearchResults.length > 0) setShowOrderSearchResults(true);
+                        }}
+                      />
+                    </div>
+                    {isSearchingOrders && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <IconLoader2 className="h-4 w-4 animate-spin" />
+                        Searching orders...
+                      </div>
+                    )}
+                    {orderSearchTerm.length >= 2 && !isSearchingOrders && orderSearchResults.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No matching orders found.</p>
+                    )}
+                  </div>
+                )}
+                {/* Order search dropdown via portal */}
+                {showOrderSearchResults && orderSearchResults.length > 0 && orderDropdownPosition && typeof document !== "undefined" && createPortal(
+                  <div
+                    ref={orderResultsRef}
+                    className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                    style={{
+                      top: `${orderDropdownPosition.top}px`,
+                      left: `${orderDropdownPosition.left}px`,
+                      width: `${orderDropdownPosition.width}px`,
+                    }}
+                  >
+                    <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
+                      Select an order to link:
+                    </div>
+                    {orderSearchResults.map((order) => (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => handleSelectOrder(order)}
+                        className="w-full text-left p-3 hover:bg-blue-50 transition-colors border-b last:border-b-0"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-mono text-sm font-medium text-primary">
+                                {order.orderNumber}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {order.status}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Buyer: {order.buyerName}
+                            </p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>{order.variety}</span>
+                              <span>·</span>
+                              <span>{order.quantity} kg</span>
+                              <span>·</span>
+                              <span>Grade {order.qualityGrade}</span>
+                            </div>
+                          </div>
+                          <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+              </CardContent>
+            </Card>
+
             {/* Direct delivery – Farmer (optional) */}
-            <Card>
+            <Card className="relative overflow-visible">
               <CardHeader>
                 <CardTitle>Direct Delivery – Farmer (Optional)</CardTitle>
                 <CardDescription>
-                  When a farmer delivers directly to the centre (no order, no pickup), select the farmer so the system can create a listing and notify them.
+                  When a farmer delivers directly to the centre (no order, no pickup), search for the farmer so the system can create a listing and notify them.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Label>Farmer</Label>
-                  <Select
-                    value={formData.farmerId || "none"}
-                    onValueChange={(value) => {
-                      if (value === "none") {
-                        setFormData((prev) => ({ ...prev, farmerId: "", farmerName: "" }));
-                        return;
-                      }
-                      const farmer = farmers.find((f) => ((f as any).userId ?? f.id) === value);
-                      const name = farmer?.name || [farmer?.firstName, farmer?.lastName].filter(Boolean).join(" ") || farmer?.phone || "";
-                      setFormData((prev) => ({ ...prev, farmerId: value, farmerName: name }));
+              <CardContent className="space-y-4 overflow-visible relative">
+                {formData.farmerId ? (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-sm">{formData.farmerName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          A listing will be created and the farmer notified.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFormData((prev) => ({ ...prev, farmerId: "", farmerName: "" }));
+                          setFarmerSearchTerm("");
+                        }}
+                      >
+                        <IconX className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Search Farmer by Name or Phone</Label>
+                    <div className="relative z-[4]" ref={farmerInputRef}>
+                      <Input
+                        placeholder="Type farmer name or phone number..."
+                        value={farmerSearchTerm}
+                        onChange={(e) => {
+                          setFarmerSearchTerm(e.target.value);
+                          setShowFarmerResults(true);
+                        }}
+                        onFocus={() => {
+                          if (farmerSearchResults.length > 0 && farmerSearchTerm.length >= 2) setShowFarmerResults(true);
+                        }}
+                      />
+                    </div>
+                    {isSearchingFarmers && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <IconLoader2 className="h-3 w-3 animate-spin" />
+                        Searching farmers...
+                      </div>
+                    )}
+                    {farmerSearchTerm.length >= 2 && !isSearchingFarmers && farmerSearchResults.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No matching farmers found.</p>
+                    )}
+                  </div>
+                )}
+                {/* Farmer search dropdown via portal */}
+                {showFarmerResults && farmerSearchResults.length > 0 && farmerDropdownPosition && typeof document !== "undefined" && createPortal(
+                  <div
+                    ref={farmerResultsRef}
+                    className="fixed z-[9999] bg-white border border-gray-200 rounded-lg shadow-xl max-h-64 overflow-y-auto"
+                    style={{
+                      top: `${farmerDropdownPosition.top}px`,
+                      left: `${farmerDropdownPosition.left}px`,
+                      width: `${farmerDropdownPosition.width}px`,
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue>{formData.farmerId && formData.farmerId !== "none" ? (formData.farmerName || "Farmer") : "Select farmer (optional)"}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None / Not direct delivery</SelectItem>
-                      {farmers.map((f) => {
-                        const uid = (f as any).userId ?? f.id;
-                        const label = f.name || [f.firstName, f.lastName].filter(Boolean).join(" ") || f.phone || uid;
-                        return (
-                          <SelectItem key={uid} value={uid}>
-                            {label} {f.phone ? `(${f.phone})` : ""}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  {formData.farmerId && formData.farmerName && (
-                    <p className="text-sm text-muted-foreground">
-                      Direct delivery from: <strong>{formData.farmerName}</strong>. A listing will be created and the farmer notified.
-                    </p>
-                  )}
-                </div>
+                    <div className="p-2 text-xs font-semibold text-muted-foreground border-b">
+                      Select a farmer ({farmerSearchResults.length} match{farmerSearchResults.length !== 1 ? "es" : ""}):
+                    </div>
+                    {farmerSearchResults.map((f) => (
+                        <button
+                          key={f.userId}
+                          type="button"
+                          onClick={() => handleSelectFarmer(f.userId, f.name)}
+                          className="w-full text-left p-3 hover:bg-green-50 transition-colors border-b last:border-b-0"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-sm font-medium">{f.name}</span>
+                              {f.phone && (
+                                <span className="text-xs text-muted-foreground ml-2">{f.phone}</span>
+                              )}
+                              {f.ward && (
+                                <span className="text-xs text-muted-foreground ml-2">({f.ward})</span>
+                              )}
+                            </div>
+                            <IconCheck className="h-4 w-4 text-primary ml-2 flex-shrink-0" />
+                          </div>
+                        </button>
+                    ))}
+                  </div>,
+                  document.body
+                )}
               </CardContent>
             </Card>
 
@@ -1033,6 +1371,12 @@ export function StockInForm() {
                       {formData.batchId || (foundBatch?.batchId) || "Will be generated"}
                     </span>
                   </div>
+                  {selectedOrder && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Order</span>
+                      <span className="font-medium font-mono text-xs">{selectedOrder.orderNumber}</span>
+                    </div>
+                  )}
                   {(formData.farmerName || foundBatch?.farmerName) && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Farmer</span>

@@ -70,7 +70,7 @@ interface ProfileContextType {
   updateUser: (id: string, data: UpdateUserData) => Promise<UserType>;
   updateUserStatus: (id: string, status: 'active' | 'inactive' | 'suspended' | 'pending') => Promise<UserType>;
   updateUserRole: (id: string, role: UserRole) => Promise<UserType>;
-  resetUserPassword: (id: string, newPassword: string) => Promise<void>;
+  resetUserPassword: (id: string, newPassword?: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   
   // Rating Actions
@@ -118,11 +118,17 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       county: user.profile?.county,
       subCounty: user.profile?.subcounty || user.profile?.subCounty,
       ward: user.profile?.ward,
-      // Assignment fields (mirroring backend profile assignments)
+      village: user.profile?.village,
+      countyId: user.profile?.countyId,
+      subCountyId: user.profile?.subCountyId,
+      wardId: user.profile?.wardId,
+      villageId: user.profile?.villageId,
       farmerGroupId: user.profile?.farmerGroupId,
       aggregationCenterId: user.profile?.aggregationCenterId,
+      assignedVillageIds: user.profile?.assignedVillageIds || [],
       assignedCounty: user.profile?.assignedCounty,
       assignedSubCounty: user.profile?.assignedSubCounty,
+      assignedWard: user.profile?.assignedWard,
       hasAllAccess: user.profile?.hasAllAccess,
       location: user.profile?.location || user.profile?.county || '',
       createdAt: user.createdAt,
@@ -442,7 +448,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [selectedProfile, transformUserToProfile]);
 
-  const resetUserPasswordAction = useCallback(async (id: string, newPassword: string): Promise<void> => {
+  const resetUserPasswordAction = useCallback(async (id: string, newPassword?: string): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {

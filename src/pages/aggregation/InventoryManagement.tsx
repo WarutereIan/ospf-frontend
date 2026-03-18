@@ -27,10 +27,12 @@ import {
   AgingHeatmap,
 } from "@/components/visualizations";
 import { useAggregation } from "@/contexts/AggregationContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import type { InventoryItem } from "@/types/aggregation";
 
 export function InventoryManagement() {
   const { inventory, fetchInventory, isLoading, selectedCenter, centers, fetchCenters } = useAggregation();
+  const { varieties: catalogVarieties, qualityGrades: catalogGrades, getGradeColor } = useCatalog();
   
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -192,18 +194,6 @@ export function InventoryManagement() {
     }
   };
 
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case "A":
-        return "bg-green-100 text-green-800";
-      case "B":
-        return "bg-yellow-100 text-yellow-800";
-      case "C":
-        return "bg-orange-100 text-orange-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -330,9 +320,9 @@ export function InventoryManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>
-                <SelectItem value="kenya">Kenya</SelectItem>
-                <SelectItem value="spk004">SPK004</SelectItem>
-                <SelectItem value="kabode">Kabode</SelectItem>
+                {catalogVarieties.filter(v => v.isActive).map(v => (
+                  <SelectItem key={v.id} value={v.code}>{v.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={gradeFilter} onValueChange={(value) => setGradeFilter(value || "all")}>
@@ -341,9 +331,9 @@ export function InventoryManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Grades</SelectItem>
-                <SelectItem value="A">Grade A</SelectItem>
-                <SelectItem value="B">Grade B</SelectItem>
-                <SelectItem value="C">Grade C</SelectItem>
+                {catalogGrades.filter(g => g.isActive).map(g => (
+                  <SelectItem key={g.id} value={g.code}>{g.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value || "all")}>

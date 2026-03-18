@@ -27,8 +27,13 @@ export function LoginPage() {
       const result = await login(phone, password);
 
       if (result.success) {
-      // Navigate to dashboard (which will redirect to role-specific dashboard)
-      navigate("/dashboard");
+      if (result.role === "buyer") {
+        navigate("/dashboard/buyer/marketplace");
+      } else if (result.role === "farmer") {
+        navigate("/dashboard/farmer/orders");
+      } else {
+        navigate("/dashboard");
+      }
     } else {
         setError(result.error || "Invalid phone number or password. Please check the mock credentials below.");
       }
@@ -93,18 +98,14 @@ export function LoginPage() {
                     {error}
                   </div>
                 )}
-               {/*  <div className="flex items-center justify-between">
-                  <label className="text-sm text-muted-foreground">
-                    <input type="checkbox" className="mr-2" />
-                    Remember me
-                  </label>
+                <div className="flex items-center justify-end">
                   <Link
                     to="/forgot-password"
                     className="text-sm text-primary hover:underline"
                   >
                     Forgot password?
                   </Link>
-                </div> */}
+                </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Signing in..." : "Sign In"}
                 </Button>

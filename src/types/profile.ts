@@ -45,12 +45,24 @@ export interface BaseProfile {
   updatedAt: string; // ISO 8601
   avatar?: string; // Profile image URL
   
+  // Location hierarchy IDs
+  county?: string;
+  subCounty?: string;
+  ward?: string;
+  village?: string;
+  countyId?: string;
+  subCountyId?: string;
+  wardId?: string;
+  villageId?: string;
+
   // Assignment fields
-  farmerGroupId?: string; // Farmer group assignment (for farmers)
-  aggregationCenterId?: string; // Aggregation center assignment (for aggregation managers)
-  assignedCounty?: string; // Assigned county (for county staff)
-  assignedSubCounty?: string; // Assigned subcounty (for county staff)
-  hasAllAccess?: boolean; // All access permission (for county staff)
+  farmerGroupId?: string;
+  aggregationCenterId?: string;
+  assignedVillageIds?: string[];
+  assignedCounty?: string;
+  assignedSubCounty?: string;
+  assignedWard?: string;
+  hasAllAccess?: boolean;
 }
 
 /**

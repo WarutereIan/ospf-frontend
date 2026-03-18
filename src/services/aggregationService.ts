@@ -371,6 +371,40 @@ export async function searchOrders(query: string, limit: number = 10): Promise<O
 }
 
 /**
+ * Farmer search result interface
+ */
+export interface FarmerSearchResult {
+  userId: string;
+  name: string;
+  phone: string;
+  email: string;
+  businessName: string;
+  county: string;
+  subCounty: string;
+  ward: string;
+}
+
+/**
+ * Search farmers using PostgreSQL full-text search by name, phone, or email
+ * Backend: GET /api/v1/aggregation/farmers/search
+ */
+export async function searchFarmers(query: string, limit: number = 10): Promise<FarmerSearchResult[]> {
+  try {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+    const params: Record<string, any> = { q: query.trim() };
+    if (limit) params.limit = limit;
+
+    const farmers = await apiGet<FarmerSearchResult[]>('/aggregation/farmers/search', params);
+    return farmers;
+  } catch (error) {
+    console.error('Error searching farmers:', error);
+    return [];
+  }
+}
+
+/**
  * Backend CreateStockTransactionDto shape (POST /aggregation/stock-in, /aggregation/stock-out).
  */
 interface CreateStockTransactionDto {

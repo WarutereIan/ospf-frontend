@@ -13,10 +13,12 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { useAggregation } from "@/contexts/AggregationContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import type { InventoryItem } from "@/types/aggregation";
 
 export function StorageManagement() {
   const { inventory, fetchInventory, selectedCenter, centers, fetchCenters, isLoading } = useAggregation();
+  const { varieties: catalogVarieties } = useCatalog();
   
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [varietyFilter, setVarietyFilter] = useState("all");
@@ -177,9 +179,9 @@ export function StorageManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>
-                <SelectItem value="kenya">Kenya</SelectItem>
-                <SelectItem value="spk004">SPK004</SelectItem>
-                <SelectItem value="kabode">Kabode</SelectItem>
+                {catalogVarieties.filter(v => v.isActive).map(v => (
+                  <SelectItem key={v.id} value={v.code}>{v.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value || "all")}>

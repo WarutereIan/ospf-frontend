@@ -23,6 +23,7 @@ import {
   IconAlertCircle,
 } from "@tabler/icons-react";
 import { useAggregation } from "@/contexts/AggregationContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { useMarketplace } from "@/contexts/MarketplaceContext";
 import type { InventoryItem } from "@/types/aggregation";
 import type { MarketplaceOrder } from "@/types/marketplace";
@@ -30,6 +31,7 @@ import type { MarketplaceOrder } from "@/types/marketplace";
 export function BuyerDemandMatching() {
   const { inventory, fetchInventory, selectedCenter } = useAggregation();
   const { orders, fetchOrders } = useMarketplace();
+  const { varieties: catalogVarieties, qualityGrades: catalogGrades, getGradeColor } = useCatalog();
   
   const [filterVariety, setFilterVariety] = useState<string>("all");
   const [filterGrade, setFilterGrade] = useState<string>("all");
@@ -201,9 +203,9 @@ export function BuyerDemandMatching() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>
-                <SelectItem value="kenya">Kenya</SelectItem>
-                <SelectItem value="spk004">SPK004</SelectItem>
-                <SelectItem value="kabode">Kabode</SelectItem>
+                {catalogVarieties.filter(v => v.isActive).map(v => (
+                  <SelectItem key={v.id} value={v.code}>{v.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterGrade} onValueChange={setFilterGrade}>
@@ -212,9 +214,9 @@ export function BuyerDemandMatching() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Grades</SelectItem>
-                <SelectItem value="A">Grade A</SelectItem>
-                <SelectItem value="B">Grade B</SelectItem>
-                <SelectItem value="C">Grade C</SelectItem>
+                {catalogGrades.filter(g => g.isActive).map(g => (
+                  <SelectItem key={g.id} value={g.code}>{g.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

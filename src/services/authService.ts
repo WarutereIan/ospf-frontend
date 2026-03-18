@@ -205,30 +205,25 @@ export async function register(
  * This validates the session by calling /auth/me with the HttpOnly cookie
  * Suppresses error toasts for this endpoint as it's called frequently
  */
-export async function getCurrentUser(): Promise<{ success: boolean; user?: any; error?: string }> {
+export async function getCurrentUser(signal?: AbortSignal): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
-    // Suppress error toast for /auth/me - it's called frequently and 401s are expected
-    const backendUser = await apiGet<any>('/auth/me', undefined, { showErrorToast: false });
+    const backendUser = await apiGet<any>('/auth/me', undefined, { showErrorToast: false, signal });
     if (!backendUser) {
       return { success: false, error: 'Not authenticated' };
     }
 
     const user = transformUser(backendUser);
-    // Update local user cache
     storeLocalUser(user);
-    // Reset session invalidation flag - session is valid!
     resetSessionInvalidation();
 
     return { success: true, user };
   } catch (error: any) {
-    // Don't log 401 errors as they're expected when not authenticated
-    // Don't log 429 errors either - they're handled by the refresh mechanism
-    if (error.statusCode !== 401 && error.statusCode !== 429) {
+    if (error.statusCode !== 401 && error.statusCode !== 429 && error?.name !== 'AbortError') {
       console.error('Get current user error:', error);
     }
     return {
       success: false,
-      error: error.message || 'Not authenticated',
+      error: error?.name === 'AbortError' ? 'Request timed out' : (error.message || 'Not authenticated'),
     };
   }
 }
@@ -259,6 +254,47 @@ export async function refreshToken(): Promise<{ success: boolean; error?: string
       success: false,
       error: error.message || 'Token refresh failed',
     };
+  }
+}
+
+/**
+ * Forgot password (public) - sends a new auto-generated password via SMS/email.
+ */
+export async function forgotPassword(
+  identifier: string
+): Promise<{ success: boolean; message?: string; channel?: string; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/${API_PREFIX}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: identifier.trim() }),
+    });
+
+    const raw = await response.json().catch(() => ({}));
+    const data = raw.data ?? raw;
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to reset password');
+    }
+
+    return { success: true, message: data.message, channel: data.channel };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to reset password' };
+  }
+}
+
+/**
+ * Change password for the currently logged-in user.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await apiPost('/auth/change-password', { currentPassword, newPassword });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to change password' };
   }
 }
 

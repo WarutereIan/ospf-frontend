@@ -70,7 +70,7 @@ const sortOptions = [
 
 export function MarketplacePage() {
   const { role, user } = useAuth();
-  const { listings, fetchListings, createOrder, createSourcingRequest, isLoading, listingFilters, setListingFilters } = useMarketplace();
+  const { listings, fetchListings, createOrder, createSourcingRequest, isLoading, error: marketplaceError, listingFilters, setListingFilters } = useMarketplace();
   const { varieties, qualityGrades, getGradeColor } = useCatalog();
   const varietyFilterOptions = [
     { value: "all", label: "All Varieties" },
@@ -211,6 +211,7 @@ export function MarketplacePage() {
         status: "order_placed",
       });
 
+      const wasAdvance = selectedListing.expectedReadyAt && new Date(selectedListing.expectedReadyAt).getTime() > Date.now();
       // Close dialog and reset
       setOrderDialogOpen(false);
       setOrderQuantity("");
@@ -219,7 +220,9 @@ export function MarketplacePage() {
       setDeliveryCoordinates(undefined);
       setFulfillmentType("self_pickup");
       setSelectedListing(null);
-      alert("Order placed successfully!");
+      alert(wasAdvance
+        ? "Order booked successfully! You will be notified when the produce is ready for payment."
+        : "Order placed successfully!");
     } catch (error) {
       console.error("Failed to place order:", error);
       alert("Failed to place order. Please try again.");
@@ -306,7 +309,7 @@ export function MarketplacePage() {
           <h1 className="text-2xl font-bold tracking-tight text-stone-900">Marketplace</h1>
           <p className="text-stone-500 mt-1">Browse and order OFSP produce directly from verified farmers.</p>
         </div>
-        {role === "buyer" && (
+        {/* {role === "buyer" && (
           <Button
             variant="outline"
             onClick={() => setAdvanceOrderOpen(true)}
@@ -315,7 +318,7 @@ export function MarketplacePage() {
             <IconCalendar className="h-4 w-4" />
             Place Advance Order
           </Button>
-        )}
+        )} */}
       </div>
 
       {/* Smart Matching */}
@@ -513,6 +516,20 @@ export function MarketplacePage() {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {marketplaceError && !isLoading && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+          <IconPackage className="h-5 w-5 text-red-500 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">Failed to load listings</p>
+            <p className="text-xs text-red-600 mt-0.5">{marketplaceError}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => fetchListings()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Listings Grid */}
       {isLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -676,7 +693,9 @@ export function MarketplacePage() {
                         }}
                       >
                         <IconShoppingCart className="h-4 w-4" />
-                        Order Now
+                        {listing.expectedReadyAt && new Date(listing.expectedReadyAt).getTime() > Date.now()
+                          ? "Book Order"
+                          : "Order Now"}
                       </Button>
                     {/*   <InitiateNegotiationButton
                         listing={listing}
@@ -732,13 +751,27 @@ export function MarketplacePage() {
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Place Order</DialogTitle>
+            <DialogTitle>
+              {selectedListing?.expectedReadyAt && new Date(selectedListing.expectedReadyAt).getTime() > Date.now()
+                ? "Book Advance Order"
+                : "Place Order"}
+            </DialogTitle>
             <DialogDescription>
               Order {selectedListing?.variety} from {selectedListing?.farmerName}
             </DialogDescription>
           </DialogHeader>
           {selectedListing && (
             <div className="space-y-4">
+              {selectedListing.expectedReadyAt && new Date(selectedListing.expectedReadyAt).getTime() > Date.now() && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <IconClock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-700">
+                    This produce will be ready by{" "}
+                    <strong>{new Date(selectedListing.expectedReadyAt).toLocaleDateString(undefined, { dateStyle: "long" })}</strong>.
+                    You can book this order now and payment will be required once the produce is available.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Price per kg</label>
@@ -837,7 +870,9 @@ export function MarketplacePage() {
                 (fulfillmentType === "request_transport" && (!deliveryLocation || !deliveryCounty))
               }
             >
-              Place Order
+              {selectedListing?.expectedReadyAt && new Date(selectedListing.expectedReadyAt).getTime() > Date.now()
+                ? "Book Order"
+                : "Place Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

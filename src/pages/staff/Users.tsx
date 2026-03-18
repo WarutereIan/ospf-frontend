@@ -40,7 +40,8 @@ import type { Profile, ProfileStatus } from "@/types/profile";
 import { showSuccess, showError } from "@/lib/toast";
 import { getFarmerGroups, type FarmerGroup } from "@/services/farmerGroupService";
 import { bulkCreateFarmers, type BulkCreateFarmersResult } from "@/services/userService";
-import { VALID_SUBCOUNTIES } from "@/constants/locations";
+import { getCounties, getSubCounties, getWards, getVillages } from "@/services/locationsService";
+import type { County, SubCounty as SubCountyType, Ward as WardType, Village as VillageType } from "@/types/locations";
 
 type UsersSortColumn = "role" | "status" | "createdAt" | "lastLogin";
 type SortDirection = "asc" | "desc";
@@ -79,6 +80,24 @@ export function Users() {
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [farmerGroups, setFarmerGroups] = useState<FarmerGroup[]>([]);
+
+  // Cascading location state for create dialog
+  const [counties, setCounties] = useState<County[]>([]);
+  const [subCounties, setSubCounties] = useState<SubCountyType[]>([]);
+  const [wards, setWards] = useState<WardType[]>([]);
+  const [villages, setVillages] = useState<VillageType[]>([]);
+
+  // Cascading location state for manage dialog
+  const [mCounties, setMCounties] = useState<County[]>([]);
+  const [mSubCounties, setMSubCounties] = useState<SubCountyType[]>([]);
+  const [mWards, setMWards] = useState<WardType[]>([]);
+  const [mVillages, setMVillages] = useState<VillageType[]>([]);
+
+  // Cascading location state for officer (create + manage)
+  const [oSubCounties, setOSubCounties] = useState<SubCountyType[]>([]);
+  const [oWards, setOWards] = useState<WardType[]>([]);
+  const [moSubCounties, setMoSubCounties] = useState<SubCountyType[]>([]);
+  const [moWards, setMoWards] = useState<WardType[]>([]);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -87,8 +106,16 @@ export function Users() {
     role: "farmer" as UserRole,
     farmerGroupId: "",
     aggregationCenterId: "",
-    assignedCounty: "",
-    assignedSubCounty: "",
+    // Location fields for farmer / lead_farmer
+    countyId: "",
+    subCountyId: "",
+    wardId: "",
+    villageId: "",
+    assignedVillageIds: [] as string[],
+    // County staff fields (store IDs for cascading, resolved to names on save)
+    officerCountyId: "",
+    officerSubCountyId: "",
+    officerWardId: "",
     hasAllAccess: false,
   });
 
@@ -100,8 +127,16 @@ export function Users() {
     status: "active" as ProfileStatus,
     farmerGroupId: "",
     aggregationCenterId: "",
-    assignedCounty: "",
-    assignedSubCounty: "",
+    // Location fields for farmer / lead_farmer
+    countyId: "",
+    subCountyId: "",
+    wardId: "",
+    villageId: "",
+    assignedVillageIds: [] as string[],
+    // County staff fields
+    officerCountyId: "",
+    officerSubCountyId: "",
+    officerWardId: "",
     hasAllAccess: false,
   });
 
@@ -110,6 +145,7 @@ export function Users() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [isBulkDeactivating, setIsBulkDeactivating] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkResettingPasswords, setIsBulkResettingPasswords] = useState(false);
 
   // Fetch users, centers, and farmer groups on mount
   useEffect(() => {
@@ -121,6 +157,109 @@ export function Users() {
     };
     loadFarmerGroups();
   }, [fetchProfiles, fetchCenters, roleFilter]);
+
+  // Load counties on mount (shared by both create and manage dialogs)
+  useEffect(() => {
+    getCounties().then((c) => { setCounties(c); setMCounties(c); });
+  }, []);
+
+  // Create dialog: cascading subcounties when county changes
+  useEffect(() => {
+    if (formData.countyId) {
+      getSubCounties(formData.countyId).then(setSubCounties);
+    } else {
+      setSubCounties([]);
+    }
+    setWards([]);
+    setVillages([]);
+  }, [formData.countyId]);
+
+  // Create dialog: cascading wards when subcounty changes
+  useEffect(() => {
+    if (formData.subCountyId) {
+      getWards(formData.subCountyId).then(setWards);
+    } else {
+      setWards([]);
+    }
+    setVillages([]);
+  }, [formData.subCountyId]);
+
+  // Create dialog: cascading villages when ward changes
+  useEffect(() => {
+    if (formData.wardId) {
+      getVillages(formData.wardId).then(setVillages);
+    } else {
+      setVillages([]);
+    }
+  }, [formData.wardId]);
+
+  // Manage dialog: cascading subcounties when county changes
+  useEffect(() => {
+    if (manageForm.countyId) {
+      getSubCounties(manageForm.countyId).then(setMSubCounties);
+    } else {
+      setMSubCounties([]);
+    }
+    setMWards([]);
+    setMVillages([]);
+  }, [manageForm.countyId]);
+
+  // Manage dialog: cascading wards when subcounty changes
+  useEffect(() => {
+    if (manageForm.subCountyId) {
+      getWards(manageForm.subCountyId).then(setMWards);
+    } else {
+      setMWards([]);
+    }
+    setMVillages([]);
+  }, [manageForm.subCountyId]);
+
+  // Manage dialog: cascading villages when ward changes
+  useEffect(() => {
+    if (manageForm.wardId) {
+      getVillages(manageForm.wardId).then(setMVillages);
+    } else {
+      setMVillages([]);
+    }
+  }, [manageForm.wardId]);
+
+  // Officer create dialog: cascading subcounties when county changes
+  useEffect(() => {
+    if (formData.officerCountyId) {
+      getSubCounties(formData.officerCountyId).then(setOSubCounties);
+    } else {
+      setOSubCounties([]);
+    }
+    setOWards([]);
+  }, [formData.officerCountyId]);
+
+  // Officer create dialog: cascading wards when subcounty changes
+  useEffect(() => {
+    if (formData.officerSubCountyId) {
+      getWards(formData.officerSubCountyId).then(setOWards);
+    } else {
+      setOWards([]);
+    }
+  }, [formData.officerSubCountyId]);
+
+  // Officer manage dialog: cascading subcounties when county changes
+  useEffect(() => {
+    if (manageForm.officerCountyId) {
+      getSubCounties(manageForm.officerCountyId).then(setMoSubCounties);
+    } else {
+      setMoSubCounties([]);
+    }
+    setMoWards([]);
+  }, [manageForm.officerCountyId]);
+
+  // Officer manage dialog: cascading wards when subcounty changes
+  useEffect(() => {
+    if (manageForm.officerSubCountyId) {
+      getWards(manageForm.officerSubCountyId).then(setMoWards);
+    } else {
+      setMoWards([]);
+    }
+  }, [manageForm.officerSubCountyId]);
 
   const availablePermissions: Permission[] = [
     { id: "users.read", name: "View Users", description: "View user list and details", category: "read" },
@@ -237,6 +376,17 @@ export function Users() {
         return;
       }
 
+      // Resolve location names from IDs for display/storage
+      const countyName = counties.find((c) => c.id === formData.countyId)?.name;
+      const subCountyName = subCounties.find((s) => s.id === formData.subCountyId)?.name;
+      const wardName = wards.find((w) => w.id === formData.wardId)?.name;
+      const villageName = villages.find((v) => v.id === formData.villageId)?.name;
+
+      // Resolve officer location names
+      const officerCountyName = counties.find((c) => c.id === formData.officerCountyId)?.name;
+      const officerSubCountyName = oSubCounties.find((s) => s.id === formData.officerSubCountyId)?.name;
+      const officerWardName = oWards.find((w) => w.id === formData.officerWardId)?.name;
+
       await createUser({
         email: formData.email?.trim() ?? "",
         phone: formData.phone,
@@ -245,10 +395,20 @@ export function Users() {
         profile: {
           firstName,
           lastName,
+          county: countyName,
+          subcounty: subCountyName,
+          ward: wardName,
+          village: villageName,
+          countyId: formData.countyId || undefined,
+          subCountyId: formData.subCountyId || undefined,
+          wardId: formData.wardId || undefined,
+          villageId: formData.villageId || undefined,
           farmerGroupId: formData.farmerGroupId || undefined,
           aggregationCenterId: formData.aggregationCenterId || undefined,
-          assignedCounty: formData.assignedCounty || undefined,
-          assignedSubCounty: formData.assignedSubCounty || undefined,
+          assignedVillageIds: formData.assignedVillageIds.length > 0 ? formData.assignedVillageIds : undefined,
+          assignedCounty: officerCountyName || undefined,
+          assignedSubCounty: officerSubCountyName || undefined,
+          assignedWard: officerWardName || undefined,
           hasAllAccess: formData.hasAllAccess,
         },
       });
@@ -263,8 +423,14 @@ export function Users() {
         role: "farmer",
         farmerGroupId: "",
         aggregationCenterId: "",
-        assignedCounty: "",
-        assignedSubCounty: "",
+        countyId: "",
+        subCountyId: "",
+        wardId: "",
+        villageId: "",
+        assignedVillageIds: [],
+        officerCountyId: "",
+        officerSubCountyId: "",
+        officerWardId: "",
         hasAllAccess: false,
       });
       
@@ -276,15 +442,13 @@ export function Users() {
   };
 
   const handleResetPassword = async (userId: string) => {
-    if (!confirm("Are you sure you want to reset this user's password? A temporary password will be generated.")) {
+    if (!confirm("Are you sure you want to reset this user's password? A new password will be generated and sent to the user via SMS/email.")) {
       return;
     }
 
     try {
-      // Generate a temporary password
-      const tempPassword = `Temp${Math.random().toString(36).slice(-8)}!`;
-      await resetUserPassword(userId, tempPassword);
-      showSuccess(`Password reset successfully. Temporary password: ${tempPassword}`);
+      await resetUserPassword(userId);
+      showSuccess("Password reset successfully. A new password has been sent to the user via SMS/email.");
     } catch (error: any) {
       showError(error.message || "Failed to reset password");
     }
@@ -403,6 +567,41 @@ export function Users() {
     }
   };
 
+  const handleBulkResetPasswords = async () => {
+    if (selectedUserIds.size === 0) return;
+    if (!confirm(`Reset passwords for ${selectedUserIds.size} selected user(s)? New passwords will be generated and sent to each user via SMS/email.`)) {
+      return;
+    }
+    setIsBulkResettingPasswords(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      for (const id of selectedUserIds) {
+        try {
+          await resetUserPassword(id);
+          succeeded++;
+        } catch {
+          failed++;
+        }
+      }
+      if (succeeded > 0) {
+        showSuccess(
+          succeeded === selectedUserIds.size
+            ? `All ${succeeded} passwords reset. New passwords sent via SMS/email.`
+            : `Reset ${succeeded} password(s). ${failed} failed. New passwords sent via SMS/email.`
+        );
+      }
+      if (failed > 0 && succeeded === 0) {
+        showError("Failed to reset passwords for selected users.");
+      }
+      setSelectedUserIds(new Set());
+    } catch {
+      showError("Bulk password reset failed.");
+    } finally {
+      setIsBulkResettingPasswords(false);
+    }
+  };
+
   const handleManagePermissions = (user: Profile) => {
     setSelectedUser(user);
     setIsPermissionsDialogOpen(true);
@@ -419,6 +618,10 @@ export function Users() {
     const statusRaw = u.status && String(u.status).toLowerCase();
     const status: ProfileStatus =
       statusRaw === "pending_verification" ? "pending" : (statusRaw as ProfileStatus) || "active";
+    // Reverse-lookup officer county/subcounty IDs from stored name strings
+    const officerCounty = mCounties.find(
+      (c) => c.name.toLowerCase() === (u.assignedCounty ?? "").toLowerCase()
+    );
     setManageForm({
       name,
       email: u.email ?? "",
@@ -427,10 +630,39 @@ export function Users() {
       status: status || "active",
       farmerGroupId: u.farmerGroupId ?? "",
       aggregationCenterId: u.aggregationCenterId ?? "",
-      assignedCounty: u.assignedCounty ?? u.county ?? "",
-      assignedSubCounty: u.assignedSubCounty ?? u.subCounty ?? "",
+      countyId: u.countyId ?? "",
+      subCountyId: u.subCountyId ?? "",
+      wardId: u.wardId ?? "",
+      villageId: u.villageId ?? "",
+      assignedVillageIds: u.assignedVillageIds ?? [],
+      officerCountyId: officerCounty?.id ?? "",
+      officerSubCountyId: "",
+      officerWardId: "",
       hasAllAccess: Boolean(u.hasAllAccess),
     });
+
+    // Load subcounties for the officer county, then find the matching one
+    if (officerCounty?.id) {
+      getSubCounties(officerCounty.id).then((subs) => {
+        setMoSubCounties(subs);
+        const officerSub = subs.find(
+          (s) => s.name.toLowerCase() === (u.assignedSubCounty ?? "").toLowerCase()
+        );
+        if (officerSub) {
+          setManageForm((prev) => ({ ...prev, officerSubCountyId: officerSub.id }));
+          getWards(officerSub.id).then((w) => {
+            setMoWards(w);
+            const officerWard = w.find(
+              (wd) => wd.name.toLowerCase() === (u.assignedWard ?? "").toLowerCase()
+            );
+            if (officerWard) {
+              setManageForm((prev) => ({ ...prev, officerWardId: officerWard.id }));
+            }
+          });
+        }
+      });
+    }
+
     setIsManageUserDialogOpen(true);
   };
 
@@ -451,18 +683,34 @@ export function Users() {
         status: manageForm.status,
       });
 
+      // Resolve location names from IDs for farmer/lead_farmer
+      const mCountyName = mCounties.find((c) => c.id === manageForm.countyId)?.name;
+      const mSubCountyName = mSubCounties.find((s) => s.id === manageForm.subCountyId)?.name;
+      const mWardName = mWards.find((w) => w.id === manageForm.wardId)?.name;
+      const mVillageName = mVillages.find((v) => v.id === manageForm.villageId)?.name;
+
       // Update profile fields (name + role-specific assignments)
       await updateProfile(selectedUser.id, {
         firstName,
         lastName,
-        // Persist farmer group assignment when applicable
+        // Persist farmer/lead_farmer location + group
         ...((manageForm.role === "farmer" || manageForm.role === "lead_farmer") && {
+          county: mCountyName,
+          subCounty: mSubCountyName,
+          ward: mWardName,
+          village: mVillageName,
+          countyId: manageForm.countyId || undefined,
+          subCountyId: manageForm.subCountyId || undefined,
+          wardId: manageForm.wardId || undefined,
+          villageId: manageForm.villageId || undefined,
           farmerGroupId: manageForm.farmerGroupId || undefined,
+          assignedVillageIds: manageForm.assignedVillageIds.length > 0 ? manageForm.assignedVillageIds : [],
         }),
         // Persist county staff assignments when applicable
         ...((manageForm.role === "county_officer" || manageForm.role === "staff") && {
-          assignedCounty: manageForm.assignedCounty || undefined,
-          assignedSubCounty: manageForm.assignedSubCounty || undefined,
+          assignedCounty: mCounties.find((c) => c.id === manageForm.officerCountyId)?.name || undefined,
+          assignedSubCounty: moSubCounties.find((s) => s.id === manageForm.officerSubCountyId)?.name || undefined,
+          assignedWard: moWards.find((w) => w.id === manageForm.officerWardId)?.name || undefined,
           hasAllAccess: manageForm.hasAllAccess,
         }),
       });
@@ -640,10 +888,18 @@ export function Users() {
             <div className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-lg bg-muted/50 border">
               <span className="text-sm font-medium">{selectedUserIds.size} selected</span>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBulkResetPasswords}
+                disabled={isBulkDeactivating || isBulkDeleting || isBulkResettingPasswords}
+              >
+                {isBulkResettingPasswords ? "Resetting…" : "Reset passwords"}
+              </Button>
+              <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleBulkDeactivate}
-                disabled={isBulkDeactivating || isBulkDeleting}
+                disabled={isBulkDeactivating || isBulkDeleting || isBulkResettingPasswords}
               >
                 {isBulkDeactivating ? "Deactivating…" : "Deactivate selected"}
               </Button>
@@ -651,11 +907,11 @@ export function Users() {
                 variant="destructive"
                 size="sm"
                 onClick={handleBulkDelete}
-                disabled={isBulkDeactivating || isBulkDeleting}
+                disabled={isBulkDeactivating || isBulkDeleting || isBulkResettingPasswords}
               >
                 {isBulkDeleting ? "Deleting…" : "Delete selected"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedUserIds(new Set())} disabled={isBulkDeactivating || isBulkDeleting}>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedUserIds(new Set())} disabled={isBulkDeactivating || isBulkDeleting || isBulkResettingPasswords}>
                 Clear selection
               </Button>
             </div>
@@ -790,7 +1046,7 @@ export function Users() {
 
       {/* Create User Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New User</DialogTitle>
             <DialogDescription>Add a new user to the system</DialogDescription>
@@ -840,11 +1096,16 @@ export function Users() {
                 onValueChange={(value: UserRole) => setFormData({ 
                   ...formData, 
                   role: value,
-                  // Reset assignment fields when role changes
                   farmerGroupId: "",
                   aggregationCenterId: "",
-                  assignedCounty: "",
-                  assignedSubCounty: "",
+                  countyId: "",
+                  subCountyId: "",
+                  wardId: "",
+                  villageId: "",
+                  assignedVillageIds: [],
+                  officerCountyId: "",
+                  officerSubCountyId: "",
+                  officerWardId: "",
                   hasAllAccess: false,
                 })}
               >
@@ -864,34 +1125,168 @@ export function Users() {
               </Select>
             </div>
 
-            {/* Farmer Group Assignment (for farmers) */}
+            {/* Location Assignment (for farmers / lead farmers) */}
             {(formData.role === "farmer" || formData.role === "lead_farmer") && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Farmer Group (Optional)</label>
-                <Select
-                  value={formData.farmerGroupId}
-                  onValueChange={(value) => setFormData({ ...formData, farmerGroupId: value })}
-                >
-                  <SelectTrigger className="min-w-[260px]">
-                    <SelectValue>
-                      {(value) => {
-                        if (!value) return "Select farmer group (optional)";
-                        const group = farmerGroups.find((g) => g.id === value);
-                        return group ? `${group.name} (${group.code})` : "Select farmer group (optional)";
-                      }}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {farmerGroups
-                      .filter(group => group.isActive)
-                      .map((group) => (
-                        <SelectItem key={group.id} value={group.id}>
-                          {group.name} ({group.code})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Location</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* County */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">County</label>
+                    <Select
+                      value={formData.countyId}
+                      onValueChange={(value) => setFormData({ ...formData, countyId: value, subCountyId: "", wardId: "", villageId: "", assignedVillageIds: [] })}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">Select county</span>;
+                            return counties.find((c) => c.id === value)?.name ?? "Select county";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {counties.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Sub-County */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Sub-County</label>
+                    <Select
+                      value={formData.subCountyId}
+                      onValueChange={(value) => setFormData({ ...formData, subCountyId: value, wardId: "", villageId: "", assignedVillageIds: [] })}
+                      disabled={!formData.countyId}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">{formData.countyId ? "Select sub-county" : "Select county first"}</span>;
+                            return subCounties.find((s) => s.id === value)?.name ?? "Select sub-county";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subCounties.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Ward */}
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Ward</label>
+                    <Select
+                      value={formData.wardId}
+                      onValueChange={(value) => setFormData({ ...formData, wardId: value, villageId: "", assignedVillageIds: [] })}
+                      disabled={!formData.subCountyId}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">{formData.subCountyId ? "Select ward" : "Select sub-county first"}</span>;
+                            return wards.find((w) => w.id === value)?.name ?? "Select ward";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {wards.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Village (single for farmer) */}
+                  {formData.role === "farmer" && (
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Village</label>
+                      <Select
+                        value={formData.villageId}
+                        onValueChange={(value) => setFormData({ ...formData, villageId: value })}
+                        disabled={!formData.wardId}
+                      >
+                        <SelectTrigger className="max-w-[220px]">
+                          <SelectValue>
+                            {(value) => {
+                              if (!value) return <span className="text-muted-foreground">{formData.wardId ? "Select village" : "Select ward first"}</span>;
+                              return villages.find((v) => v.id === value)?.name ?? "Select village";
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {villages.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Multiple villages for lead farmer */}
+                {formData.role === "lead_farmer" && formData.wardId && (
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground">
+                      Assigned Villages ({formData.assignedVillageIds.length} selected)
+                    </label>
+                    <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+                      {villages.length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-1">No villages in this ward</p>
+                      ) : (
+                        villages.map((v) => (
+                          <label key={v.id} className="flex items-center gap-2 p-1 hover:bg-muted rounded cursor-pointer">
+                            <Checkbox
+                              checked={formData.assignedVillageIds.includes(v.id)}
+                              onCheckedChange={(checked) => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  assignedVillageIds: checked
+                                    ? [...prev.assignedVillageIds, v.id]
+                                    : prev.assignedVillageIds.filter((id) => id !== v.id),
+                                }));
+                              }}
+                            />
+                            <span className="text-sm">{v.name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Farmer Group (optional, secondary) */}
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Farmer Group (Optional)</label>
+                  <Select
+                    value={formData.farmerGroupId}
+                    onValueChange={(value) => setFormData({ ...formData, farmerGroupId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(value) => {
+                          if (!value) return <span className="text-muted-foreground">Select farmer group (optional)</span>;
+                          const group = farmerGroups.find((g) => g.id === value);
+                          return group ? `${group.name} (${group.code})` : value;
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">None</SelectItem>
+                      {farmerGroups
+                        .filter((group) => group.isActive)
+                        .map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name} ({group.code})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
 
@@ -932,55 +1327,89 @@ export function Users() {
               </div>
             )}
 
-            {/* County/Subcounty Assignment (for county officers and staff) */}
-            {(formData.role === "extension_officer" || formData.role === "staff") && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Assigned County</label>
-                  <Input
-                    placeholder="e.g., Machakos"
-                    value={formData.assignedCounty}
-                    onChange={(e) => setFormData({ ...formData, assignedCounty: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Assigned Subcounty</label>
-                  <Select
-                    value={formData.assignedSubCounty}
-                    onValueChange={(value) => setFormData({ ...formData, assignedSubCounty: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue>
-                        {(value) =>
-                          value == null || value === ""
-                            ? "Select subcounty"
-                            : undefined
-                        }
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">None</SelectItem>
-                      {VALID_SUBCOUNTIES.map((subCounty) => (
-                        <SelectItem key={subCounty} value={subCounty}>
-                          {subCounty}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {/* Assigned Area (for county officers and staff) */}
+            {(formData.role === "county_officer" || formData.role === "staff") && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Assigned Area</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">County</label>
+                    <Select
+                      value={formData.officerCountyId}
+                      onValueChange={(value) => setFormData({ ...formData, officerCountyId: value, officerSubCountyId: "", officerWardId: "" })}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">Select county</span>;
+                            return counties.find((c) => c.id === value)?.name ?? "Select county";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {counties.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Sub-County</label>
+                    <Select
+                      value={formData.officerSubCountyId}
+                      onValueChange={(value) => setFormData({ ...formData, officerSubCountyId: value, officerWardId: "" })}
+                      disabled={!formData.officerCountyId}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">{formData.officerCountyId ? "Select sub-county" : "Select county first"}</span>;
+                            return oSubCounties.find((s) => s.id === value)?.name ?? "Select sub-county";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {oSubCounties.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Ward (Optional)</label>
+                    <Select
+                      value={formData.officerWardId}
+                      onValueChange={(value) => setFormData({ ...formData, officerWardId: value })}
+                      disabled={!formData.officerSubCountyId}
+                    >
+                      <SelectTrigger className="max-w-[220px]">
+                        <SelectValue>
+                          {(value) => {
+                            if (!value) return <span className="text-muted-foreground">{formData.officerSubCountyId ? "Select ward (optional)" : "Select sub-county first"}</span>;
+                            return oWards.find((w) => w.id === value)?.name ?? "Select ward";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {oWards.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     id="hasAllAccess"
                     checked={formData.hasAllAccess}
-                    onChange={(e) => setFormData({ ...formData, hasAllAccess: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300"
+                    onCheckedChange={(checked) => setFormData({ ...formData, hasAllAccess: !!checked })}
                   />
-                  <label htmlFor="hasAllAccess" className="text-sm font-medium">
+                  <label htmlFor="hasAllAccess" className="text-sm">
                     Grant all access to all counties and subcounties
                   </label>
                 </div>
-              </>
+              </div>
             )}
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-row sm:items-center">
@@ -1274,37 +1703,179 @@ export function Users() {
                 </div>
               </div>
 
-              {/* Assignments (read-only for now, based on role) */}
+              {/* Assignments based on role */}
               <div className="space-y-4">
                 {(manageForm.role === "farmer" || manageForm.role === "lead_farmer") && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Farmer Group</label>
-                    <Select
-                      value={manageForm.farmerGroupId}
-                      onValueChange={(value) =>
-                        setManageForm((prev) => ({ ...prev, farmerGroupId: value }))
-                      }
-                    >
-                      <SelectTrigger className="min-w-[260px]">
-                        <SelectValue>
-                          {(value) => {
-                            if (!value) return "Select farmer group (optional)";
-                            const group = farmerGroups.find((g) => g.id === value);
-                            return group ? `${group.name} (${group.code})` : "Select farmer group (optional)";
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">None</SelectItem>
-                        {farmerGroups
-                          .filter((group) => group.isActive)
-                          .map((group) => (
-                            <SelectItem key={group.id} value={group.id}>
-                              {group.name} ({group.code})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Location</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* County */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">County</label>
+                        <Select
+                          value={manageForm.countyId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, countyId: value, subCountyId: "", wardId: "", villageId: "", assignedVillageIds: [] }))
+                          }
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">Select county</span>;
+                                return mCounties.find((c) => c.id === value)?.name ?? "Select county";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {mCounties.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Sub-County */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Sub-County</label>
+                        <Select
+                          value={manageForm.subCountyId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, subCountyId: value, wardId: "", villageId: "", assignedVillageIds: [] }))
+                          }
+                          disabled={!manageForm.countyId}
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">{manageForm.countyId ? "Select sub-county" : "Select county first"}</span>;
+                                return mSubCounties.find((s) => s.id === value)?.name ?? "Select sub-county";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {mSubCounties.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Ward */}
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Ward</label>
+                        <Select
+                          value={manageForm.wardId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, wardId: value, villageId: "", assignedVillageIds: [] }))
+                          }
+                          disabled={!manageForm.subCountyId}
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">{manageForm.subCountyId ? "Select ward" : "Select sub-county first"}</span>;
+                                return mWards.find((w) => w.id === value)?.name ?? "Select ward";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {mWards.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Village (single for farmer) */}
+                      {manageForm.role === "farmer" && (
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Village</label>
+                          <Select
+                            value={manageForm.villageId}
+                            onValueChange={(value) =>
+                              setManageForm((prev) => ({ ...prev, villageId: value }))
+                            }
+                            disabled={!manageForm.wardId}
+                          >
+                            <SelectTrigger className="max-w-[220px]">
+                              <SelectValue>
+                                {(value) => {
+                                  if (!value) return <span className="text-muted-foreground">{manageForm.wardId ? "Select village" : "Select ward first"}</span>;
+                                  return mVillages.find((v) => v.id === value)?.name ?? "Select village";
+                                }}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {mVillages.map((v) => (
+                                <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Multiple villages for lead farmer */}
+                    {manageForm.role === "lead_farmer" && manageForm.wardId && (
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">
+                          Assigned Villages ({manageForm.assignedVillageIds.length} selected)
+                        </label>
+                        <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-1">
+                          {mVillages.length === 0 ? (
+                            <p className="text-xs text-muted-foreground p-1">No villages in this ward</p>
+                          ) : (
+                            mVillages.map((v) => (
+                              <label key={v.id} className="flex items-center gap-2 p-1 hover:bg-muted rounded cursor-pointer">
+                                <Checkbox
+                                  checked={manageForm.assignedVillageIds.includes(v.id)}
+                                  onCheckedChange={(checked) => {
+                                    setManageForm((prev) => ({
+                                      ...prev,
+                                      assignedVillageIds: checked
+                                        ? [...prev.assignedVillageIds, v.id]
+                                        : prev.assignedVillageIds.filter((id) => id !== v.id),
+                                    }));
+                                  }}
+                                />
+                                <span className="text-sm">{v.name}</span>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Farmer Group (optional) */}
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Farmer Group (Optional)</label>
+                      <Select
+                        value={manageForm.farmerGroupId}
+                        onValueChange={(value) =>
+                          setManageForm((prev) => ({ ...prev, farmerGroupId: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue>
+                            {(value) => {
+                              if (!value) return <span className="text-muted-foreground">Select farmer group (optional)</span>;
+                              const group = farmerGroups.find((g) => g.id === value);
+                              return group ? `${group.name} (${group.code})` : value;
+                            }}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">None</SelectItem>
+                          {farmerGroups
+                            .filter((group) => group.isActive)
+                            .map((group) => (
+                              <SelectItem key={group.id} value={group.id}>
+                                {group.name} ({group.code})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
 
@@ -1337,60 +1908,92 @@ export function Users() {
                 )}
 
                 {(manageForm.role === "county_officer" || manageForm.role === "staff") && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Assigned County</label>
-                      <Input
-                        value={manageForm.assignedCounty}
-                        onChange={(e) =>
-                          setManageForm((prev) => ({ ...prev, assignedCounty: e.target.value }))
-                        }
-                        placeholder="e.g., Machakos"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Assigned Subcounty</label>
-                      <Select
-                        value={manageForm.assignedSubCounty}
-                        onValueChange={(value) =>
-                          setManageForm((prev) => ({ ...prev, assignedSubCounty: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue>
-                            {(value) => {
-                              if (!value) return "Select subcounty";
-                              const display = VALID_SUBCOUNTIES.includes(
-                                value as (typeof VALID_SUBCOUNTIES)[number]
-                              )
-                                ? value
-                                : value;
-                              return display || "Select subcounty";
-                            }}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">None</SelectItem>
-                          {VALID_SUBCOUNTIES.map((subCounty) => (
-                            <SelectItem key={subCounty} value={subCounty}>
-                              {subCounty}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Assigned Area</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">County</label>
+                        <Select
+                          value={manageForm.officerCountyId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, officerCountyId: value, officerSubCountyId: "", officerWardId: "" }))
+                          }
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">Select county</span>;
+                                return mCounties.find((c) => c.id === value)?.name ?? "Select county";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {mCounties.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Sub-County</label>
+                        <Select
+                          value={manageForm.officerSubCountyId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, officerSubCountyId: value, officerWardId: "" }))
+                          }
+                          disabled={!manageForm.officerCountyId}
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">{manageForm.officerCountyId ? "Select sub-county" : "Select county first"}</span>;
+                                return moSubCounties.find((s) => s.id === value)?.name ?? "Select sub-county";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {moSubCounties.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Ward (Optional)</label>
+                        <Select
+                          value={manageForm.officerWardId}
+                          onValueChange={(value) =>
+                            setManageForm((prev) => ({ ...prev, officerWardId: value }))
+                          }
+                          disabled={!manageForm.officerSubCountyId}
+                        >
+                          <SelectTrigger className="max-w-[220px]">
+                            <SelectValue>
+                              {(value) => {
+                                if (!value) return <span className="text-muted-foreground">{manageForm.officerSubCountyId ? "Select ward (optional)" : "Select sub-county first"}</span>;
+                                return moWards.find((w) => w.id === value)?.name ?? "Select ward";
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {moWards.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={manageForm.hasAllAccess}
-                        onChange={(e) =>
-                          setManageForm((prev) => ({ ...prev, hasAllAccess: e.target.checked }))
+                        onCheckedChange={(checked) =>
+                          setManageForm((prev) => ({ ...prev, hasAllAccess: !!checked }))
                         }
-                        className="h-4 w-4 rounded border-gray-300"
                       />
-                      <span className="text-sm">Has all access to all counties and subcounties</span>
+                      <span className="text-sm">Grant all access to all counties and subcounties</span>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 

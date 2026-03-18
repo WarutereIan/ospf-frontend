@@ -10,7 +10,19 @@ import {
   IconStar,
   IconUser,
   IconTruck,
+  IconX,
+  IconLoader2,
+  IconClock,
 } from "@tabler/icons-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { OrderTimeline, type OrderStage } from "@/components/orders/OrderTimeline";
 import { EscrowStatus, type EscrowStatus as EscrowStatusType } from "@/components/payments/EscrowStatus";
 import { PaymentConfirmationDialog } from "@/components/payments/PaymentConfirmationDialog";
@@ -26,13 +38,16 @@ import type { MarketplaceOrder } from "@/types/marketplace";
 
 export function BuyerOrderDetails() {
   const { id } = useParams<{ id: string }>();
-  const { selectedOrder, fetchOrderById, isLoading } = useMarketplace();
+  const { selectedOrder, fetchOrderById, isLoading, cancelOrder } = useMarketplace();
   const { payments, fetchPayments } = usePayment();
   const { user } = useAuth();
   
   const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
   const [paymentConfirmationOpen, setPaymentConfirmationOpen] = useState(false);
   const [requestTransportOpen, setRequestTransportOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Fetch order details on mount
   useEffect(() => {
@@ -44,6 +59,33 @@ export function BuyerOrderDetails() {
 
   const order = selectedOrder;
   const payment = payments.find((p) => p.orderId === id);
+
+  const PAID_STATUSES = ["secured", "confirmed_by_farmer", "released"];
+  const TERMINAL_STATUSES = ["completed", "cancelled", "order_rejected", "refunded", "disputed"];
+  const canCancel =
+    order &&
+    !TERMINAL_STATUSES.includes(order.status) &&
+    !PAID_STATUSES.includes(order.paymentStatus?.toLowerCase() ?? "");
+
+  const isPreHarvest =
+    order?.listing?.expectedReadyAt &&
+    new Date(order.listing.expectedReadyAt).getTime() > Date.now();
+
+  const handleCancelOrder = async () => {
+    if (!order || !id || !cancelReason.trim()) return;
+    setIsCancelling(true);
+    try {
+      await cancelOrder(id, cancelReason.trim());
+      showSuccess("Order Cancelled", "The order has been cancelled successfully");
+      setCancelDialogOpen(false);
+      setCancelReason("");
+      await fetchOrderById(id);
+    } catch (error) {
+      showError("Failed to Cancel Order", error instanceof Error ? error.message : "An error occurred");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -89,9 +131,9 @@ export function BuyerOrderDetails() {
             <p className="text-sm text-muted-foreground mt-1">Order #{order.id}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Show Confirm Payment button for orders awaiting payment */}
+            {/* Show Confirm Payment button for orders awaiting payment (blocked for pre-harvest) */}
             {(order.status === "order_placed" || order.status === "order_accepted") &&
-             order.paymentStatus === "pending" && (
+             order.paymentStatus === "pending" && !isPreHarvest && (
               <Button
                 onClick={() => setPaymentConfirmationOpen(true)}
                 className="bg-green-600 hover:bg-green-700"
@@ -108,6 +150,15 @@ export function BuyerOrderDetails() {
               >
                 <IconTruck className="mr-2 h-4 w-4" />
                 Request Transport
+              </Button>
+            )}
+            {canCancel && (
+              <Button
+                variant="destructive"
+                onClick={() => setCancelDialogOpen(true)}
+              >
+                <IconX className="mr-2 h-4 w-4" />
+                Cancel Order
               </Button>
             )}
             {order.canRate && (
@@ -134,6 +185,21 @@ export function BuyerOrderDetails() {
           </div>
         </div>
       </div>
+
+      {/* Pre-harvest notice */}
+      {isPreHarvest && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <IconClock className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Advance Order – Produce Not Yet Ready</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              This produce is expected to be ready by{" "}
+              <strong>{new Date(order.listing!.expectedReadyAt!).toLocaleDateString(undefined, { dateStyle: "long" })}</strong>.
+              Payment can be made once the produce is available. Your order has been booked.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Order Timeline */}
       <Card>
@@ -475,6 +541,43 @@ export function BuyerOrderDetails() {
           }
         }}
       />
+
+      {/* Cancel Order Dialog */}
+      <Dialog open={cancelDialogOpen} onOpenChange={(open) => { setCancelDialogOpen(open); if (!open) setCancelReason(""); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Order</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for cancelling order #{order?.orderNumber || order?.id}. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Why are you cancelling this order?"
+            value={cancelReason}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCancelReason(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialogOpen(false)} disabled={isCancelling}>
+              Go back
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelOrder}
+              disabled={isCancelling || !cancelReason.trim()}
+            >
+              {isCancelling ? (
+                <>
+                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                "Confirm cancellation"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

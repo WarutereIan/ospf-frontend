@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useAggregation } from "@/contexts/AggregationContext";
+import { useCatalog } from "@/contexts/CatalogContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { WastageEntry } from "@/types/aggregation";
 
@@ -31,6 +32,7 @@ const wastageCategories = [
 export function WastageTracking() {
   const { wastageEntries, fetchWastageEntries, recordWastageEntry, inventory, fetchInventory, centers, fetchCenters, selectedCenter, isLoading, wastageFilters, setWastageFilters } = useAggregation();
   const { user } = useAuth();
+  const { varieties: catalogVarieties } = useCatalog();
   
   const [filteredEntries, setFilteredEntries] = useState<WastageEntry[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -357,9 +359,9 @@ export function WastageTracking() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Varieties</SelectItem>
-                <SelectItem value="kenya">Kenya</SelectItem>
-                <SelectItem value="spk004">SPK004</SelectItem>
-                <SelectItem value="kabode">Kabode</SelectItem>
+                {catalogVarieties.filter(v => v.isActive).map(v => (
+                  <SelectItem key={v.id} value={v.code}>{v.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value || "all")}>

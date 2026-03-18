@@ -70,6 +70,7 @@ export interface ProduceListing {
   farmerId: string; // Reference to farmer profile
   farmerName?: string; // Denormalized for quick display
   farmerRating?: number; // Denormalized farmer rating
+  productType?: string; // e.g. FRESH_ROOTS, PROCESS_GRADE
   variety: OFSPVariety;
   quantity: number; // Total quantity available (kg)
   availableQuantity: number; // Remaining quantity (kg)
@@ -144,6 +145,9 @@ export interface MarketplaceOrder {
   farmerCoordinates?: [number, number];
   deliveryCoordinates?: [number, number];
   currentCoordinates?: [number, number]; // For in-transit tracking
+  cancellationReason?: string;
+  cancelledBy?: string;
+  listing?: ProduceListing; // Embedded listing data (from backend include)
   canRate?: boolean; // Whether buyer can rate farmer
   // Extended properties used in dashboards
   totalQuantity?: number; // Alias for quantity (used in some contexts)
@@ -175,6 +179,7 @@ export interface MarketplaceFilters {
   subCounty?: string;
   farmerId?: string; // Filter by farmer ID (for farmer's own listings)
   searchQuery?: string;
+  minQuantity?: number;
   minRating?: number;
   maxDistance?: number; // km
 }

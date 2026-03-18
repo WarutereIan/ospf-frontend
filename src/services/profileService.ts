@@ -164,6 +164,11 @@ interface UpdateProfileDto {
   county?: string;
   subcounty?: string;
   ward?: string;
+  village?: string;
+  countyId?: string;
+  subCountyId?: string;
+  wardId?: string;
+  villageId?: string;
   location?: string;
   businessName?: string;
   businessRegistrationNumber?: string;
@@ -172,8 +177,10 @@ interface UpdateProfileDto {
   // Assignment fields
   farmerGroupId?: string;
   aggregationCenterId?: string;
+  assignedVillageIds?: string[];
   assignedCounty?: string;
   assignedSubCounty?: string;
+  assignedWard?: string;
   hasAllAccess?: boolean;
 }
 
@@ -189,6 +196,11 @@ function toUpdateProfileDto(updates: Partial<Profile>): UpdateProfileDto {
   if (u.county !== undefined) dto.county = u.county as string;
   if (u.subCounty !== undefined) dto.subcounty = u.subCounty as string;
   if (u.ward !== undefined) dto.ward = u.ward as string;
+  if (u.village !== undefined) dto.village = u.village as string;
+  if (u.countyId !== undefined) dto.countyId = u.countyId as string;
+  if (u.subCountyId !== undefined) dto.subCountyId = u.subCountyId as string;
+  if (u.wardId !== undefined) dto.wardId = u.wardId as string;
+  if (u.villageId !== undefined) dto.villageId = u.villageId as string;
   if (updates.location !== undefined) dto.location = updates.location;
   if ((updates as any).businessName !== undefined) dto.businessName = (updates as any).businessName;
   if ((updates as any).businessRegistrationNumber !== undefined) dto.businessRegistrationNumber = (updates as any).businessRegistrationNumber;
@@ -196,8 +208,10 @@ function toUpdateProfileDto(updates: Partial<Profile>): UpdateProfileDto {
   if ((updates as any).profilePicture !== undefined) dto.profilePicture = (updates as any).profilePicture;
   if (updates.farmerGroupId !== undefined) dto.farmerGroupId = updates.farmerGroupId;
   if (updates.aggregationCenterId !== undefined) dto.aggregationCenterId = updates.aggregationCenterId;
+  if (u.assignedVillageIds !== undefined) dto.assignedVillageIds = u.assignedVillageIds as string[];
   if (updates.assignedCounty !== undefined) dto.assignedCounty = updates.assignedCounty;
   if (updates.assignedSubCounty !== undefined) dto.assignedSubCounty = updates.assignedSubCounty;
+  if (u.assignedWard !== undefined) dto.assignedWard = u.assignedWard as string;
   if (updates.hasAllAccess !== undefined) dto.hasAllAccess = updates.hasAllAccess;
   return dto;
 }

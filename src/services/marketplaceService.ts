@@ -473,22 +473,21 @@ function transformNegotiation(negotiation: any): Negotiation {
  * Backend: GET /api/v1/marketplace/listings
  */
 export async function getListings(filters?: MarketplaceFilters): Promise<ProduceListing[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.variety) params.variety = filters.variety;
-    if ((filters as any)?.county) params.county = (filters as any).county;
-    const backendStatus = toBackendListingStatus(filters?.status ?? 'all');
-    if (backendStatus) params.status = backendStatus;
-    if (filters?.minPrice) params.minPrice = filters.minPrice;
-    if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
+  const params: Record<string, any> = {};
+  if (filters?.farmerId) params.farmerId = filters.farmerId;
+  if (filters?.variety && filters.variety !== 'all') params.variety = filters.variety;
+  if ((filters as any)?.county) params.county = (filters as any).county;
+  if (filters?.subCounty && filters.subCounty !== 'all') params.subCounty = filters.subCounty;
+  if (filters?.qualityGrade && filters.qualityGrade !== 'all') params.qualityGrade = filters.qualityGrade;
+  if (filters?.searchQuery) params.searchQuery = filters.searchQuery;
+  if (filters?.minQuantity) params.minQuantity = filters.minQuantity;
+  const backendStatus = toBackendListingStatus(filters?.status ?? 'all');
+  if (backendStatus) params.status = backendStatus;
+  if (filters?.minPrice) params.minPrice = filters.minPrice;
+  if (filters?.maxPrice) params.maxPrice = filters.maxPrice;
 
-    const listings = await apiGet<any[]>('/marketplace/listings', params);
-    return listings.map(transformProduceListing);
-  } catch (error) {
-    console.error('Error fetching listings:', error);
-    return [];
-  }
+  const listings = await apiGet<any[]>('/marketplace/listings', params);
+  return listings.map(transformProduceListing);
 }
 
 /**
@@ -496,13 +495,8 @@ export async function getListings(filters?: MarketplaceFilters): Promise<Produce
  * Backend: GET /api/v1/marketplace/listings/:id
  */
 export async function getListingById(id: string): Promise<ProduceListing | null> {
-  try {
-    const listing = await apiGet<any>(`/marketplace/listings/${id}`);
-    return transformProduceListing(listing);
-  } catch (error) {
-    console.error('Error fetching listing:', error);
-    return null;
-  }
+  const listing = await apiGet<any>(`/marketplace/listings/${id}`);
+  return transformProduceListing(listing);
 }
 
 /**
@@ -699,23 +693,17 @@ export async function rejectListing(id: string, reason?: string): Promise<ApiRes
  * Backend: GET /api/v1/marketplace/orders
  */
 export async function getMarketplaceOrders(filters?: MarketplaceOrderFilters): Promise<MarketplaceOrder[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.centerId) params.centerId = filters.centerId;
-    // Transform status filter to backend format (UPPER_CASE) if provided
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase().replace(/_/g, '_');
-    }
-    if ((filters as any)?.listingId) params.listingId = (filters as any).listingId;
-
-    const orders = await apiGet<any[]>('/marketplace/orders', params);
-    return orders.map(transformMarketplaceOrder);
-  } catch (error) {
-    console.error('Error fetching orders:', error);
-    return [];
+  const params: Record<string, any> = {};
+  if (filters?.buyerId) params.buyerId = filters.buyerId;
+  if (filters?.farmerId) params.farmerId = filters.farmerId;
+  if (filters?.centerId) params.centerId = filters.centerId;
+  if (filters?.status && filters.status !== "all") {
+    params.status = filters.status.toUpperCase().replace(/_/g, '_');
   }
+  if ((filters as any)?.listingId) params.listingId = (filters as any).listingId;
+
+  const orders = await apiGet<any[]>('/marketplace/orders', params);
+  return orders.map(transformMarketplaceOrder);
 }
 
 /**
@@ -723,13 +711,8 @@ export async function getMarketplaceOrders(filters?: MarketplaceOrderFilters): P
  * Backend: GET /api/v1/marketplace/orders/:id
  */
 export async function getMarketplaceOrderById(id: string): Promise<MarketplaceOrder | null> {
-  try {
-    const order = await apiGet<any>(`/marketplace/orders/${id}`);
-    return transformMarketplaceOrder(order);
-  } catch (error) {
-    console.error('Error fetching order:', error);
-    return null;
-  }
+  const order = await apiGet<any>(`/marketplace/orders/${id}`);
+  return transformMarketplaceOrder(order);
 }
 
 /**
@@ -822,6 +805,22 @@ export async function updateMarketplaceOrderStatus(
 }
 
 /**
+ * Cancel an order with a reason.
+ * Backend: PUT /api/v1/marketplace/orders/:id/cancel
+ */
+export async function cancelMarketplaceOrder(
+  id: string,
+  reason: string
+): Promise<ApiResponse<MarketplaceOrder>> {
+  try {
+    const updated = await apiPut<any>(`/marketplace/orders/${id}/cancel`, { reason });
+    return { data: transformMarketplaceOrder(updated), message: "Order cancelled" };
+  } catch (error: any) {
+    return { data: null as any, error: error.message || "Failed to cancel order" };
+  }
+}
+
+/**
  * Start order processing (aggregation center)
  * Backend: PUT /api/v1/marketplace/orders/:id/start-processing
  */
@@ -888,22 +887,17 @@ export async function confirmDeliveryByBuyer(
  * Backend: GET /api/v1/marketplace/sourcing-requests
  */
 export async function getSourcingRequests(filters?: SourcingRequestFilters): Promise<SourcingRequest[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase();
-    }
-    if (filters?.productType && filters.productType !== "all") {
-      params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
-    }
-
-    const requests = await apiGet<any[]>('/marketplace/sourcing-requests', params);
-    return requests.map(transformSourcingRequest);
-  } catch (error) {
-    console.error('Error fetching sourcing requests:', error);
-    return [];
+  const params: Record<string, any> = {};
+  if (filters?.buyerId) params.buyerId = filters.buyerId;
+  if (filters?.status && filters.status !== "all") {
+    params.status = filters.status.toUpperCase();
   }
+  if (filters?.productType && filters.productType !== "all") {
+    params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
+  }
+
+  const requests = await apiGet<any[]>('/marketplace/sourcing-requests', params);
+  return requests.map(transformSourcingRequest);
 }
 
 /**
@@ -911,13 +905,8 @@ export async function getSourcingRequests(filters?: SourcingRequestFilters): Pro
  * Backend: GET /api/v1/marketplace/sourcing-requests/:id
  */
 export async function getSourcingRequestById(id: string): Promise<SourcingRequest | null> {
-  try {
-    const request = await apiGet<any>(`/marketplace/sourcing-requests/${id}`);
-    return transformSourcingRequest(request);
-  } catch (error) {
-    console.error('Error fetching sourcing request:', error);
-    return null;
-  }
+  const request = await apiGet<any>(`/marketplace/sourcing-requests/${id}`);
+  return transformSourcingRequest(request);
 }
 
 /**
@@ -1168,21 +1157,16 @@ export async function getRecurringOrders(filters?: {
   farmerId?: string;
   isActive?: boolean;
 }): Promise<RecurringOrder[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.isActive !== undefined) params.isActive = filters.isActive;
+  const params: Record<string, any> = {};
+  if (filters?.buyerId) params.buyerId = filters.buyerId;
+  if (filters?.farmerId) params.farmerId = filters.farmerId;
+  if (filters?.isActive !== undefined) params.isActive = filters.isActive;
 
-    const orders = await apiGet<any[]>('/marketplace/recurring-orders', params);
-    return orders.map(order => ({
-      ...order,
-      variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
-    }));
-  } catch (error) {
-    console.error('Error fetching recurring orders:', error);
-    return [];
-  }
+  const orders = await apiGet<any[]>('/marketplace/recurring-orders', params);
+  return orders.map(order => ({
+    ...order,
+    variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+  }));
 }
 
 /**
@@ -1190,16 +1174,11 @@ export async function getRecurringOrders(filters?: {
  * Backend: GET /api/v1/marketplace/recurring-orders/:id
  */
 export async function getRecurringOrderById(id: string): Promise<RecurringOrder | null> {
-  try {
-    const order = await apiGet<any>(`/marketplace/recurring-orders/${id}`);
-    return {
-      ...order,
-      variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
-    };
-  } catch (error) {
-    console.error('Error fetching recurring order:', error);
-    return null;
-  }
+  const order = await apiGet<any>(`/marketplace/recurring-orders/${id}`);
+  return {
+    ...order,
+    variety: order.variety ? mapOFSPVariety(order.variety) : order.variety,
+  };
 }
 
 /**
@@ -1258,28 +1237,7 @@ export async function cancelRecurringOrder(id: string): Promise<void> {
  * Backend: GET /api/v1/marketplace/stats
  */
 export async function getMarketplaceStats(): Promise<MarketplaceStats> {
-  try {
-    return await apiGet<MarketplaceStats>('/marketplace/stats');
-  } catch (error) {
-    console.error('Error fetching marketplace stats:', error);
-    return {
-      totalListings: 0,
-      activeListings: 0,
-      totalOrders: 0,
-      pendingOrders: 0,
-      completedOrders: 0,
-      totalVolume: 0,
-      totalValue: 0,
-      averagePrice: 0,
-      totalSourcingRequests: 0,
-      activeSourcingRequests: 0,
-      totalRecurringOrders: 0,
-      totalNegotiations: 0,
-      activeNegotiations: 0,
-      totalRFQs: 0,
-      activeRFQs: 0,
-    };
-  }
+  return apiGet<MarketplaceStats>('/marketplace/stats');
 }
 
 // ==================== Negotiation Functions ====================
@@ -1289,21 +1247,16 @@ export async function getMarketplaceStats(): Promise<MarketplaceStats> {
  * Backend: GET /api/v1/marketplace/negotiations
  */
 export async function getNegotiations(filters?: NegotiationFilters): Promise<Negotiation[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.listingId) params.listingId = filters.listingId;
-    if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.farmerId) params.farmerId = filters.farmerId;
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase().replace(/_/g, '_');
-    }
-
-    const negotiations = await apiGet<any[]>('/marketplace/negotiations', params);
-    return negotiations.map(transformNegotiation);
-  } catch (error) {
-    console.error('Error fetching negotiations:', error);
-    return [];
+  const params: Record<string, any> = {};
+  if (filters?.listingId) params.listingId = filters.listingId;
+  if (filters?.buyerId) params.buyerId = filters.buyerId;
+  if (filters?.farmerId) params.farmerId = filters.farmerId;
+  if (filters?.status && filters.status !== "all") {
+    params.status = filters.status.toUpperCase().replace(/_/g, '_');
   }
+
+  const negotiations = await apiGet<any[]>('/marketplace/negotiations', params);
+  return negotiations.map(transformNegotiation);
 }
 
 /**
@@ -1311,13 +1264,8 @@ export async function getNegotiations(filters?: NegotiationFilters): Promise<Neg
  * Backend: GET /api/v1/marketplace/negotiations/:id
  */
 export async function getNegotiationById(id: string): Promise<Negotiation | null> {
-  try {
-    const negotiation = await apiGet<any>(`/marketplace/negotiations/${id}`);
-    return transformNegotiation(negotiation);
-  } catch (error) {
-    console.error('Error fetching negotiation:', error);
-    return null;
-  }
+  const negotiation = await apiGet<any>(`/marketplace/negotiations/${id}`);
+  return transformNegotiation(negotiation);
 }
 
 /**
@@ -1557,22 +1505,17 @@ function toUpdateRFQDto(rfq: Partial<RFQ>): Partial<CreateRFQDto> {
  * Backend: GET /api/v1/marketplace/rfqs
  */
 export async function getRFQs(filters?: RFQFilters): Promise<RFQ[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.buyerId) params.buyerId = filters.buyerId;
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase();
-    }
-    if (filters?.productType && filters.productType !== "all") {
-      params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
-    }
-
-    const rfqs = await apiGet<any[]>('/marketplace/rfqs', params);
-    return rfqs.map(transformRFQ);
-  } catch (error) {
-    console.error('Error fetching RFQs:', error);
-    return [];
+  const params: Record<string, any> = {};
+  if (filters?.buyerId) params.buyerId = filters.buyerId;
+  if (filters?.status && filters.status !== "all") {
+    params.status = filters.status.toUpperCase();
   }
+  if (filters?.productType && filters.productType !== "all") {
+    params.productType = filters.productType.toUpperCase().replace(/_/g, '_');
+  }
+
+  const rfqs = await apiGet<any[]>('/marketplace/rfqs', params);
+  return rfqs.map(transformRFQ);
 }
 
 /**
@@ -1580,13 +1523,8 @@ export async function getRFQs(filters?: RFQFilters): Promise<RFQ[]> {
  * Backend: GET /api/v1/marketplace/rfqs/:id
  */
 export async function getRFQById(id: string): Promise<RFQ | null> {
-  try {
-    const rfq = await apiGet<any>(`/marketplace/rfqs/${id}`);
-    return transformRFQ(rfq);
-  } catch (error) {
-    console.error('Error fetching RFQ:', error);
-    return null;
-  }
+  const rfq = await apiGet<any>(`/marketplace/rfqs/${id}`);
+  return transformRFQ(rfq);
 }
 
 /**
@@ -1681,30 +1619,14 @@ export async function getRFQResponses(
   rfqId: string,
   filters?: RFQResponseFilters
 ): Promise<RFQResponse[]> {
-  try {
-    const params: Record<string, any> = {};
-    if (filters?.supplierId) params.supplierId = filters.supplierId;
-    if (filters?.status && filters.status !== "all") {
-      params.status = filters.status.toUpperCase().replace(/_/g, '_');
-    }
-
-    const responses = await apiGet<any[]>(`/marketplace/rfqs/${rfqId}/responses`, params);
-    // Debug: Log first response to check data structure (only in dev)
-    if (import.meta.env.DEV && responses.length > 0) {
-      console.log('RFQ Response data from backend:', {
-        pricePerUnit: responses[0].pricePerUnit,
-        totalAmount: responses[0].totalAmount,
-        quantity: responses[0].quantity,
-        typeOfPricePerUnit: typeof responses[0].pricePerUnit,
-        typeOfTotalAmount: typeof responses[0].totalAmount,
-        fullResponse: responses[0],
-      });
-    }
-    return responses.map(transformRFQResponse);
-  } catch (error) {
-    console.error('Error fetching RFQ responses:', error);
-    return [];
+  const params: Record<string, any> = {};
+  if (filters?.supplierId) params.supplierId = filters.supplierId;
+  if (filters?.status && filters.status !== "all") {
+    params.status = filters.status.toUpperCase().replace(/_/g, '_');
   }
+
+  const responses = await apiGet<any[]>(`/marketplace/rfqs/${rfqId}/responses`, params);
+  return responses.map(transformRFQResponse);
 }
 
 /**
@@ -1761,13 +1683,8 @@ export async function getRFQResponseById(
   rfqId: string,
   responseId: string
 ): Promise<RFQResponse | null> {
-  try {
-    const response = await apiGet<any>(`/marketplace/rfq-responses/${responseId}`);
-    return transformRFQResponse(response);
-  } catch (error) {
-    console.error('Error fetching RFQ response:', error);
-    return null;
-  }
+  const response = await apiGet<any>(`/marketplace/rfq-responses/${responseId}`);
+  return transformRFQResponse(response);
 }
 
 /**
