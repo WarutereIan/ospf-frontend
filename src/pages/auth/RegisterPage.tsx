@@ -15,14 +15,28 @@ const userRoles = [
 export function RegisterPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
+      <Card className="relative w-full max-w-md">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-lg bg-background/80 backdrop-blur-sm">
+          <div className="mx-4 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted/50 px-6 py-8 text-center">
+            <h2 className="text-xl font-semibold text-foreground">Coming Soon</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Registration is not yet available. Please contact the concerned admin for more information.
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link to="/login" className="text-primary hover:underline">
+              Sign in here
+            </Link>
+          </p>
+        </div>
+        <CardHeader className="space-y-1 opacity-50 pointer-events-none">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
             Register for OFSP Marketplace
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="opacity-50 pointer-events-none">
           <form className="space-y-4">
             <FieldGroup>
               <Field>
@@ -89,12 +103,6 @@ export function RegisterPage() {
               </Button>
             </FieldGroup>
           </form>
-          <div className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="text-primary hover:underline">
-              Sign in here
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>
