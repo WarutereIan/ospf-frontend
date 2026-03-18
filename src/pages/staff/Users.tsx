@@ -768,6 +768,23 @@ export function Users() {
     setBulkResult(null);
   };
 
+  const downloadBulkResultCsv = () => {
+    if (!bulkResult?.details?.length) return;
+    const header = "Row,Name,Phone,Status,Message";
+    const rows = bulkResult.details.map((d) => {
+      const escapeCsv = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      return `${d.row},${escapeCsv(d.name)},${escapeCsv(d.phone)},${d.status},${escapeCsv(d.message)}`;
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bulk-upload-results-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   /** Download CSV template for bulk farmer upload (headers + example rows). */
   const downloadBulkFarmersTemplate = () => {
     const header = "first_name,last_name,gender,phone,password,email,county,subcounty,ward,village";
@@ -1489,25 +1506,49 @@ export function Users() {
               )}
             </div>
             {bulkResult && (
-              <div className="space-y-2 rounded-lg border p-4 bg-muted/30">
-                <p className="text-sm font-medium">Result</p>
-                <div className="flex gap-4 text-sm">
-                  <span className="text-green-600">Created: {bulkResult.created ?? 0}</span>
-                  <span className="text-red-600">Failed: {bulkResult.failed ?? 0}</span>
+              <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Result</p>
+                  {(bulkResult.details ?? []).length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={downloadBulkResultCsv}>
+                      <IconDownload className="mr-2 h-4 w-4" />
+                      Download results CSV
+                    </Button>
+                  )}
                 </div>
-                {(bulkResult.errors ?? []).length > 0 && (
-                  <div className="mt-2 max-h-40 overflow-y-auto">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Row errors:</p>
-                    <ul className="text-xs space-y-0.5">
-                      {(bulkResult.errors ?? []).slice(0, 20).map((err, i) => (
-                        <li key={i}>
-                          Row {err.row}: {err.message}
-                        </li>
-                      ))}
-                      {(bulkResult.errors ?? []).length > 20 && (
-                        <li className="text-muted-foreground">… and {(bulkResult.errors ?? []).length - 20} more</li>
-                      )}
-                    </ul>
+                <div className="flex gap-4 text-sm">
+                  <span className="text-green-600 font-medium">Created: {bulkResult.created ?? 0}</span>
+                  <span className="text-red-600 font-medium">Failed: {bulkResult.failed ?? 0}</span>
+                  <span className="text-muted-foreground">Total: {(bulkResult.created ?? 0) + (bulkResult.failed ?? 0)}</span>
+                </div>
+                {(bulkResult.details ?? []).length > 0 && (
+                  <div className="mt-2 max-h-52 overflow-y-auto border rounded">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs py-1 px-2">Row</TableHead>
+                          <TableHead className="text-xs py-1 px-2">Name</TableHead>
+                          <TableHead className="text-xs py-1 px-2">Phone</TableHead>
+                          <TableHead className="text-xs py-1 px-2">Status</TableHead>
+                          <TableHead className="text-xs py-1 px-2">Message</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(bulkResult.details ?? []).map((d, i) => (
+                          <TableRow key={i} className={d.status === "failed" ? "bg-red-50" : "bg-green-50"}>
+                            <TableCell className="text-xs py-1 px-2">{d.row}</TableCell>
+                            <TableCell className="text-xs py-1 px-2">{d.name || "-"}</TableCell>
+                            <TableCell className="text-xs py-1 px-2">{d.phone || "-"}</TableCell>
+                            <TableCell className="text-xs py-1 px-2">
+                              <Badge variant={d.status === "created" ? "default" : "destructive"} className="text-[10px] px-1.5 py-0">
+                                {d.status === "created" ? "Created" : "Failed"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs py-1 px-2 max-w-[200px] truncate" title={d.message}>{d.message}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </div>

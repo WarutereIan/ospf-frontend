@@ -327,6 +327,7 @@ export interface BulkCreateFarmersResult {
   created: number;
   failed: number;
   errors: { row: number; message: string }[];
+  details: { row: number; name: string; phone: string; status: 'created' | 'failed'; message: string }[];
 }
 
 /**
