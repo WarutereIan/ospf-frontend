@@ -117,23 +117,27 @@ export function transformUser(backendUser: any): {
  * Login user - backend sets HttpOnly cookies
  */
 export async function login(
-  phone: string,
+  identifier: string,
   password: string
 ): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
-    // Normalize phone number (remove spaces, dashes, etc.)
-    const normalizedPhone = phone.replace(/\s+/g, "").replace(/-/g, "");
+    const trimmed = identifier.trim();
+    const isEmail = trimmed.includes("@");
+
+    const body: Record<string, string> = { password };
+    if (isEmail) {
+      body.email = trimmed;
+    } else {
+      body.phone = trimmed.replace(/\s+/g, "").replace(/-/g, "");
+    }
 
     const response = await fetch(`${API_BASE_URL}/${API_PREFIX}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include', // Important: receive and store HttpOnly cookies
-      body: JSON.stringify({
-        phone: normalizedPhone,
-        password,
-      }),
+      credentials: 'include',
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {

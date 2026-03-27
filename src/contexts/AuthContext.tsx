@@ -3,7 +3,6 @@ import {
   login as apiLogin, 
   logout as apiLogout, 
   getCurrentUser,
-  type LoginRequest 
 } from "@/services/authService";
 import { getLocalUser, storeLocalUser, clearLocalAuth } from "@/lib/api-client";
 
@@ -38,7 +37,7 @@ interface AuthContextType {
   isLoading: boolean;
 
   // Auth Methods
-  login: (phone: string, password: string) => Promise<{ success: boolean; error?: string; role?: UserRole }>;
+  login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string; role?: UserRole }>;
   logout: () => void;
   
   // User Methods
@@ -50,79 +49,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock credentials - matches LoginPage (for development/testing fallback)
-const MOCK_CREDENTIALS: Record<string, { role: UserRole; name: string; phone: string; password: string; email?: string; location?: string; subCounty?: string }> = {
-  farmer: {
-    role: "farmer",
-    name: "John Mutua",
-    phone: "+254712345678",
-    password: "farmer123",
-    email: "john.mutua@example.com",
-    location: "Kangundo",
-    subCounty: "Kangundo",
-  },
-  buyer: {
-    role: "buyer",
-    name: "Sarah Mwangi",
-    phone: "+254723456789",
-    password: "buyer123",
-    email: "sarah.mwangi@example.com",
-    location: "Nairobi",
-  },
-  officer: {
-    role: "officer",
-    name: "David Kimani",
-    phone: "+254734567890",
-    password: "officer123",
-    email: "david.kimani@example.com",
-    location: "Machakos",
-  },
-  staff: {
-    role: "staff",
-    name: "Mary Wanjiku",
-    phone: "+254745678901",
-    password: "staff123",
-    email: "mary.wanjiku@example.com",
-    location: "Nairobi",
-  },
-  aggregation_manager: {
-    role: "aggregation_manager",
-    name: "Peter Kariuki",
-    phone: "+254756789012",
-    password: "manager123",
-    email: "peter.kariuki@example.com",
-    location: "Kangundo",
-    subCounty: "Kangundo",
-  },
-  input_provider: {
-    role: "input_provider",
-    name: "Grace Njeri",
-    phone: "+254767890123",
-    password: "input123",
-    email: "grace.njeri@example.com",
-    location: "Nairobi",
-  },
-  transport_provider: {
-    role: "transport_provider",
-    name: "James Omondi",
-    phone: "+254778901234",
-    password: "transport123",
-    email: "james.omondi@example.com",
-    location: "Nairobi",
-  },
-  lead_farmer: {
-    role: "lead_farmer",
-    name: "Kamau Mwangi",
-    phone: "+254789012345",
-    password: "leadfarmer123",
-    email: "kamau.lead@example.com",
-    location: "Kangundo",
-    subCounty: "Kangundo",
-  },
-};
-
-const MOCK_USER_KEY = "ofsp_mock_user";
 
 // Session restore lock to prevent multiple simultaneous /auth/me calls
 let sessionRestorePromise: Promise<void> | null = null;
@@ -152,19 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             window.location.pathname === '/register' ||
                             window.location.pathname === '/forgot-password';
           
-          // Check for mock user first (development fallback)
-          const mockUser = localStorage.getItem(MOCK_USER_KEY);
-          if (mockUser) {
-            const parsed = JSON.parse(mockUser);
-            if (parsed.id?.startsWith('mock-')) {
-              setUser(parsed as User);
-              setIsLoading(false);
-              isRestoringSession = false;
-              sessionRestorePromise = null;
-              return;
-            }
-          }
-
           // Check for cached user
           const cachedUser = getLocalUser();
           
@@ -230,44 +143,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     restoreSession();
   }, []);
 
-  const login = async (phone: string, password: string): Promise<{ success: boolean; error?: string; role?: UserRole }> => {
+  const login = async (identifier: string, password: string): Promise<{ success: boolean; error?: string; role?: UserRole }> => {
     try {
-      // Try backend API first
-      const result = await apiLogin(phone, password);
+      const result = await apiLogin(identifier, password);
       
       if (result.success && result.user) {
         setUser(result.user);
-        // Clear any mock user
-        localStorage.removeItem(MOCK_USER_KEY);
         return { success: true, role: result.user.role };
       } else {
-        // Fallback to mock credentials for development/testing
-        const normalizedPhone = phone.replace(/\s+/g, "").replace(/-/g, "");
-        const credential = Object.values(MOCK_CREDENTIALS).find(
-          (cred) => cred.phone === normalizedPhone || cred.phone.replace(/\s+/g, "") === normalizedPhone
-        );
-
-        if (credential && credential.password === password) {
-          // Create user object from mock credentials
-          const newUser: User = {
-            id: `mock-${credential.role}-${Date.now()}`,
-            name: credential.name,
-            phone: credential.phone,
-            role: credential.role,
-            email: credential.email,
-            location: credential.location,
-            subCounty: credential.subCounty,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-          };
-
-          setUser(newUser);
-          // Store mock user separately
-          localStorage.setItem(MOCK_USER_KEY, JSON.stringify(newUser));
-          return { success: true, role: credential.role };
-        } else {
-          return { success: false, error: result.error || "Invalid phone number or password" };
-        }
+        return { success: false, error: result.error || "Invalid credentials" };
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -283,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
       clearLocalAuth();
-      localStorage.removeItem(MOCK_USER_KEY);
     }
   };
 
@@ -318,5 +201,3 @@ export function useAuth() {
   return context;
 }
 
-// Export mock credentials for use in LoginPage
-export { MOCK_CREDENTIALS };

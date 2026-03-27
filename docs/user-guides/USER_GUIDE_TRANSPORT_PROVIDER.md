@@ -127,4 +127,4 @@ Use the **menu icon** on small screens to open or close the sidebar.
 
 ---
 
-For **farmers** booking pickup slots, see **[User Guide: Farmer](USER_GUIDE_FARMER.md)** (section 5). For **buyers** tracking delivery, see **[User Guide: Buyer](USER_GUIDE_BUYER.md)** (sections 6–7).
+

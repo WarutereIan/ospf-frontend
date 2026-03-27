@@ -9,7 +9,7 @@ import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function LoginPage() {
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -23,7 +23,7 @@ export function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await login(phone, password);
+      const result = await login(identifier, password);
 
       if (result.success) {
         if (result.role === "buyer") {
@@ -34,7 +34,7 @@ export function LoginPage() {
           navigate("/dashboard");
         }
       } else {
-        setError(result.error || "Invalid phone number or password.");
+        setError(result.error || "Invalid credentials.");
       }
     } catch (err) {
       setError("An error occurred during login. Please try again.");
@@ -57,13 +57,14 @@ export function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="phone">Phone Number</FieldLabel>
+                  <FieldLabel htmlFor="identifier">Phone Number or Email</FieldLabel>
                   <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="+254 7XX XXX XXX"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    id="identifier"
+                    type="text"
+                    placeholder="+254 7XX XXX XXX or name@example.com"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    autoComplete="username"
                     required
                   />
                 </Field>
